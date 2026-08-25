@@ -18,6 +18,7 @@ import {
   DEFAULT_LAYER_ID,
   identityTransform,
   type LayerDef,
+  type PartCollider,
   type Placement,
   type StaticObjectDoc,
   type Transform,
@@ -61,6 +62,34 @@ export const $selection = atom<string[]>([]);
 
 /** The layer new placements land in (session state; clamped on object switch). */
 export const $activeLayerId = atom<string>(DEFAULT_LAYER_ID);
+
+/**
+ * The selected COLLIDER (single-select; mutually exclusive with the placement
+ * selection). `owner` = a placement instanceId for a placement-owned collider,
+ * or null for an object-level one. Template (piece-owned) colliders are
+ * read-only and never selectable.
+ */
+export interface ColliderRef {
+  owner: string | null;
+  colliderId: string;
+}
+
+export const $colliderSelection = atom<ColliderRef | null>(null);
+
+/** Reads the collider a ref points at, or undefined. */
+export function getCollider(ref: ColliderRef): PartCollider | undefined {
+  const obj = $activeObject.get();
+  const list =
+    ref.owner === null
+      ? obj.objectColliders
+      : obj.placements.find((pl) => pl.instanceId === ref.owner)?.colliders;
+  return list?.find((c) => c.id === ref.colliderId);
+}
+
+function clampColliderSelection(): void {
+  const ref = $colliderSelection.get();
+  if (ref && !getCollider(ref)) $colliderSelection.set(null);
+}
 
 function clampActiveLayer(): void {
   const layers = $activeObject.get().layers;
@@ -126,6 +155,7 @@ export function undo(): string {
   redoStack.push(snapshot(entry.description));
   $project.set(entry.project);
   $selection.set(entry.selection);
+  clampColliderSelection();
   publishDepth();
   return entry.description;
 }
@@ -136,6 +166,7 @@ export function redo(): string {
   undoStack.push(snapshot(entry.description));
   $project.set(entry.project);
   $selection.set(entry.selection);
+  clampColliderSelection();
   publishDepth();
   return entry.description;
 }
@@ -166,6 +197,7 @@ function clampSelection(): void {
   const ids = new Set($activeObject.get().placements.map((pl) => pl.instanceId));
   const kept = $selection.get().filter((id) => ids.has(id));
   if (kept.length !== $selection.get().length) $selection.set(kept);
+  clampColliderSelection();
 }
 
 // --- Placement mutators (each enrolled in undo, invariant I6) -------------------
@@ -434,11 +466,48 @@ export function setPlacementsLayer(instanceIds: readonly string[], layerId: stri
   }));
 }
 
-/** Selects every placement on a visible layer. */
+/** Selects every placement on a visible, unlocked layer. */
 export function selectAllVisible(): void {
   const obj = $activeObject.get();
-  const visible = new Set(obj.layers.filter((l) => l.visible).map((l) => l.id));
-  $selection.set(obj.placements.filter((pl) => visible.has(pl.layerId)).map((pl) => pl.instanceId));
+  const usable = new Set(obj.layers.filter((l) => l.visible && !l.locked).map((l) => l.id));
+  $selection.set(obj.placements.filter((pl) => usable.has(pl.layerId)).map((pl) => pl.instanceId));
+}
+
+/** Lock = rendered but unpickable (view state, like visibility — not an undo step). */
+export function setLayerLocked(layerId: string, locked: boolean): void {
+  mutateActive((o) => ({
+    ...o,
+    layers: o.layers.map((l) => (l.id === layerId ? { ...l, locked } : l)),
+  }));
+  if (locked) {
+    const affected = new Set(
+      $activeObject
+        .get()
+        .placements.filter((pl) => pl.layerId === layerId)
+        .map((pl) => pl.instanceId),
+    );
+    $selection.set($selection.get().filter((id) => !affected.has(id)));
+  }
+}
+
+/** Isolate (solo) a layer: only it stays visible; a second call restores all. */
+export function isolateLayer(layerId: string): void {
+  const obj = $activeObject.get();
+  const isIsolated =
+    obj.layers.every((l) => (l.id === layerId ? l.visible : !l.visible)) && obj.layers.length > 1;
+  mutateActive((o) => ({
+    ...o,
+    layers: o.layers.map((l) => ({ ...l, visible: isIsolated ? true : l.id === layerId })),
+  }));
+  if (!isIsolated) {
+    const hidden = new Set(
+      $activeObject
+        .get()
+        .placements.filter((pl) => pl.layerId !== layerId)
+        .map((pl) => pl.instanceId),
+    );
+    $selection.set($selection.get().filter((id) => !hidden.has(id)));
+  }
 }
 
 /** Selects every (visible-layer) placement of a layer. */
@@ -531,4 +600,93 @@ export function importStockPart(
     droppedPartColliders: copies.length === 0 && anchorColliders ? anchorColliders.length : 0,
     layerId,
   };
+}
+
+// --- Collider CRUD (plans: the collider-system follow-up) -----------------------
+
+/** Unique collider id within the owner's list. */
+function mintColliderId(existing: readonly PartCollider[], shape: string): string {
+  let n = existing.length + 1;
+  const taken = new Set(existing.map((c) => c.id));
+  while (taken.has(`${shape}Collider${n}`)) n++;
+  return `${shape}Collider${n}`;
+}
+
+/** Adds a collider to a placement (owner = instanceId) or the object (null); selects it. */
+export function addColliderTo(
+  owner: string | null,
+  collider: Omit<PartCollider, 'id' | 'layerId' | 'ownerTemplateId'>,
+): ColliderRef | null {
+  const obj = $activeObject.get();
+  const list =
+    owner === null
+      ? obj.objectColliders
+      : (obj.placements.find((pl) => pl.instanceId === owner)?.colliders ?? []);
+  if (owner !== null && !obj.placements.some((pl) => pl.instanceId === owner)) return null;
+  pushUndo('Add collider');
+  const full: PartCollider = {
+    ...collider,
+    id: mintColliderId(list, collider.shape),
+    ownerTemplateId: null,
+    layerId: DEFAULT_LAYER_ID,
+  };
+  mutateActive((o) =>
+    owner === null
+      ? { ...o, objectColliders: [...o.objectColliders, full] }
+      : {
+          ...o,
+          placements: o.placements.map((pl) =>
+            pl.instanceId === owner ? { ...pl, colliders: [...(pl.colliders ?? []), full] } : pl,
+          ),
+        },
+  );
+  const ref: ColliderRef = { owner, colliderId: full.id };
+  $selection.set([]);
+  $colliderSelection.set(ref);
+  return ref;
+}
+
+/** Streaming collider edit (gizmo/typing) — callers own the gesture. */
+export function updateCollider(ref: ColliderRef, patch: Partial<PartCollider>): void {
+  const apply = (c: PartCollider) => (c.id === ref.colliderId ? { ...c, ...patch, id: c.id } : c);
+  mutateActive((o) =>
+    ref.owner === null
+      ? { ...o, objectColliders: o.objectColliders.map(apply) }
+      : {
+          ...o,
+          placements: o.placements.map((pl) =>
+            pl.instanceId === ref.owner
+              ? { ...pl, colliders: (pl.colliders ?? []).map(apply) }
+              : pl,
+          ),
+        },
+  );
+}
+
+export function removeCollider(ref: ColliderRef): void {
+  pushUndo('Delete collider');
+  mutateActive((o) =>
+    ref.owner === null
+      ? { ...o, objectColliders: o.objectColliders.filter((c) => c.id !== ref.colliderId) }
+      : {
+          ...o,
+          placements: o.placements.map((pl) =>
+            pl.instanceId === ref.owner
+              ? { ...pl, colliders: (pl.colliders ?? []).filter((c) => c.id !== ref.colliderId) }
+              : pl,
+          ),
+        },
+  );
+  if ($colliderSelection.get()?.colliderId === ref.colliderId) $colliderSelection.set(null);
+}
+
+export function duplicateColliderRef(ref: ColliderRef): void {
+  const src = getCollider(ref);
+  if (!src) return;
+  addColliderTo(ref.owner, {
+    shape: src.shape,
+    position: { x: src.position.x + 0.5, y: src.position.y + 0.5, z: src.position.z },
+    rotation: { ...src.rotation },
+    scale: { ...src.scale },
+  });
 }

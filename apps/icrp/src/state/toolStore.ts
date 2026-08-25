@@ -47,3 +47,6 @@ export const $overlaysVisible = persistentJSON<boolean>('icrp:overlays', true);
  * alone).
  */
 export const $keepGrounded = persistentJSON<boolean>('icrp:keepGrounded', true);
+
+/** Collider wireframes visible? (template = dimmed amber, editable = full). */
+export const $collidersVisible = persistentJSON<boolean>('icrp:colliders', true);

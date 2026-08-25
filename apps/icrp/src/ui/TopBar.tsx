@@ -5,6 +5,7 @@
  */
 import { useStore } from '@nanostores/react';
 import {
+  Box,
   Grid3x3,
   Magnet,
   MousePointer2,
@@ -39,6 +40,7 @@ import {
   undo,
 } from '../state/docStore';
 import {
+  $collidersVisible,
   $groundLock,
   $keepGrounded,
   $overlaysVisible,
@@ -206,6 +208,12 @@ function buildMenus(): MenuBarMenu[] {
               checked={$overlaysVisible.get()}
               onAction={() => $overlaysVisible.set(!$overlaysVisible.get())}
             />
+            <Row
+              label="Colliders"
+              keys={['C']}
+              checked={$collidersVisible.get()}
+              onAction={() => $collidersVisible.set(!$collidersVisible.get())}
+            />
           </>,
         ),
     },
@@ -231,6 +239,7 @@ export function TopBar() {
   const snap = useStore($snap);
   const groundLock = useStore($groundLock);
   const overlays = useStore($overlaysVisible);
+  const colliders = useStore($collidersVisible);
   // Menus re-evaluate enabled/checked on open (kit contract); these subscriptions
   // keep the toolbar toggles live.
   return (
@@ -261,6 +270,14 @@ export function TopBar() {
         onChange={() => $overlaysVisible.set(!overlays)}
       >
         <Circle size={14} />
+      </ToggleButton>
+      <ToggleButton
+        size="sm"
+        aria-label="Colliders"
+        isSelected={colliders}
+        onChange={() => $collidersVisible.set(!colliders)}
+      >
+        <Box size={14} />
       </ToggleButton>
       <div className="flex-1" />
       <Button

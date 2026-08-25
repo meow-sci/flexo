@@ -18,29 +18,47 @@ import { IcrpViewport } from './IcrpViewport';
 import { GroundPlane } from './GroundPlane';
 import { FootprintLayer } from './FootprintLayer';
 import { GhostObjectsLayer } from './GhostObjectsLayer';
+import { ColliderVisLayer, decodeColliderRef } from './ColliderVisLayer';
 import { PieceObject } from './PieceObject';
 import { IcrpGizmo, type GizmoMode } from './IcrpGizmo';
 import { applyStaticBasis } from './basis';
 import { SelectionManager } from '../../../../src/three/SelectionManager';
 import {
+  colliderLocalFromWorld,
   matrixFromTransform,
   readPlacementTransform,
   transformFromMatrix,
 } from '../../../../src/three/coords';
+import { collectWorldPoints } from '../../../../src/three/samplePoints';
+import { fitCollider, IDENTITY_QUAT } from '../../../../src/ksa/colliderFit';
+import { normalizeColliderSize } from '../../../../src/ksa/colliderSize';
 import { ksaToThree } from './basis';
 import {
   $activeObject,
+  $colliderSelection,
   $project,
   $selection,
+  addColliderTo,
   beginGesture,
   endGesture,
+  getCollider,
   getPlacement,
   setPlacementTransform,
   setPlacementTransformsBatch,
   transformPlacements,
+  updateCollider,
+  type ColliderRef,
 } from '../state/docStore';
 import { $pieceIndex } from '../state/catalogStore';
-import { $tool, $groundLock, $keepGrounded, $snap, $overlaysVisible } from '../state/toolStore';
+import {
+  $tool,
+  $groundLock,
+  $keepGrounded,
+  $snap,
+  $overlaysVisible,
+  $collidersVisible,
+} from '../state/toolStore';
+import type { PartCollider } from '../ksa/types';
 import type { Transform } from '../ksa/types';
 
 export class StaticScene {
@@ -51,6 +69,7 @@ export class StaticScene {
   private readonly ground: GroundPlane;
   private readonly footprints: FootprintLayer;
   private readonly ghosts: GhostObjectsLayer;
+  private readonly colliderVis: ColliderVisLayer;
   private readonly gizmo: IcrpGizmo;
   private readonly selectionMgr: SelectionManager;
   private readonly objects = new Map<string, PieceObject>();
@@ -81,15 +100,30 @@ export class StaticScene {
     this.ghosts = new GhostObjectsLayer(() => this.viewport.invalidate());
     this.root.add(this.ghosts.group);
 
+    this.colliderVis = new ColliderVisLayer();
+    this.root.add(this.colliderVis.group);
+
     this.selectionMgr = new SelectionManager(
       this.viewport.camera,
       this.viewport.renderer.domElement,
       this.root,
       (selected, additive) => {
         if (!selected) {
-          if (!additive) $selection.set([]);
+          if (!additive) {
+            $selection.set([]);
+            $colliderSelection.set(null);
+          }
           return;
         }
+        if (selected.kind === 'collider') {
+          const ref = decodeColliderRef(selected.id);
+          if (ref) {
+            $selection.set([]);
+            $colliderSelection.set(ref);
+          }
+          return;
+        }
+        $colliderSelection.set(null);
         const current = $selection.get();
         if (additive) {
           $selection.set(
@@ -119,10 +153,15 @@ export class StaticScene {
             return;
           }
           // Parent is the basis root, so the read-back is KSA-frame numbers.
-          const id = (obj.userData.selectable as { id: string } | undefined)?.id;
-          if (!id) return;
+          const selectable = obj.userData.selectable as { kind?: string; id: string } | undefined;
+          if (!selectable) return;
           const t = readPlacementTransform(obj);
-          setPlacementTransform(id, t);
+          if (selectable.kind === 'collider') {
+            const ref = decodeColliderRef(selectable.id);
+            if (ref) this.writeColliderFromWorld(ref, t);
+            return;
+          }
+          setPlacementTransform(selectable.id, t);
         },
         onDraggingChanged: (dragging) => {
           this.selectionMgr.setSuppressed(dragging);
@@ -143,6 +182,7 @@ export class StaticScene {
             // single-select echo-skip ends here), THEN re-center the pivot so
             // the next drag starts from identity.
             this.reconcile();
+            this.applyColliderVis();
             this.applySelection();
             this.viewport.invalidate();
           }
@@ -173,6 +213,149 @@ export class StaticScene {
     this.sub($overlaysVisible, () => this.applyOverlays());
     this.sub($project, () => this.applyGhosts());
     this.sub($pieceIndex, () => this.applyGhosts());
+    this.sub($activeObject, () => this.applyColliderVis());
+    this.sub($pieceIndex, () => this.applyColliderVis());
+    this.sub($collidersVisible, () => this.applyColliderVis());
+    this.sub($colliderSelection, () => {
+      this.colliderVis.setSelected($colliderSelection.get());
+      this.applySelection();
+    });
+  }
+
+  /** True while the gizmo is dragging the SELECTED COLLIDER's visual. */
+  private draggingCollider = false;
+
+  private applyColliderVis(): void {
+    // Echo-skip: while the gizmo drags a collider visual, the write-back
+    // rebuild would destroy the very object being dragged (converged on drag
+    // end, same pattern as placements).
+    if (this.draggingCollider && this.gizmo.isDragging) return;
+    // The rebuild DISPOSES every collider visual — detach the gizmo first if it
+    // holds one (TransformControls crashes updating a parentless object), then
+    // re-attach to the freshly built visual via applySelection.
+    if (this.draggingCollider) this.gizmo.attach(null);
+    this.colliderVis.update($activeObject.get(), $pieceIndex.get(), $collidersVisible.get());
+    this.colliderVis.setSelected($colliderSelection.get());
+    if ($colliderSelection.get()) this.applySelection();
+  }
+
+  /** Writes a dragged collider visual's KSA-frame transform back to the doc. */
+  private writeColliderFromWorld(ref: ColliderRef, world: Transform): void {
+    const size = normalizeColliderSize(getCollider(ref)?.shape ?? 'Box', world.scale);
+    if (ref.owner === null) {
+      updateCollider(ref, { position: world.position, rotation: world.rotation, scale: size });
+      return;
+    }
+    const pl = getPlacement(ref.owner);
+    if (!pl) return;
+    const frame: Transform = {
+      position: pl.transform.position,
+      rotation: pl.transform.rotation,
+      scale: { x: 1, y: 1, z: 1 },
+    };
+    const local = colliderLocalFromWorld({ ...world, scale: size }, frame);
+    updateCollider(ref, { position: local.position, rotation: local.rotation, scale: size });
+  }
+
+  // --- Collider authoring (details-panel commands) --------------------------------
+
+  /** KSA-frame (object space) sample points of the selected placements. */
+  private selectionKsaPoints(): { x: number; y: number; z: number }[] {
+    const groups: THREE.Object3D[] = [];
+    for (const id of $selection.get()) {
+      const obj = this.objects.get(id);
+      if (obj) groups.push(obj.group);
+    }
+    // collectWorldPoints returns THREE world points; root basis maps them back.
+    return collectWorldPoints(groups, 'vertex').map((p) => ({ x: p.y, y: p.x, z: -p.z }));
+  }
+
+  /**
+   * Fits `shape` around the selected placements' geometry and adds it as a
+   * collider OWNED BY the first selected placement (so it follows the piece);
+   * with nothing selected the fit is impossible (returns false).
+   */
+  addFittedCollider(shape: PartCollider['shape']): boolean {
+    const ids = $selection.get();
+    if (ids.length === 0) return false;
+    const points = this.selectionKsaPoints();
+    const fit = fitCollider(shape, points, IDENTITY_QUAT, 0);
+    if (!fit) return false;
+    const q = new THREE.Quaternion(
+      fit.quaternion[0],
+      fit.quaternion[1],
+      fit.quaternion[2],
+      fit.quaternion[3],
+    );
+    const e = new THREE.Euler().setFromQuaternion(q, 'ZYX');
+    const world: Transform = {
+      position: fit.position,
+      rotation: { x: e.x, y: e.y, z: e.z },
+      scale: fit.size,
+    };
+    const owner = ids[0];
+    const pl = getPlacement(owner);
+    if (!pl) return false;
+    const frame: Transform = {
+      position: pl.transform.position,
+      rotation: pl.transform.rotation,
+      scale: { x: 1, y: 1, z: 1 },
+    };
+    const local = colliderLocalFromWorld(world, frame);
+    addColliderTo(owner, {
+      shape,
+      position: local.position,
+      rotation: local.rotation,
+      scale: fit.size,
+    });
+    return true;
+  }
+
+  /**
+   * Adds a default 1 m collider at the selection centroid, owned by the first
+   * selected placement (or object-level with nothing selected).
+   */
+  addManualCollider(shape: PartCollider['shape']): void {
+    const ids = $selection.get();
+    const owner = ids[0] ?? null;
+    let centreKsa = { x: 0.5, y: 0, z: 0 };
+    const box = new THREE.Box3();
+    for (const id of ids) {
+      const obj = this.objects.get(id);
+      if (obj) box.expandByObject(obj.group);
+    }
+    if (!box.isEmpty()) {
+      const c = new THREE.Vector3();
+      box.getCenter(c);
+      centreKsa = { x: c.y, y: c.x, z: -c.z };
+    }
+    const size = normalizeColliderSize(shape, { x: 1, y: 1, z: 1 });
+    if (owner === null) {
+      addColliderTo(null, {
+        shape,
+        position: centreKsa,
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: size,
+      });
+      return;
+    }
+    const pl = getPlacement(owner);
+    if (!pl) return;
+    const frame: Transform = {
+      position: pl.transform.position,
+      rotation: pl.transform.rotation,
+      scale: { x: 1, y: 1, z: 1 },
+    };
+    const local = colliderLocalFromWorld(
+      { position: centreKsa, rotation: { x: 0, y: 0, z: 0 }, scale: size },
+      frame,
+    );
+    addColliderTo(owner, {
+      shape,
+      position: local.position,
+      rotation: local.rotation,
+      scale: size,
+    });
   }
 
   private lastGhostKey = '';
@@ -463,13 +646,21 @@ export class StaticScene {
       }
     }
 
-    const layerVisible = new Map(doc.layers.map((l) => [l.id, l.visible]));
+    const layerState = new Map(doc.layers.map((l) => [l.id, l]));
+    const stateOf = (layerId: string) => {
+      const layer = layerState.get(layerId);
+      return {
+        visible: layer?.visible ?? true,
+        pickable: (layer?.visible ?? true) && !layer?.locked,
+      };
+    };
 
     // Update survivors, create newcomers.
     for (const pl of doc.placements) {
       const existing = this.objects.get(pl.instanceId);
       if (existing) {
-        existing.setVisible(layerVisible.get(pl.layerId) ?? true);
+        const st = stateOf(pl.layerId);
+        existing.setLayerState(st.visible, st.pickable);
         // Skip the write-back echo of the object currently being dragged: the
         // gizmo owns its transform mid-drag, and re-applying identical numbers
         // each frame would fight TransformControls.
@@ -491,8 +682,8 @@ export class StaticScene {
         if (stale) stale.dispose();
         this.objects.set(obj.instanceId, obj);
         obj.applyTransform(current);
-        const visible = $activeObject.get().layers.find((l) => l.id === current.layerId)?.visible;
-        obj.setVisible(visible ?? true);
+        const layer = $activeObject.get().layers.find((l) => l.id === current.layerId);
+        obj.setLayerState(layer?.visible ?? true, (layer?.visible ?? true) && !layer?.locked);
         this.root.add(obj.group);
         this.applySelection();
         this.viewport.invalidate();
@@ -607,6 +798,17 @@ export class StaticScene {
     const ids = new Set($selection.get());
     for (const [id, obj] of this.objects) obj.setSelected(ids.has(id));
     if (this.gizmo.isDragging) return;
+
+    // A selected collider owns the gizmo (all three tools; scale = resize).
+    const colliderRef = $colliderSelection.get();
+    if (colliderRef) {
+      const target = this.colliderVis.getPickable(colliderRef);
+      this.gizmoOnPivot = false;
+      this.draggingCollider = !!target;
+      this.gizmo.attach(target);
+      return;
+    }
+    this.draggingCollider = false;
 
     if (ids.size === 1) {
       const single = this.objects.get([...ids][0]);
@@ -852,6 +1054,7 @@ export class StaticScene {
     this.objects.clear();
     this.gizmo.dispose();
     this.selectionMgr.dispose();
+    this.colliderVis.dispose();
     this.ghosts.dispose();
     this.footprints.dispose();
     this.ground.dispose();

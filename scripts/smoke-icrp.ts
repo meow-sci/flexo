@@ -17,7 +17,9 @@
  *   8. body drag — grabbing a piece slides the whole selection on the ground
  *   9. pivot drag — dragging a gizmo arrow moves the group (regression: the
  *      multi-select pivot must stream deltas into the document)
- *  10. export — the dialog opens, the Assets preview contains <StaticObject>
+ *  10. colliders — Fit Box on a selected piece opens the collider inspector
+ *  11. export — the dialog opens, the Assets preview contains <StaticObject>,
+ *      and system-mod mode ALWAYS ships a systems/ scenario
  *
  * Steps 8–9 use the dev-only `window.__icrp` debug handle (installed by
  * main.tsx under import.meta.env.DEV) to target the WebGL scene
@@ -323,8 +325,39 @@ async function run(page: Page): Promise<void> {
     assert(midMoved !== endMesh || midMoved !== 'null', 'pivot drag: mesh never moved mid-drag')
   })
 
-  await step('export dialog previews the Assets XML', async () => {
+  await step('collider fit + inspector', async () => {
+    await page.evaluate(() => {
+      const w = window as unknown as {
+        __icrp: {
+          project: () => { objects: { placements: { instanceId: string }[] }[] }
+          select: (ids: string[]) => void
+        }
+      }
+      const pl = w.__icrp.project().objects[0].placements[0]
+      w.__icrp.select([pl.instanceId])
+    })
+    await delay(300)
+    await page.getByRole('button', { name: 'Fit Box collider' }).click()
+    await delay(400)
+    await page.locator('text=/Box collider · on /').waitFor({ timeout: 5_000 })
+    // The collider landed on the placement in the document.
+    const own = await page.evaluate(() => {
+      const w = window as unknown as {
+        __icrp: {
+          project: () => { objects: { placements: { colliders?: unknown[] }[] }[] }
+        }
+      }
+      return w.__icrp
+        .project()
+        .objects[0].placements.reduce((n, p) => n + (p.colliders?.length ?? 0), 0)
+    })
+    assert(own > 0, 'fit added no placement-owned collider')
+    await page.keyboard.press('Escape') // deselect the collider
+  })
+
+  await step('export: Assets preview + always-shipped system scenario', async () => {
     await page.getByRole('button', { name: 'Export mod…' }).click()
+    await page.getByRole('button', { name: /system\.xml/ }).waitFor({ timeout: 10_000 })
     await page.getByRole('button', { name: /Assets\.xml/ }).click()
     const preview = await page.locator('pre').textContent()
     assert(

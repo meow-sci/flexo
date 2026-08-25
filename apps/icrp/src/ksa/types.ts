@@ -41,6 +41,8 @@ export interface LayerDef {
   name: string;
   /** Hidden layers render nothing and are unpickable (view state, not undo-enrolled). */
   visible: boolean;
+  /** Locked layers render but are unpickable/undraggable (view state, additive field). */
+  locked?: boolean;
 }
 
 export const DEFAULT_LAYER_ID = 'default';

@@ -7,16 +7,18 @@ import { useEffect, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { cn } from '../../../src/ui/kit';
 import {
+  $colliderSelection,
   $selection,
   duplicatePlacements,
   endGesture,
   redo,
+  removeCollider,
   removePlacements,
   selectAllVisible,
   undo,
 } from './state/docStore';
 import { ensureStaticCatalogLoaded } from './state/catalogStore';
-import { $groundLock, setTool } from './state/toolStore';
+import { $collidersVisible, $groundLock, setTool } from './state/toolStore';
 import { $addOpen, $exportOpen } from './state/uiStore';
 import { TopBar } from './ui/TopBar';
 import { AddDialog } from './ui/AddDialog';
@@ -54,13 +56,17 @@ export function App() {
         e.preventDefault();
         $exportOpen.set(true);
       } else if (e.key === 'Backspace' || e.key === 'Delete') {
-        removePlacements($selection.get());
+        const colliderRef = $colliderSelection.get();
+        if (colliderRef) removeCollider(colliderRef);
+        else removePlacements($selection.get());
       } else if (e.key === 'F') {
         getScene()?.frameAll();
       } else if (e.key === 'f') {
         getScene()?.frameSelection();
       } else if (e.key === 'g') {
         $groundLock.set(!$groundLock.get());
+      } else if (e.key === 'c') {
+        $collidersVisible.set(!$collidersVisible.get());
       } else if (e.key === 'a') {
         $addOpen.set(true);
       } else if (mod && e.key === 'ArrowDown' && e.shiftKey) {
@@ -70,7 +76,10 @@ export function App() {
         e.preventDefault();
         getScene()?.dropToGround($selection.get());
       } else if (e.key === 'Escape') {
-        if (!getScene()?.cancelDrag()) $selection.set([]);
+        if (!getScene()?.cancelDrag()) {
+          if ($colliderSelection.get()) $colliderSelection.set(null);
+          else $selection.set([]);
+        }
       } else if (e.key === 'q') {
         setTool('select');
       } else if (e.key === 'w') {

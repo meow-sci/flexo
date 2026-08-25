@@ -62,19 +62,17 @@ export class PieceObject {
     applyPlacement(this.group, placement.transform);
   }
 
-  /** Layer visibility: hides the group AND makes it unpickable (raycast noop). */
-  setVisible(visible: boolean): void {
-    if (this.group.visible === visible) return;
+  /**
+   * Layer state: `visible` hides the mesh; `pickable` (visible && !locked)
+   * controls raycasting — a LOCKED layer renders but cannot be selected or
+   * dragged.
+   */
+  setLayerState(visible: boolean, pickable: boolean): void {
     this.group.visible = visible;
     const mesh = this.group.children[0] as THREE.Mesh | undefined;
-    if (mesh) {
-      if (visible) {
-        if (this.savedRaycast) mesh.raycast = this.savedRaycast;
-      } else {
-        this.savedRaycast = mesh.raycast;
-        mesh.raycast = () => {};
-      }
-    }
+    if (!mesh) return;
+    if (this.savedRaycast === null) this.savedRaycast = mesh.raycast;
+    mesh.raycast = pickable && visible ? this.savedRaycast : () => {};
   }
 
   private savedRaycast: THREE.Mesh['raycast'] | null = null;

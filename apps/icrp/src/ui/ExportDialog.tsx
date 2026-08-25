@@ -49,7 +49,10 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
     let stale = false;
     void (async () => {
       let system: SystemFilePlan | null = null;
-      if (mode === 'system-mod' && project.sites.length > 0) {
+      // System-mod mode ALWAYS ships the custom system — the full stock-planet
+      // clone with any site-hosting bodies (Earth) inlined — even with zero
+      // sites, so the mod is a complete selectable scenario from day one.
+      if (mode === 'system-mod') {
         const corpus = await ensureCorpusLoaded();
         if (corpus) {
           const modId = sanitizeBaseName(project.modName);

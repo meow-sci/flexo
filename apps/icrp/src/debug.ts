@@ -3,7 +3,14 @@
  * read the document and drive the scene deterministically. Never in prod
  * builds (the import is guarded in main.tsx by import.meta.env.DEV).
  */
-import { $project, $selection, getPlacement, selectLayerContents } from './state/docStore';
+import {
+  $colliderSelection,
+  $project,
+  $selection,
+  getPlacement,
+  selectLayerContents,
+  type ColliderRef,
+} from './state/docStore';
 import { getScene } from './three/sceneHandle';
 
 declare global {
@@ -17,6 +24,8 @@ declare global {
       hoveredAxis: () => string | null;
       pickAt: (clientX: number, clientY: number) => unknown;
       meshWorld: (id: string) => { x: number; y: number; z: number } | null;
+      select: (ids: string[]) => void;
+      selectCollider: (ref: ColliderRef | null) => void;
     };
   }
 }
@@ -31,5 +40,13 @@ export function installDebugHandle(): void {
     hoveredAxis: () => getScene()?.debugHoveredAxis() ?? null,
     pickAt: (clientX: number, clientY: number) => getScene()?.debugPickAt(clientX, clientY),
     meshWorld: (id: string) => getScene()?.debugMeshWorld(id) ?? null,
+    select: (ids: string[]) => {
+      $colliderSelection.set(null);
+      $selection.set(ids);
+    },
+    selectCollider: (ref: ColliderRef | null) => {
+      $selection.set([]);
+      $colliderSelection.set(ref);
+    },
   };
 }

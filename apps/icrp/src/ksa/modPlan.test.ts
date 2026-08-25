@@ -117,13 +117,35 @@ describe('buildModPlan', () => {
     );
   });
 
-  it('warns on scaled placements with colliders (I3) and missing FootprintRadius', () => {
+  it('bakes a scaled-collider VARIANT for a scaled placement (no more warning)', () => {
     const p = project();
-    p.objects[0].placements[0].transform.scale = { x: 2, y: 1, z: 1 };
+    p.objects[0].placements[0].transform.scale = { x: 2, y: 2, z: 2 };
     p.objects[0].footprintRadiusM = null;
     const plan = buildModPlan(p, INDEX);
-    expect(plan.issues.some((i) => i.message.includes('never scales'))).toBe(true);
+    const assets = plan.files.find((f) => f.path === 'MyPadAssets.xml')!.data;
+    // The placement is re-pointed at an auto-minted variant piece…
+    expect(assets).toContain('InstanceOf="icrp_MyPad_v1_LaunchPadA_Subpart_PadA"');
+    // …whose collider dims carry the ×2 bake (source Box scale was 1×2×3).
+    const variant = /<StaticSubObject Id="icrp_MyPad_v1_[^"]*">[\s\S]*?<\/StaticSubObject>/.exec(
+      assets,
+    )![0];
+    expect(variant).toContain('<LengthX M="2"/>');
+    expect(variant).toContain('<LengthY M="4"/>');
+    expect(variant).toContain('<LengthZ M="6"/>');
+    // Baking is automatic — informational note, no actionable warning.
+    expect(plan.issues.some((i) => i.message.includes('never scales'))).toBe(false);
+    expect(plan.issues.some((i) => i.message.includes('variant piece(s) baked'))).toBe(true);
     expect(plan.issues.some((i) => i.message.includes('FootprintRadius'))).toBe(true);
+    // Two scaled placements of the same piece+scale share ONE variant.
+    p.objects[0].placements.push({
+      ...p.objects[0].placements[0],
+      instanceId: 'a2',
+    });
+    const plan2 = buildModPlan(p, INDEX);
+    const assets2 = plan2.files.find((f) => f.path === 'MyPadAssets.xml')!.data;
+    expect(
+      assets2.match(/icrp_MyPad_v\d+_/g)!.filter((m, i, a) => a.indexOf(m) === i),
+    ).toHaveLength(1);
   });
 
   it('warns when an object has no colliders at all (I4)', () => {

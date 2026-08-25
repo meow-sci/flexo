@@ -14,6 +14,7 @@
  */
 import { sanitizeBaseName } from '../../../../src/ksa/modExport';
 import { colliderWorld } from '../../../../src/three/coords';
+import { isUnitScale, scaleCollider, scaleVariantKey } from './colliderScale';
 import type { CatalogStaticPiece } from './staticCatalog';
 import type { IcrpProjectDoc } from '../state/docStore';
 import {
@@ -23,6 +24,8 @@ import {
   type StaticObjectPlan,
   type StaticPiecePlan,
 } from './staticXmlSerializer';
+
+type Vec3Like = { x: number; y: number; z: number };
 
 export interface ModFile {
   /** Path inside the mod folder (forward slashes). */
@@ -92,7 +95,7 @@ export function buildModPlan(
   }
 
   const vesselPieces: StaticPiecePlan[] = [];
-  /** placement pieceId → exported InstanceOf. */
+  /** placement pieceId → exported InstanceOf (unscaled placements). */
   const instanceOf = new Map<string, string>();
   for (const pieceId of [...usedPieceIds].sort()) {
     const piece = pieceIndex.get(pieceId);
@@ -122,6 +125,37 @@ export function buildModPlan(
     });
   }
 
+  /**
+   * Scaled-collider VARIANTS: a scaled placement of a piece WITH template
+   * colliders is re-pointed at an auto-minted `<StaticSubObject>` variant whose
+   * colliders carry the scale baked in (KSA never scales colliders — fact
+   * F4/I3 — so this is how scaled pieces keep matching collision). Deduped per
+   * (piece, scale); the variant reuses the same mesh/material ids by global
+   * registry (fact F12).
+   */
+  const scaleVariants = new Map<string, string>();
+  let variantCounter = 0;
+  const resolveInstanceOf = (pieceId: string, scale: Vec3Like): string => {
+    const base = instanceOf.get(pieceId) ?? pieceId;
+    const piece = pieceIndex.get(pieceId);
+    if (!piece || piece.colliders.length === 0 || isUnitScale(scale)) return base;
+    const key = scaleVariantKey(pieceId, scale);
+    let variantId = scaleVariants.get(key);
+    if (!variantId) {
+      variantCounter++;
+      variantId = `icrp_${modId}_v${variantCounter}_${pieceId.replace(/^Core/, '')}`;
+      scaleVariants.set(key, variantId);
+      vesselPieces.push({
+        id: variantId,
+        meshId: piece.meshNodeName,
+        materialId: piece.materialId ?? '',
+        terrain: piece.terrain,
+        colliders: piece.colliders.map((c) => scaleCollider(c, scale)),
+      });
+    }
+    return variantId;
+  };
+
   // --- Objects ------------------------------------------------------------------
   const objectPlans: StaticObjectPlan[] = [];
   const gameDataPlans: StaticGameDataPlan[] = [];
@@ -148,21 +182,6 @@ export function buildModPlan(
       });
     }
 
-    // I3: colliders never scale with the placement.
-    for (const pl of obj.placements) {
-      const s = pl.transform.scale;
-      const scaled =
-        Math.abs(s.x - 1) > 1e-9 || Math.abs(s.y - 1) > 1e-9 || Math.abs(s.z - 1) > 1e-9;
-      if (scaled && (pieceIndex.get(pl.pieceId)?.colliders.length ?? 0) > 0) {
-        issues.push({
-          severity: 'warning',
-          message:
-            `'${pl.instanceId}' is scaled but its piece has colliders — KSA never scales ` +
-            `colliders (visuals and collision will disagree).`,
-        });
-      }
-    }
-
     if (obj.footprintRadiusM === null && obj.placements.length > 0) {
       issues.push({
         severity: 'warning',
@@ -172,18 +191,19 @@ export function buildModPlan(
       });
     }
 
-    // Placement-owned colliders (part-level shapes from stock-part imports)
-    // compose into the object-level <Collider> with the placement's CURRENT
-    // transform — they follow the piece wherever it was moved. Scale is never
-    // composed (KSA, fact F4/I3): the collider's own scale IS its size.
+    // Placement-owned colliders (part-level shapes from stock-part imports and
+    // user-authored ones) compose into the object-level <Collider> with the
+    // placement's CURRENT transform. The placement's scale is BAKED first
+    // (scaleCollider) so collision keeps matching the scaled visuals.
     const placementColliders = obj.placements.flatMap((pl) =>
       (pl.colliders ?? []).map((c, i) => {
+        const baked = scaleCollider(c, pl.transform.scale);
         const world = colliderWorld(
-          { position: c.position, rotation: c.rotation, scale: c.scale },
+          { position: baked.position, rotation: baked.rotation, scale: baked.scale },
           pl.transform,
         );
         return {
-          ...c,
+          ...baked,
           id: `${pl.instanceId}_${c.id}${i}`,
           position: world.position,
           rotation: world.rotation,
@@ -195,7 +215,7 @@ export function buildModPlan(
       id: obj.id,
       placements: obj.placements.map((pl) => ({
         instanceId: pl.instanceId,
-        instanceOf: instanceOf.get(pl.pieceId) ?? pl.pieceId,
+        instanceOf: resolveInstanceOf(pl.pieceId, pl.transform.scale),
         transform: pl.transform,
       })),
       colliders: [...obj.objectColliders, ...placementColliders],
@@ -218,7 +238,7 @@ export function buildModPlan(
           'Earth pads; switch to system-mod to place new sites.',
       });
     }
-    const merged = objectPlansToStockGameData(project, instanceOf, issues);
+    const merged = objectPlansToStockGameData(project, resolveInstanceOf, issues);
     const assetsNameX = `${modId}Assets.xml`;
     const gameDataNameX = `${modId}GameData.xml`;
     const filesX: ModFile[] = [
@@ -270,12 +290,12 @@ export function buildModPlan(
       });
     }
   }
-  if (project.sites.length > 0 && !system) {
+  if (!system) {
     issues.push({
       severity: 'error',
       message:
-        'Sites exist but no <System> scenario was built (Core Astronomicals/SolSystem ' +
-        'unavailable?) — the exported mod would have no way to place them.',
+        'No <System> scenario was built (Core Astronomicals/SolSystem unavailable under ' +
+        '/ksa/?) — a system-mod export always ships the custom system.',
     });
   }
 
@@ -304,6 +324,15 @@ export function buildModPlan(
   ];
   if (system && systemPath) files.push({ path: systemPath, data: system.xml });
 
+  if (scaleVariants.size > 0) {
+    issues.push({
+      severity: 'warning',
+      message:
+        `${scaleVariants.size} scaled-collider variant piece(s) baked automatically ` +
+        `(scaled placements keep matching collision — nothing to fix).`,
+    });
+  }
+
   return { modId, files, issues, vesselPieceIds: vesselPieces.map((p) => p.id) };
 }
 
@@ -314,7 +343,7 @@ export function buildModPlan(
  */
 function objectPlansToStockGameData(
   project: IcrpProjectDoc,
-  instanceOf: ReadonlyMap<string, string>,
+  resolveInstanceOf: (pieceId: string, scale: Vec3Like) => string,
   issues: PreflightIssue[],
 ): StaticGameDataPlan {
   const placements: StaticObjectPlan['placements'][number][] = [];
@@ -330,16 +359,17 @@ function objectPlansToStockGameData(
       seenInstanceIds.add(instanceId);
       placements.push({
         instanceId,
-        instanceOf: instanceOf.get(pl.pieceId) ?? pl.pieceId,
+        instanceOf: resolveInstanceOf(pl.pieceId, pl.transform.scale),
         transform: pl.transform,
       });
       for (const [i, c] of (pl.colliders ?? []).entries()) {
+        const baked = scaleCollider(c, pl.transform.scale);
         const world = colliderWorld(
-          { position: c.position, rotation: c.rotation, scale: c.scale },
+          { position: baked.position, rotation: baked.rotation, scale: baked.scale },
           pl.transform,
         );
         colliders.push({
-          ...c,
+          ...baked,
           id: `${instanceId}_${c.id}${i}`,
           position: world.position,
           rotation: world.rotation,

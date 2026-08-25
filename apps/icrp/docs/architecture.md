@@ -72,6 +72,10 @@ as one, so an imported part keeps its shape); **keep-grounded** (Arrange menu, d
 re-drops a scaled piece whose bottom sat on the ground before the scale gesture — inside
 the same undo step — while below-grade pieces (terrain skirts) are left alone.
 
+**Layers**: visibility (eye), **lock** (padlock — rendered but unpickable/undraggable),
+**isolate** (solo, second press restores), inline rename (double-click), select-contents,
+move-selection-here, active layer for new placements.
+
 **Moving things** (three ways, all streaming into the document with one undo step):
 **grab-anywhere** — with the translate tool, pointer-dragging a piece BODY slides the whole
 selection on the ground plane (grabbing an unselected piece selects and drags just it;
@@ -90,6 +94,28 @@ instances at construction, and an HMR swap would silently split UI and scene sta
 normals via TBN), `<Alpha>` = real blend sampling **`.r`** (three's stock alphaMap chunk
 reads `.g` — patched), `<Terrain>` = flat ground-colour stand-in (the game samples planet
 biome textures). On-demand render loop (flexo's `RenderLoop` contract).
+
+## Colliders
+
+Three homes, one visual language (ColliderVisLayer on flexo's ColliderObject — amber wire
+
+- translucent pick fill, node scale IS the size in metres):
+  **piece-template** colliders (dimmed, read-only — owned by the shared `<StaticSubObject>`
+  declaration, drawn per placement with position/rotation only), **placement-owned** (full
+  amber, editable — stored in the piece frame, follow the piece, export composes them
+  object-level with the placement's CURRENT transform), and **object-level** (editable,
+  object frame). Click a wire to select; all three gizmo tools work (scale = resize); the
+  details panel edits position/rotation/size per shape (`colliderSizeLabels`); Add and
+  **Fit** buttons author them — Fit wraps the selected pieces' sampled geometry with a
+  Box/Cylinder/Sphere/Capsule (flexo's `fitCollider`) and attaches to the first selected
+  piece. `C` toggles visibility.
+
+**Scaling just works** (no warnings): a scaled placement whose piece has template
+colliders is re-pointed at an auto-minted VARIANT `<StaticSubObject>` with the scale baked
+into the collider dims (deduped per piece+scale, mesh/material by global id — fact F12);
+placement-owned colliders bake the scale before object-level composition
+(`ksa/colliderScale.ts`; per-axis exact for identity-rotated colliders and uniform scales,
+volume-preserving mean otherwise — documented approximation).
 
 ## Export
 

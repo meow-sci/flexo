@@ -235,7 +235,19 @@ composes them into object-level shapes with the placement's current transform; v
 pieces now also carry their `<SubPartGameData>` colliders (harvested via the Part catalog —
 they were silently missing before), and `<Internal>` props became importable pieces (F6).
 
-In-game checks [V1]–[V6] remain open (require a human with the game).
+**First in-game test results (2026-08-24)** forced two architecture corrections, now
+implemented: (1) **[V5a] FAILED** — Id-only texture references do not resolve from a
+`Documents/mods` install; the exporter now writes ABSOLUTE `<install>/Content/Core/…`
+paths (configurable, user-verified working) with `../Core/` as the Content-install
+option. (2) **The inline-Earth system export could never work** (the user's blank-pad
+report): `StaticObject.ResolveAll` links landmarks to statics only for
+`ModLibrary.TemplateLookup` bodies, and system-inline bodies never register there —
+site-hosting bodies now ship as top-level clones in `<Mod>Bodies.xml` under
+`<body>_<modId>` ids, referenced from the system via `<LoadFromLibrary>` (scope/
+launch-sites.md facts 8+10; the cartoon-moon route).
+
+Remaining in-game checks [V1]–[V6] (V2 re-test with the new architecture) require a
+human with the game.
 
 ### 0.9 Phase map
 

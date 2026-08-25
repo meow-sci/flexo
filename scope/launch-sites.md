@@ -37,15 +37,31 @@ plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (L1–L9) + §Phase 7.
 7. **Spawn** (`Vehicle.cs:3898-3959`): altitude = mean radius + max terrain height under the
    4 bottom bbox corners (CPU terrain evaluation **includes decals**) + half-height +
    `GroundOffset + SurfaceHeight`; body frame X=up/Y=east/Z=north; co-rotating, Landed.
-8. **Texture references in an inline body clone**: an element with `Id` and **empty Path**
-   is a pure registry reference (`FileReference.cs:42-49` — `_isReference` iff Path empty),
-   resolved to Core's already-loaded asset. Earth's block has 3 anonymous (`Path`-only)
-   textures which get `../Core/…` re-rooting (works from a `Content/<mod>/` install;
-   ⏳ **[V5]** verifies both routes). Never apply path rewrites to ICRP's own asset XML.
-9. **Mod loading** (`Mod.cs:26-76`, `ModManifest.cs`): `manifest.toml` order = load order,
-   **new mods append disabled** (the export dialog says so); `mod.toml` lists `assets=[…]`
-   and `systems=[…]` explicitly (no directory scan); paths are mod-dir-relative;
-   `Category=` is a texture size cap. Emitter: `apps/icrp/src/ksa/modPlan.ts`.
+8. **Texture references in a cloned body — IN-GAME VERIFIED (2026-08-24)**: a
+   `Documents/mods` install can NOT reach Core textures by relative `Path`, and Id-only
+   references (stripped `Path`) **do not work in practice** ([V5a] FAILED) despite
+   `FileReference.cs:42-49` suggesting otherwise. The reliable form is an **absolute
+   `Path` into the game install** (`<install>/Content/Core/<path>`; .NET `Path.Combine`
+   keeps an absolute second argument — user-verified working). ICRP rewrites every
+   relative `Path=` under cloned/inline bodies (authored `Id=`s kept); `../Core/<path>`
+   remains as an option for `Content/<mod>/` installs. Never apply path rewrites to
+   ICRP's own asset XML.
+9. **A system-INLINE body's landmarks NEVER resolve their static objects — IN-GAME
+   VERIFIED (2026-08-24, the blank-pad bug)**: `StaticObject.ResolveAll`
+   (`StaticObject.cs:47-66`) calls `ResolveStaticObject()` only for bodies in
+   `ModLibrary.TemplateLookup` (+ their runtime `.Bodies`), and inline `<System>` bodies
+   live in the system-local lookup (`SystemTemplate.cs:43-48`) — landmark `_staticObject`
+   stays null: nothing renders, no collider, no spawn bump. Site-hosting bodies must
+   therefore ship as TOP-LEVEL bodies in an `<Assets>` file under a **mod-suffixed id**
+   (`Earth_<modId>` — a second "Earth" loses first-wins to Core) referenced from the
+   system via `<LoadFromLibrary>`; registration is gated on the selected scenario
+   requiring the id (`AssetBundle.cs:86-92`, `SystemInfo.Requires`). Starting-vehicle
+   rows bind their celestial via the ROW's `Parent=` (situations are pure orbits), so
+   the rename only touches `Parent` attributes.
+10. **Mod loading** (`Mod.cs:26-76`, `ModManifest.cs`): `manifest.toml` order = load order,
+    **new mods append disabled** (the export dialog says so); `mod.toml` lists `assets=[…]`
+    and `systems=[…]` explicitly (no directory scan); paths are mod-dir-relative;
+    `Category=` is a texture size cap. Emitter: `apps/icrp/src/ksa/modPlan.ts`.
 
 ## Break-surface (re-check on a game update)
 

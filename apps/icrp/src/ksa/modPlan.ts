@@ -47,11 +47,18 @@ export interface ModPlanResult {
   vesselPieceIds: string[];
 }
 
-/** The prebuilt `<System>` scenario (from `systemXml.ts`) when sites exist. */
+/** The prebuilt world files (from `systemXml.ts`). */
 export interface SystemFilePlan {
   /** File name under `systems/` (e.g. `mycomplex_system.xml`). */
   fileName: string;
   xml: string;
+  /**
+   * The cloned site-hosting bodies `<Assets>` doc (TemplateLookup route —
+   * landmarks on system-INLINE bodies never resolve their static objects).
+   * Null when the project has no sites.
+   */
+  bodiesFileName?: string | null;
+  bodiesXml?: string | null;
 }
 
 /** How the mod places its objects in the world (plan D2/P8.02). */
@@ -327,13 +334,14 @@ export function buildModPlan(
   // --- Files --------------------------------------------------------------------
   const assetsName = `${modId}Assets.xml`;
   const gameDataName = `${modId}GameData.xml`;
+  const bodiesName = system?.bodiesXml ? (system.bodiesFileName ?? `${modId}Bodies.xml`) : null;
   const systemPath = system ? `systems/${system.fileName}` : null;
   const files: ModFile[] = [
     {
       path: 'mod.toml',
       data: serializeIcrpModToml(
         project.modName,
-        [assetsName, gameDataName],
+        bodiesName ? [assetsName, gameDataName, bodiesName] : [assetsName, gameDataName],
         systemPath ? [systemPath] : [],
       ),
     },
@@ -347,6 +355,7 @@ export function buildModPlan(
     },
     { path: gameDataName, data: serializeStaticGameDataXml(gameDataPlans) },
   ];
+  if (bodiesName && system?.bodiesXml) files.push({ path: bodiesName, data: system.bodiesXml });
   if (system && systemPath) files.push({ path: systemPath, data: system.xml });
 
   if (scaleVariants.size > 0) {

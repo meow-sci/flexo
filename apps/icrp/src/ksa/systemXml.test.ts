@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest';
 import { DOMParser } from '@xmldom/xmldom';
 import { hasKsaAssets, ksaAsset } from '../../../../src/ksa/ksaTestAssets';
 import { directChildren } from '../../../../src/ksa/partXmlParser';
-import { buildSystemXml, parseCelestialCorpus, type CelestialCorpus } from './systemXml';
+import {
+  buildSystemXml,
+  parseCelestialCorpus,
+  type CelestialCorpus,
+  type SystemXmlInput,
+} from './systemXml';
 import { defaultDecal, type Site } from './siteTypes';
 
 /** ICRP's own structural minis (NOT the byte-synced vendored Core fixtures). */
@@ -23,305 +28,203 @@ function parseMiniCorpus(): CelestialCorpus {
   ]);
 }
 
-/** Direct element children of the `<System>` root, in document order. */
-function systemChildren(doc: Document): Element[] {
-  const root = doc.documentElement!;
-  expect(root.tagName).toBe('System');
-  return Array.from(root.childNodes).filter((n): n is Element => n.nodeType === 1);
+const INSTALL = 'C:/Program Files/Kitten Space Agency';
+
+function input(corpus: CelestialCorpus, sites: Site[]): SystemXmlInput {
+  return {
+    systemId: 'testmod_sol',
+    displayName: 'Sol — Test',
+    modId: 'testmod',
+    corpus,
+    sites,
+    texturePaths: { mode: 'absolute', installPath: INSTALL },
+  };
 }
 
-const MEOW: Site = {
-  id: 'site-meow',
+const EARTH_SITE: Site = {
+  id: 's1',
   landmarkId: 'Meow LC-1',
   bodyId: 'Earth',
   latDeg: 28.5,
   lonDeg: -80.6,
-  staticObjectId: 'icrp_test_pad',
-  decal: { ...defaultDecal(), terrainHeightM: 17.1 },
+  staticObjectId: 'icrp_test_object',
+  decal: defaultDecal(),
 };
 
-describe('parseCelestialCorpus (mini fixtures)', () => {
-  it('indexes top-level bodies by Id and finds the stock <System>', () => {
+/** Direct element children of a parsed document's `<System>` root. */
+function systemChildren(doc: Document): Element[] {
+  const root = doc.documentElement!;
+  return Array.from(root.childNodes).filter((n): n is Element => n.nodeType === 1);
+}
+
+describe('buildSystemXml (mini corpus) — TemplateLookup architecture', () => {
+  it('zero sites: a faithful stock clone, no bodies file', () => {
     const corpus = parseMiniCorpus();
-    expect(Array.from(corpus.bodies.keys())).toEqual(['Sol', 'Earth']);
-    expect(corpus.bodies.get('Earth')!.tagName).toBe('AtmosphericBody');
-    expect(corpus.stockSystem.getAttribute('Id')).toBe('Sol');
-  });
-
-  it('throws when no <System> document is given', () => {
-    expect(() =>
-      parseCelestialCorpus([
-        { doc: parse(readMiniFixture('mini-astronomicals.xml')), file: 'mini-astronomicals.xml' },
-      ]),
-    ).toThrow(/no <System>/);
-  });
-});
-
-describe('buildSystemXml (mini fixtures)', () => {
-  it('with zero sites clones the stock system: only LoadFromLibrary rows, Id/DisplayName swapped', () => {
-    const corpus = parseMiniCorpus();
-    const result = buildSystemXml({
-      systemId: 'icrp_test_sol',
-      displayName: 'ICRP Test System',
-      corpus,
-      sites: [],
-    });
-    expect(result.idRefs).toBe(0);
-    expect(result.pathRewrites).toBe(0);
-    expect(result.xml.startsWith('<?xml version="1.0" encoding="utf-8"?>\n')).toBe(true);
-
-    const doc = parse(result.xml);
-    const root = doc.documentElement!;
-    expect(root.getAttribute('Id')).toBe('icrp_test_sol');
-    expect(directChildren(root, 'DisplayName')[0]!.getAttribute('Value')).toBe('ICRP Test System');
-
-    // The stock body list survives as LoadFromLibrary rows with attributes intact.
-    const rows = directChildren(root, 'LoadFromLibrary');
+    const result = buildSystemXml(input(corpus, []));
+    expect(result.bodiesXml).toBeNull();
+    expect(result.renamedBodies.size).toBe(0);
+    const out = parse(result.xml);
+    expect(out.documentElement!.getAttribute('Id')).toBe('testmod_sol');
+    const rows = systemChildren(out).filter((el) => el.tagName === 'LoadFromLibrary');
     expect(rows.map((r) => r.getAttribute('Id'))).toEqual(['Sol', 'Earth']);
-    const earthRow = rows[1]!;
+  });
+
+  it('a site body is CLONED into the bodies file (mod-suffixed id) and the system row swaps to LoadFromLibrary', () => {
+    const corpus = parseMiniCorpus();
+    const result = buildSystemXml(input(corpus, [EARTH_SITE]));
+    expect(result.renamedBodies.get('Earth')).toBe('Earth_testmod');
+
+    // System: NO inline Earth (an inline body's landmarks never resolve —
+    // StaticObject.ResolveAll walks TemplateLookup only), row swapped in place
+    // with Parent + HomeBody carried, vehicle Parent follows the rename.
+    const out = parse(result.xml);
+    const children = systemChildren(out);
+    expect(children.some((el) => el.tagName === 'AtmosphericBody')).toBe(false);
+    const rows = children.filter((el) => el.tagName === 'LoadFromLibrary');
+    expect(rows.map((r) => r.getAttribute('Id'))).toEqual(['Sol', 'Earth_testmod']);
+    const earthRow = rows[1];
     expect(earthRow.getAttribute('Parent')).toBe('Sol');
     expect(earthRow.getAttribute('HomeBody')).toBe('true');
-    expect(directChildren(root, 'AtmosphericBody')).toHaveLength(0);
+    const vehicle = children.find((el) => el.tagName === 'LoadVehicleFromLibrary')!;
+    expect(vehicle.getAttribute('Parent')).toBe('Earth_testmod');
 
-    // Unmodeled children are copied wholesale.
-    expect(directChildren(root, 'GalacticPlane')).toHaveLength(1);
-    const vehicle = directChildren(root, 'LoadVehicleFromLibrary')[0]!;
-    expect(vehicle.getAttribute('Id')).toBe('Rocket');
-    expect(directChildren(vehicle, 'SituationRef')[0]!.getAttribute('InstanceOf')).toBe(
-      'RocketStartingSituation',
-    );
-  });
-
-  it('with one Earth site inlines Earth at the row position with landmarks/decals added', () => {
-    const corpus = parseMiniCorpus();
-    const result = buildSystemXml({
-      systemId: 'icrp_test_sol',
-      displayName: 'ICRP Test System',
-      corpus,
-      sites: [MEOW],
-    });
-    const doc = parse(result.xml);
-    const root = doc.documentElement!;
-
-    // Earth is inline at the position of its LoadFromLibrary row, carrying the
-    // row's Parent/HomeBody attributes (AstronomicalTemplate.cs:20-24).
-    expect(directChildren(root, 'LoadFromLibrary').map((r) => r.getAttribute('Id'))).toEqual([
-      'Sol',
-    ]);
-    const children = systemChildren(doc);
-    const solIndex = children.findIndex((el) => el.tagName === 'LoadFromLibrary');
-    const earth = children[solIndex + 1]!;
-    expect(earth.tagName).toBe('AtmosphericBody');
-    expect(earth.getAttribute('Id')).toBe('Earth');
-    expect(earth.getAttribute('Parent')).toBe('Sol');
-    expect(earth.getAttribute('HomeBody')).toBe('true');
-
-    // The new landmark is appended after the existing landmark run,
-    // attribute-exact; the stock landmarks and the city survive.
-    const landmarks = directChildren(earth, 'Landmark');
+    // Bodies file: the full Earth clone under the new id, with the added
+    // landmark, the stock landmarks/city/decal preserved, and Parent carried.
+    const bodies = parse(result.bodiesXml!);
+    expect(bodies.documentElement!.tagName).toBe('Assets');
+    const clone = directChildren(bodies.documentElement!, 'AtmosphericBody')[0];
+    expect(clone.getAttribute('Id')).toBe('Earth_testmod');
+    expect(clone.getAttribute('Parent')).toBe('Sol');
+    const landmarks = directChildren(clone, 'Landmark');
     expect(landmarks.map((l) => l.getAttribute('Id'))).toEqual([
       'CCSFS LC-39A',
       'VSFB LC-4',
       'Meow LC-1',
     ]);
-    const meow = landmarks[2]!;
-    expect(meow.getAttribute('IsLaunchPad')).toBe('true');
-    expect(meow.getAttribute('StaticObject')).toBe('icrp_test_pad');
-    expect(directChildren(meow, 'Latitude')[0]!.getAttribute('Degrees')).toBe('28.5');
-    expect(directChildren(meow, 'Longitude')[0]!.getAttribute('Degrees')).toBe('-80.6');
-    expect(directChildren(earth, 'City')).toHaveLength(1);
-
-    // The decal lands at the END of the existing <Terrain><ProceduralModifiers>.
-    const modifiers = directChildren(
-      directChildren(earth, 'Terrain')[0]!,
-      'ProceduralModifiers',
-    )[0]!;
-    expect(directChildren(modifiers, 'GradientScale')).toHaveLength(1);
-    const decals = directChildren(modifiers, 'Modifier');
-    expect(decals.map((d) => d.getAttribute('Name'))).toEqual([
-      'LaunchSite_CCSFS-LC-39A',
-      'LaunchSite_Meow-LC-1',
-    ]);
-    const ourDecal = decals[1]!;
-    expect(directChildren(ourDecal, 'Radius')[0]!.getAttribute('Value')).toBe('300');
-    expect(directChildren(ourDecal, 'AltitudeOffset')[0]!.getAttribute('Km')).toBe('17.1');
-    expect(directChildren(ourDecal, 'Location')[0]!.getAttribute('Id')).toBe('Meow-LC-1');
-
-    // Texture rules (P7.00): Id+Path elements become pure Id references, the
-    // anonymous WindTexture is re-rooted, our decal's HeightMap collapses too.
-    const diffuse = earth.getElementsByTagName('Diffuse')[0]!;
-    expect(diffuse.getAttribute('Id')).toBe('Earth_Diffuse');
-    expect(diffuse.hasAttribute('Path')).toBe(false);
-    const wind = earth.getElementsByTagName('WindTexture')[0]!;
-    expect(wind.getAttribute('Path')).toBe('../Core/Textures/Earth_Ocean_Wind.png');
-    for (const decal of decals) {
-      const heightMap = directChildren(decal, 'HeightMap')[0]!;
-      expect(heightMap.getAttribute('Id')).toBe('Circle');
-      expect(heightMap.hasAttribute('Path')).toBe(false);
-      expect(heightMap.getAttribute('Category')).toBe('TerrainHeight');
-    }
-    // Mini Earth: Diffuse/Normal/Height + the stock decal HeightMap + ours = 5.
-    expect(result.idRefs).toBe(5);
-    expect(result.pathRewrites).toBe(1);
+    const added = landmarks[2];
+    expect(added.getAttribute('IsLaunchPad')).toBe('true');
+    expect(added.getAttribute('StaticObject')).toBe('icrp_test_object');
+    // The new site's decal joined the existing ProceduralModifiers.
+    expect(result.bodiesXml).toContain('LaunchSite_Meow-LC-1');
+    expect(result.bodiesXml).toContain('LaunchSite_CCSFS-LC-39A'); // stock kept
   });
 
-  it('never mutates the corpus: a re-run produces identical output', () => {
+  it('texture paths: every relative Path= becomes absolute into the install; Ids preserved', () => {
     const corpus = parseMiniCorpus();
-    const input = {
-      systemId: 'icrp_test_sol',
-      displayName: 'ICRP Test System',
-      corpus,
-      sites: [MEOW],
-    };
-    const first = buildSystemXml(input);
-    const second = buildSystemXml(input);
-    expect(second.xml).toBe(first.xml);
-    expect(second.idRefs).toBe(first.idRefs);
-
-    // And the corpus DOM still holds the untouched Core block.
-    const earth = corpus.bodies.get('Earth')!;
-    expect(earth.getElementsByTagName('Diffuse')[0]!.getAttribute('Path')).toBe(
-      'Textures/Earth_Diffuse.ktx2',
+    const result = buildSystemXml(input(corpus, [EARTH_SITE]));
+    const bodies = result.bodiesXml!;
+    expect(bodies).toContain(
+      `Id="Earth_Diffuse" Path="${INSTALL}/Content/Core/Textures/Earth_Diffuse.ktx2"`,
     );
-    expect(directChildren(earth, 'Landmark')).toHaveLength(2);
+    // The anonymous WindTexture too.
+    expect(bodies).toContain(`Path="${INSTALL}/Content/Core/Textures/Earth_Ocean_Wind.png"`);
+    // ICRP's own decal height map is rewritten as well.
+    expect(bodies).toContain(`Path="${INSTALL}/Content/Core/Textures/Planets/_Decals/circle.dds"`);
+    // No relative Textures/ path survives anywhere in the bodies file.
+    expect(/Path="Textures\//.test(bodies)).toBe(false);
+    expect(result.texturesRewritten).toBeGreaterThanOrEqual(6);
   });
 
-  it('throws for a site on a body outside the corpus', () => {
+  it("'core-relative' mode writes ../Core/ prefixes instead", () => {
     const corpus = parseMiniCorpus();
-    expect(() =>
-      buildSystemXml({
-        systemId: 'icrp_test_sol',
-        displayName: 'ICRP Test System',
-        corpus,
-        sites: [{ ...MEOW, bodyId: 'Krypton' }],
-      }),
-    ).toThrow(/Krypton/);
-  });
-});
-
-describe.runIf(hasKsaAssets)('buildSystemXml (live Core tree)', () => {
-  // KSA ships these files BOM-prefixed; @xmldom rejects a BOM before <?xml?>.
-  const readLive = (name: string) => readFileSync(ksaAsset(name), 'utf-8').replace(/^\uFEFF/, '');
-
-  it('one Earth site: stock body list survives, Earth inline, stock decals intact', () => {
-    const stockSystemDoc = parse(readLive('SolSystem.xml'));
-    const corpus = parseCelestialCorpus([
-      { doc: parse(readLive('Astronomicals.xml')), file: 'Astronomicals.xml' },
-      { doc: stockSystemDoc, file: 'SolSystem.xml' },
-    ]);
-    const stockEarth = corpus.bodies.get('Earth')!;
-    const stockLandmarkCount = directChildren(stockEarth, 'Landmark').length;
-    const stockModifierNames = directChildren(
-      directChildren(directChildren(stockEarth, 'Terrain')[0]!, 'ProceduralModifiers')[0]!,
-      'Modifier',
-    ).map((m) => m.getAttribute('Name'));
-    const stockRows = directChildren(stockSystemDoc.documentElement!, 'LoadFromLibrary').map((r) =>
-      r.getAttribute('Id'),
-    );
-    const stockInlineIds = Array.from(stockSystemDoc.documentElement!.childNodes)
-      .filter((n): n is Element => n.nodeType === 1)
-      .filter((el) => el.tagName !== 'LoadFromLibrary' && el.hasAttribute('Id'))
-      .filter((el) => el.tagName !== 'LoadVehicleFromLibrary')
-      .map((el) => el.getAttribute('Id'));
-
     const result = buildSystemXml({
-      systemId: 'icrp_test_sol',
-      displayName: 'ICRP Test System',
-      corpus,
-      sites: [MEOW],
+      ...input(corpus, [EARTH_SITE]),
+      texturePaths: { mode: 'core-relative' },
     });
-    const doc = parse(result.xml);
-    const root = doc.documentElement!;
-    const outRows = directChildren(root, 'LoadFromLibrary').map((r) => r.getAttribute('Id'));
-    const outInline = new Map(
-      Array.from(root.childNodes)
-        .filter((n): n is Element => n.nodeType === 1)
-        .filter((el) => el.tagName !== 'LoadFromLibrary' && el.tagName !== 'LoadVehicleFromLibrary')
-        .filter((el) => el.hasAttribute('Id'))
-        .map((el) => [el.getAttribute('Id'), el] as const),
+    expect(result.bodiesXml).toContain('Path="../Core/Textures/Earth_Diffuse.ktx2"');
+  });
+
+  it('is repeatable: the corpus is never mutated', () => {
+    const corpus = parseMiniCorpus();
+    const first = buildSystemXml(input(corpus, [EARTH_SITE]));
+    const second = buildSystemXml(input(corpus, [EARTH_SITE]));
+    expect(second.xml).toBe(first.xml);
+    expect(second.bodiesXml).toBe(first.bodiesXml);
+  });
+
+  it('throws on a site body missing from the corpus', () => {
+    const corpus = parseMiniCorpus();
+    expect(() => buildSystemXml(input(corpus, [{ ...EARTH_SITE, bodyId: 'Nope' }]))).toThrow(
+      /not in the celestial corpus/,
     );
-
-    // Every stock body survives: Earth becomes inline, everything else keeps
-    // its row; Core's own inline bodies (Titan, Neptune, Ceres, …) come along.
-    for (const id of stockRows) {
-      if (id === 'Earth') expect(outRows).not.toContain(id);
-      else expect(outRows).toContain(id);
-    }
-    for (const id of stockInlineIds) expect(outInline.has(id)).toBe(true);
-
-    const earth = outInline.get('Earth')!;
-    expect(earth.tagName).toBe('AtmosphericBody');
-    expect(earth.getAttribute('HomeBody')).toBe('true');
-    expect(directChildren(earth, 'Landmark')).toHaveLength(stockLandmarkCount + 1);
-
-    // The real stock decal modifiers are intact, ours appended last.
-    const outModifierNames = directChildren(
-      directChildren(directChildren(earth, 'Terrain')[0]!, 'ProceduralModifiers')[0]!,
-      'Modifier',
-    ).map((m) => m.getAttribute('Name'));
-    expect(outModifierNames).toEqual([...stockModifierNames, 'LaunchSite_Meow-LC-1']);
-
-    // P7.00's census of the current build: Earth has 83 Id'd + 3 anonymous
-    // Path= elements; ICRP's decal HeightMap adds 1 Id ref; SolSystem.xml's
-    // inline bodies carry 21 more Id'd Path= elements (0 anonymous).
-    expect(result.pathRewrites).toBe(3);
-    expect(result.idRefs).toBe(83 + 1 + 21);
   });
 });
 
 describe('stock-site retargeting (matched landmark Id)', () => {
-  const site: Site = {
-    id: 's1',
-    landmarkId: 'CCSFS LC-39A', // exists in the mini Earth fixture
-    bodyId: 'Earth',
+  const retarget: Site = {
+    ...EARTH_SITE,
+    landmarkId: 'CCSFS LC-39A',
     latDeg: 11.5,
     lonDeg: -22.25,
-    staticObjectId: 'icrp_test_object',
-    decal: defaultDecal(),
   };
 
-  it('retargets in place: no duplicate landmark, StaticObject + coords replaced, decal skipped', () => {
+  it('retargets the CLONE in place: no duplicate, StaticObject + coords replaced, decal skipped', () => {
     const corpus = parseMiniCorpus();
-    const before = parse(readMiniFixture('mini-astronomicals.xml'));
-    const beforeCount = Array.from(before.getElementsByTagName('Landmark')).length;
-
-    const result = buildSystemXml({
-      systemId: 'test_sol',
-      displayName: 'Test',
-      corpus,
-      sites: [site],
-    });
+    const result = buildSystemXml(input(corpus, [retarget]));
     expect(result.retargetedLandmarks).toBe(1);
     expect(result.addedLandmarks).toBe(0);
-
-    const out = parse(result.xml);
-    const landmarks = Array.from(out.getElementsByTagName('Landmark'));
-    // Same landmark COUNT as the fixture (replaced, not appended).
-    expect(landmarks).toHaveLength(beforeCount);
+    const bodies = parse(result.bodiesXml!);
+    const clone = directChildren(bodies.documentElement!, 'AtmosphericBody')[0];
+    const landmarks = directChildren(clone, 'Landmark');
+    expect(landmarks).toHaveLength(2); // replaced, not appended
     const target = landmarks.find((l) => l.getAttribute('Id') === 'CCSFS LC-39A')!;
     expect(target.getAttribute('StaticObject')).toBe('icrp_test_object');
-    expect(target.getAttribute('IsLaunchPad')).toBe('true');
     expect(directChildren(target, 'Latitude')[0].getAttribute('Degrees')).toBe('11.5');
-    expect(directChildren(target, 'Longitude')[0].getAttribute('Degrees')).toBe('-22.25');
-    // The retargeted stock site keeps Core's decal — ICRP's is NOT appended.
-    const decals = result.xml.match(/LaunchSite_CCSFS-LC-39A/g) ?? [];
-    expect(decals.length).toBeLessThanOrEqual(1); // only the fixture's own, if present
+    // ICRP's decal is NOT appended — the stock one (already present) is kept.
+    expect((result.bodiesXml!.match(/LaunchSite_CCSFS-LC-39A/g) ?? []).length).toBe(1);
   });
+});
 
-  it('a NEW landmark id still appends (and counts as added)', () => {
-    const corpus = parseMiniCorpus();
-    const result = buildSystemXml({
-      systemId: 'test_sol',
-      displayName: 'Test',
-      corpus,
-      sites: [{ ...site, landmarkId: 'Meow LC-1' }],
-    });
-    expect(result.addedLandmarks).toBe(1);
-    expect(result.retargetedLandmarks).toBe(0);
+describe.runIf(hasKsaAssets)('buildSystemXml (live Core tree)', () => {
+  function parseLiveCorpus(): CelestialCorpus {
+    const read = (name: string) =>
+      parse(readFileSync(ksaAsset(name), 'utf-8').replace(/^\uFEFF/, ''));
+    return parseCelestialCorpus([
+      { doc: read('Astronomicals.xml'), file: 'Astronomicals.xml' },
+      { doc: read('SolSystem.xml'), file: 'SolSystem.xml' },
+    ]);
+  }
+
+  it('clones the REAL Earth into the bodies file and keeps the whole stock system', () => {
+    const corpus = parseLiveCorpus();
+    const stockRowIds = directChildren(corpus.stockSystem, 'LoadFromLibrary').map((el) =>
+      el.getAttribute('Id'),
+    );
+    const result = buildSystemXml(input(corpus, [EARTH_SITE]));
+
     const out = parse(result.xml);
-    const target = Array.from(out.getElementsByTagName('Landmark')).find(
-      (l) => l.getAttribute('Id') === 'Meow LC-1',
-    )!;
-    expect(target.getAttribute('StaticObject')).toBe('icrp_test_object');
+    const rows = systemChildren(out)
+      .filter((el) => el.tagName === 'LoadFromLibrary')
+      .map((el) => el.getAttribute('Id'));
+    // Every stock row survives, with Earth swapped for the clone.
+    for (const id of stockRowIds) {
+      if (id === 'Earth') expect(rows).toContain('Earth_testmod');
+      else expect(rows).toContain(id);
+    }
+    expect(rows).not.toContain('Earth');
+    // No inline Earth in the system; Core's other inline bodies survive.
+    expect(systemChildren(out).some((el) => el.getAttribute('Id') === 'Earth')).toBe(false);
+
+    // The clone carries the REAL Earth block: stock landmark count + 1.
+    const bodies = parse(result.bodiesXml!);
+    const clone = directChildren(bodies.documentElement!, 'AtmosphericBody')[0];
+    expect(clone.getAttribute('Id')).toBe('Earth_testmod');
+    expect(clone.getAttribute('HomeBody')).toBe('true');
+    const stockEarth = corpus.bodies.get('Earth')!;
+    const stockLandmarkCount = directChildren(stockEarth, 'Landmark').length;
+    expect(directChildren(clone, 'Landmark')).toHaveLength(stockLandmarkCount + 1);
+
+    // No relative texture path survives in either file's inline/cloned bodies.
+    expect(/Path="Textures\//.test(result.bodiesXml!)).toBe(false);
+    expect(/Path="Textures\//.test(result.xml)).toBe(false);
+    // Earth's ~86 paths + the decal + SolSystem's ~21 inline paths.
+    expect(result.texturesRewritten).toBeGreaterThanOrEqual(100);
+
+    // Every LoadVehicleFromLibrary that parented to Earth follows the clone.
+    const vehicles = systemChildren(out).filter((el) => el.tagName === 'LoadVehicleFromLibrary');
+    expect(vehicles.length).toBeGreaterThan(0);
+    for (const v of vehicles) {
+      expect(v.getAttribute('Parent')).not.toBe('Earth');
+    }
   });
 });

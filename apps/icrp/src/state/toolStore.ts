@@ -50,3 +50,19 @@ export const $keepGrounded = persistentJSON<boolean>('icrp:keepGrounded', true);
 
 /** Collider wireframes visible? (template = dimmed amber, editable = full). */
 export const $collidersVisible = persistentJSON<boolean>('icrp:colliders', true);
+
+/**
+ * The KSA install directory — cloned-body texture paths are rewritten ABSOLUTE
+ * into `<install>/Content/Core/` (user-verified: a Documents/mods install
+ * cannot reach Core textures relatively, and Id-only references fail).
+ */
+export const $installPath = persistentJSON<string>(
+  'icrp:installPath',
+  'C:/Program Files/Kitten Space Agency',
+);
+
+/** 'absolute' (Documents/mods installs) or 'core-relative' (Content/<mod> installs). */
+export const $texturePathMode = persistentJSON<'absolute' | 'core-relative'>(
+  'icrp:texturePathMode',
+  'absolute',
+);

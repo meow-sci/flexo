@@ -11,6 +11,7 @@ import { useStore } from '@nanostores/react';
 import {
   Blocks,
   Box,
+  Compass,
   Grid3x3,
   Magnet,
   MapPin,
@@ -54,6 +55,7 @@ import {
   $collidersVisible,
   $groundLock,
   $keepGrounded,
+  $magnet,
   $overlaysVisible,
   $snap,
   $tool,
@@ -199,6 +201,31 @@ function buildMenus(): MenuBarMenu[] {
             />
             <MenuSeparator />
             <Row
+              label="Spin 90° left"
+              keys={['⇧', 'A']}
+              disabled={none}
+              onAction={() => getScene()?.rotateSelection('up', 90)}
+            />
+            <Row
+              label="Spin 90° right"
+              keys={['⇧', 'D']}
+              disabled={none}
+              onAction={() => getScene()?.rotateSelection('up', -90)}
+            />
+            <Row
+              label="Tip 90° over east"
+              keys={['⇧', 'W']}
+              disabled={none}
+              onAction={() => getScene()?.rotateSelection('east', -90)}
+            />
+            <Row
+              label="Tip 90° over north"
+              keys={['⇧', 'Q']}
+              disabled={none}
+              onAction={() => getScene()?.rotateSelection('north', 90)}
+            />
+            <MenuSeparator />
+            <Row
               label="Keep grounded after scaling"
               checked={$keepGrounded.get()}
               onAction={() => $keepGrounded.set(!$keepGrounded.get())}
@@ -230,6 +257,12 @@ function buildMenus(): MenuBarMenu[] {
             />
             <Row label="Frame all" keys={['⇧', 'F']} onAction={() => getScene()?.frameAll()} />
             <MenuSeparator />
+            <Row
+              label="Magnetic part snapping"
+              keys={['M']}
+              checked={$magnet.get()}
+              onAction={() => $magnet.set(!$magnet.get())}
+            />
             <Row label="Snap" checked={$snap.get().enabled} onAction={() => toggleSnap()} />
             <Row
               label="Ground-locked rotation"
@@ -337,6 +370,7 @@ function ViewToggle(props: {
 export function TopBar() {
   const depth = useStore($historyDepth);
   const snap = useStore($snap);
+  const magnet = useStore($magnet);
   const groundLock = useStore($groundLock);
   const overlays = useStore($overlaysVisible);
   const colliders = useStore($collidersVisible);
@@ -378,13 +412,20 @@ export function TopBar() {
       <div className="mx-1 h-4 w-px shrink-0 bg-border" />
       <ViewToggle
         icon={<Magnet size={14} />}
+        label="Magnet"
+        hint="Snap dragged parts to connectors and neighbouring edges (M)"
+        selected={magnet}
+        onChange={() => $magnet.set(!magnet)}
+      />
+      <ViewToggle
+        icon={<Grid3x3 size={14} />}
         label="Snap"
         hint={`Snap moves to ${snap.translateM} m and rotations to ${snap.rotateDeg}°`}
         selected={snap.enabled}
         onChange={toggleSnap}
       />
       <ViewToggle
-        icon={<Grid3x3 size={14} />}
+        icon={<Compass size={14} />}
         label="Ground lock"
         hint="Limit rotation to spinning flat on the ground (G)"
         selected={groundLock}

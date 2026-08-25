@@ -160,6 +160,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
           : { kind: 'new' },
         pieceExists,
         prepared.anchorColliders,
+        prepared.anchorConnectors,
       );
       getScene()?.groundWhenLoaded(result.imported);
       return;

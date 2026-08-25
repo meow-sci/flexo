@@ -54,10 +54,21 @@ import {
   $tool,
   $groundLock,
   $keepGrounded,
+  $magnet,
   $snap,
   $overlaysVisible,
   $collidersVisible,
 } from '../state/toolStore';
+import {
+  bestBoxSnap,
+  bestConnectorSnap,
+  connectorWorld,
+  ksaBoxFromThree,
+  shiftKsaBox,
+  type KsaBox,
+  type WorldConnector,
+} from './snapEngine';
+import { selectLayerContents } from '../state/docStore';
 import { $mode } from '../state/modeStore';
 import type { PartCollider } from '../ksa/types';
 import type { Transform } from '../ksa/types';
@@ -103,6 +114,7 @@ export class StaticScene {
 
     this.colliderVis = new ColliderVisLayer();
     this.root.add(this.colliderVis.group);
+    this.root.add(this.snapGuides);
 
     this.selectionMgr = new SelectionManager(
       this.viewport.camera,
@@ -752,6 +764,98 @@ export class StaticScene {
    * are async — the GLB may still be loading). Quiet: no extra undo step (the
    * add/import mutator owns the step; undoing it removes the placements).
    */
+  /**
+   * Keyboard re-orientation (builder convention, App's ⇧W/A/S/D/Q/E): rotates
+   * the whole selection `deg` degrees about a world axis THROUGH the group's
+   * box center — one undo step, and the group is lifted back above grade if
+   * tipping buried it.
+   */
+  rotateSelection(axis: 'up' | 'east' | 'north', deg: number): void {
+    const ids = $selection.get();
+    if (ids.length === 0) return;
+    const union = new THREE.Box3();
+    for (const id of ids) {
+      const box = this.worldBox(id);
+      if (box && !box.isEmpty()) union.union(box);
+    }
+    if (union.isEmpty()) return;
+    const c = new THREE.Vector3();
+    union.getCenter(c);
+    // three → KSA (basis: ksa = [y, x, -z]).
+    const pivot = new THREE.Vector3(c.y, c.x, -c.z);
+    const axisVec =
+      axis === 'up'
+        ? new THREE.Vector3(1, 0, 0)
+        : axis === 'east'
+          ? new THREE.Vector3(0, 1, 0)
+          : new THREE.Vector3(0, 0, 1);
+    const q = new THREE.Quaternion().setFromAxisAngle(axisVec, (deg * Math.PI) / 180);
+    beginGesture('Rotate selection');
+    const updates = new Map<string, Transform>();
+    for (const id of ids) {
+      const pl = getPlacement(id);
+      if (!pl) continue;
+      const p = new THREE.Vector3(
+        pl.transform.position.x,
+        pl.transform.position.y,
+        pl.transform.position.z,
+      )
+        .sub(pivot)
+        .applyQuaternion(q)
+        .add(pivot);
+      const plQ = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(
+          pl.transform.rotation.x,
+          pl.transform.rotation.y,
+          pl.transform.rotation.z,
+          'ZYX',
+        ),
+      );
+      const e = new THREE.Euler().setFromQuaternion(q.clone().multiply(plQ), 'ZYX');
+      updates.set(id, {
+        ...pl.transform,
+        position: { x: p.x, y: p.y, z: p.z },
+        rotation: { x: e.x, y: e.y, z: e.z },
+      });
+    }
+    setPlacementTransformsBatch(updates);
+    this.reconcile();
+    // Never leave a tipped part buried: lift the GROUP as one back to grade.
+    const after = new THREE.Box3();
+    for (const id of ids) {
+      const box = this.worldBox(id);
+      if (box && !box.isEmpty()) after.union(box);
+    }
+    if (!after.isEmpty() && after.min.y < -0.001) {
+      const lift = -after.min.y;
+      const lifted = new Map<string, Transform>();
+      for (const id of ids) {
+        const pl = getPlacement(id);
+        if (!pl) continue;
+        lifted.set(id, {
+          ...pl.transform,
+          position: { ...pl.transform.position, x: pl.transform.position.x + lift },
+        });
+      }
+      setPlacementTransformsBatch(lifted);
+    }
+    endGesture();
+    this.reconcile();
+    this.applySelection();
+    this.viewport.invalidate();
+  }
+
+  /**
+   * A clear drop spot for library click-to-add: just east of everything already
+   * placed (0 for an empty object).
+   */
+  spawnEast(): number {
+    const union = new THREE.Box3();
+    for (const obj of this.objects.values()) union.expandByObject(obj.group);
+    if (union.isEmpty()) return 0;
+    return union.max.x + 3; // three +X == KSA east
+  }
+
   groundWhenLoaded(ids: readonly string[]): void {
     const deadline = Date.now() + 5000;
     const tick = () => {
@@ -887,7 +991,42 @@ export class StaticScene {
     starts: Map<string, Transform>;
     grab: THREE.Vector3;
     moved: boolean;
+    /** Magnet targets, captured once at drag start (stationary all drag). */
+    staticConnectors: WorldConnector[];
+    staticBoxes: KsaBox[];
+    /** Dragged connectors as (placement id, connector) pairs. */
+    movingConnectors: { id: string; conn: import('../ksa/types').SnapConnector }[];
+    /** Union KSA box of the dragged group at drag start. */
+    startBox: KsaBox | null;
   } | null = null;
+
+  /** Snap feedback visuals (docking dot + alignment guide lines), KSA frame. */
+  private readonly snapGuides = new THREE.Group();
+
+  private clearSnapGuides(): void {
+    while (this.snapGuides.children.length > 0) {
+      const child = this.snapGuides.children[this.snapGuides.children.length - 1] as THREE.Mesh;
+      child.geometry?.dispose();
+      (child.material as THREE.Material | undefined)?.dispose?.();
+      this.snapGuides.remove(child);
+    }
+  }
+
+  private guideLine(a: THREE.Vector3, b: THREE.Vector3, color: number): void {
+    const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
+    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color, depthTest: false }));
+    line.renderOrder = 999;
+    this.snapGuides.add(line);
+  }
+
+  /** Magnet radius: ~18 px at the grab point, so the pull feels zoom-constant. */
+  private magnetRadius(at: THREE.Vector3): number {
+    const cam = this.viewport.camera;
+    const dist = cam.position.distanceTo(at);
+    const h = this.viewport.renderer.domElement.clientHeight || 1;
+    const worldPerPx = (2 * dist * Math.tan((cam.fov * Math.PI) / 360)) / h;
+    return Math.min(4, Math.max(0.25, 18 * worldPerPx));
+  }
 
   private bindBodyDrag(): void {
     const el = this.viewport.renderer.domElement;
@@ -895,6 +1034,7 @@ export class StaticScene {
     el.addEventListener('pointermove', this.onBodyDragMove);
     el.addEventListener('pointerup', this.onBodyDragUp);
     el.addEventListener('pointercancel', this.onBodyDragUp);
+    el.addEventListener('dblclick', this.onCanvasDblClick);
   }
 
   private unbindBodyDrag(): void {
@@ -903,7 +1043,19 @@ export class StaticScene {
     el.removeEventListener('pointermove', this.onBodyDragMove);
     el.removeEventListener('pointerup', this.onBodyDragUp);
     el.removeEventListener('pointercancel', this.onBodyDragUp);
+    el.removeEventListener('dblclick', this.onCanvasDblClick);
   }
+
+  /**
+   * Double-click = select the piece's WHOLE LAYER (a stock-part import is a
+   * layer, so this is "select the tank as a unit" — click stays single-piece).
+   */
+  private readonly onCanvasDblClick = (e: MouseEvent): void => {
+    const hit = this.selectionMgr.pickAt(e.clientX, e.clientY);
+    if (!hit) return;
+    const pl = getPlacement(hit.id);
+    if (pl) selectLayerContents(pl.layerId);
+  };
 
   private raycastGroundPoint(e: PointerEvent, plane: THREE.Plane): THREE.Vector3 | null {
     const el = this.viewport.renderer.domElement;
@@ -948,7 +1100,41 @@ export class StaticScene {
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeY);
     const grab = this.raycastGroundPoint(e, plane);
     if (!grab) return;
-    this.bodyDrag = { pointerId: e.pointerId, plane, starts, grab, moved: false };
+    // Magnet targets: everything NOT dragged, on a visible layer (locked
+    // layers still attract — the pad is usually locked and tanks snap to it).
+    const staticConnectors: WorldConnector[] = [];
+    const staticBoxes: KsaBox[] = [];
+    if ($magnet.get()) {
+      const obj = $activeObject.get();
+      const visible = new Set(obj.layers.filter((l) => l.visible).map((l) => l.id));
+      for (const pl of obj.placements) {
+        if (starts.has(pl.instanceId) || !visible.has(pl.layerId)) continue;
+        for (const conn of pl.connectors ?? []) {
+          staticConnectors.push(connectorWorld(conn, pl.transform));
+        }
+        const box = this.worldBox(pl.instanceId);
+        if (box && !box.isEmpty()) staticBoxes.push(ksaBoxFromThree(box));
+      }
+    }
+    const movingConnectors: { id: string; conn: import('../ksa/types').SnapConnector }[] = [];
+    const startUnion = new THREE.Box3();
+    for (const id of starts.keys()) {
+      const pl = getPlacement(id);
+      for (const conn of pl?.connectors ?? []) movingConnectors.push({ id, conn });
+      const box = this.worldBox(id);
+      if (box && !box.isEmpty()) startUnion.union(box);
+    }
+    this.bodyDrag = {
+      pointerId: e.pointerId,
+      plane,
+      starts,
+      grab,
+      moved: false,
+      staticConnectors,
+      staticBoxes,
+      movingConnectors,
+      startBox: startUnion.isEmpty() ? null : ksaBoxFromThree(startUnion),
+    };
     this.viewport.controls.enabled = false;
     this.selectionMgr.setSuppressed(true);
     try {
@@ -977,12 +1163,73 @@ export class StaticScene {
       dEast = Math.round(dEast / snap.translateM) * snap.translateM;
       dNorth = Math.round(dNorth / snap.translateM) * snap.translateM;
     }
+
+    // --- Magnet pass (snapEngine): connector docking wins, else box align. ---
+    let dUp = 0;
+    this.clearSnapGuides();
+    this.lastSnapKind = null;
+    if ($magnet.get()) {
+      const radius = this.magnetRadius(here);
+      const candidate = (start: Transform): Transform => ({
+        ...start,
+        position: {
+          x: start.position.x,
+          y: start.position.y + dEast,
+          z: start.position.z + dNorth,
+        },
+      });
+      const moving: WorldConnector[] = drag.movingConnectors.flatMap(({ id, conn }) => {
+        const start = drag.starts.get(id);
+        return start ? [connectorWorld(conn, candidate(start))] : [];
+      });
+      const dock = bestConnectorSnap(moving, drag.staticConnectors, radius);
+      if (dock) {
+        dUp = dock.delta.x;
+        dEast += dock.delta.y;
+        dNorth += dock.delta.z;
+        this.lastSnapKind = 'connector';
+        // Docking dot at the joined node.
+        const dot = new THREE.Mesh(
+          new THREE.SphereGeometry(Math.min(0.25, radius * 0.4), 16, 12),
+          new THREE.MeshBasicMaterial({ color: 0xff4fd8, depthTest: false }),
+        );
+        dot.renderOrder = 999;
+        dot.position.set(dock.at.x, dock.at.y, dock.at.z);
+        this.snapGuides.add(dot);
+      } else if (drag.startBox) {
+        const movingBox = shiftKsaBox(drag.startBox, dEast, dNorth);
+        const boxSnap = bestBoxSnap(movingBox, drag.staticBoxes, radius);
+        if (boxSnap.east) dEast += boxSnap.east.delta;
+        if (boxSnap.north) dNorth += boxSnap.north.delta;
+        if (boxSnap.east || boxSnap.north) this.lastSnapKind = 'box';
+        // Guide lines on the ground plane at the snapped edge/center
+        // (KSA frame: x=up, y=east, z=north).
+        const snapped = shiftKsaBox(drag.startBox, dEast, dNorth);
+        const GUIDE = 0xffd84f;
+        if (boxSnap.east) {
+          this.guideLine(
+            new THREE.Vector3(0.05, boxSnap.east.at, snapped.north[0] - 2),
+            new THREE.Vector3(0.05, boxSnap.east.at, snapped.north[1] + 2),
+            GUIDE,
+          );
+        }
+        if (boxSnap.north) {
+          this.guideLine(
+            new THREE.Vector3(0.05, snapped.east[0] - 2, boxSnap.north.at),
+            new THREE.Vector3(0.05, snapped.east[1] + 2, boxSnap.north.at),
+            GUIDE,
+          );
+        }
+      }
+    }
+    this.viewport.invalidate();
+
     const updates = new Map<string, Transform>();
     for (const [id, start] of drag.starts) {
       updates.set(id, {
         ...start,
         position: {
-          x: start.position.x,
+          x: start.position.x + dUp,
           y: start.position.y + dEast,
           z: start.position.z + dNorth,
         },
@@ -991,10 +1238,17 @@ export class StaticScene {
     setPlacementTransformsBatch(updates);
   };
 
+  /** Debug/tests: what the LAST body-drag move snapped with (null = no snap). */
+  private lastSnapKind: 'connector' | 'box' | null = null;
+  debugLastSnapKind(): 'connector' | 'box' | null {
+    return this.lastSnapKind;
+  }
+
   private readonly onBodyDragUp = (e: PointerEvent): void => {
     const drag = this.bodyDrag;
     if (!drag || e.pointerId !== drag.pointerId) return;
     this.bodyDrag = null;
+    this.clearSnapGuides();
     this.viewport.controls.enabled = true;
     this.selectionMgr.setSuppressed(false);
     if (drag.moved) {
@@ -1052,6 +1306,7 @@ export class StaticScene {
       // Restore the grabbed transforms, then close the gesture.
       for (const [id, start] of drag.starts) setPlacementTransform(id, start);
       this.bodyDrag = null;
+      this.clearSnapGuides();
       this.viewport.controls.enabled = true;
       this.selectionMgr.setSuppressed(false);
       if (drag.moved) endGesture();

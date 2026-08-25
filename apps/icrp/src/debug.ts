@@ -15,6 +15,15 @@ import {
 } from './state/docStore';
 import type { PartCollider, Transform } from './ksa/types';
 import { getScene } from './three/sceneHandle';
+import {
+  $pieceIndex,
+  $staticObjects,
+  $staticPieces,
+  $stockParts,
+  $vesselPieces,
+} from './state/catalogStore';
+import { buildLibraryEntries, previewEntriesFor } from './state/libraryEntries';
+import { $catalogThumbs, catalogThumbSignature, requestCatalogThumb } from './three/catalogThumbs';
 
 declare global {
   interface Window {
@@ -32,6 +41,12 @@ declare global {
       /** Out-of-band store writes (the gizmo's path) — stale-render regression tests. */
       updateCollider: (ref: ColliderRef, patch: Partial<PartCollider>) => void;
       setPlacementTransform: (id: string, t: Transform) => void;
+      /** What the last body-drag move snapped with ('connector' | 'box' | null). */
+      lastSnapKind: () => string | null;
+      /** Forces fresh renders of EVERY library thumb; returns [{id, sig}] (generator). */
+      thumbAll: () => { id: string; sig: string }[];
+      /** Current thumb map (id → data/static URL). */
+      thumbs: () => Record<string, string>;
     };
   }
 }
@@ -56,5 +71,21 @@ export function installDebugHandle(): void {
     },
     updateCollider: (ref: ColliderRef, patch: Partial<PartCollider>) => updateCollider(ref, patch),
     setPlacementTransform: (id: string, t: Transform) => setPlacementTransform(id, t),
+    lastSnapKind: () => getScene()?.debugLastSnapKind() ?? null,
+    thumbAll: () => {
+      const entries = buildLibraryEntries({
+        prefabs: $staticObjects.get(),
+        parts: $stockParts.get(),
+        staticPieces: $staticPieces.get(),
+        vesselPieces: $vesselPieces.get(),
+      });
+      const index = $pieceIndex.get();
+      return entries.map((entry) => {
+        const previews = previewEntriesFor(entry, index);
+        requestCatalogThumb(entry.id, previews, true);
+        return { id: entry.id, sig: catalogThumbSignature(previews) };
+      });
+    },
+    thumbs: () => $catalogThumbs.get(),
   };
 }

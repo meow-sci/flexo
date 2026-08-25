@@ -52,6 +52,21 @@ export function defaultLayer(): LayerDef {
 }
 
 /**
+ * A magnetic snap point (EDITOR-ONLY, never exported — KSA statics have no
+ * connectors). Harvested from the stock `<Part><Connector>`s at import time
+ * (localized into the anchor placement's frame, like the part-level colliders)
+ * so imported tanks/parts stack and dock like they do in KSA's vehicle editor.
+ * Faces local +X, exactly like the vessel connector it came from.
+ */
+export interface SnapConnector {
+  id: string;
+  /** Position in the owning placement's local frame (metres). */
+  position: Vec3;
+  /** Rotation in the owning placement's local frame (XYZ radians; +X = facing). */
+  rotation: EulerXYZ;
+}
+
+/**
  * One placement of a piece inside a static object — exported as
  * `<SubObject Id InstanceOf><Transform/></SubObject>` (plan fact F3).
  */
@@ -72,6 +87,12 @@ export interface Placement {
    * cannot live there).
    */
   colliders?: PartCollider[];
+  /**
+   * Magnetic snap points local to this placement (editor-only, additive field
+   * — see {@link SnapConnector}). Stamped onto a stock-part import's anchor
+   * placement; drag-snapping composes them with the CURRENT transform.
+   */
+  connectors?: SnapConnector[];
 }
 
 /** One `<StaticObject>` (+ its `<StaticObjectGameData>` metres) — plan §0.5. */

@@ -76,3 +76,79 @@ describe('preparePartImport', () => {
     expect(prepared.droppedPartColliders).toBe(1);
   });
 });
+
+describe('preparePartImport connectors (magnetic snap points)', () => {
+  it('localizes part-frame connectors onto the anchor so composing back is exact', async () => {
+    const { connectorWorld } = await import('./snapEngine');
+    const anchor = {
+      instanceId: 'skin',
+      subPartTemplateId: 'Tank_Skin',
+      position: { x: 1, y: 2, z: 3 },
+      rotation: { x: 0, y: 0, z: Math.PI / 2 },
+      scale: { x: 1, y: 1, z: 1 },
+    };
+    const part = {
+      id: 'P',
+      editorTags: [],
+      placements: [anchor],
+      colliders: [],
+      // A tank-style pair: top node facing +X, bottom rotated to face −X.
+      connectors: [
+        {
+          id: '_c1',
+          position: { x: 0.5, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+          flags: [],
+        },
+        {
+          id: '_c2',
+          position: { x: -0.5, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: Math.PI },
+          scale: { x: 1, y: 1, z: 1 },
+          flags: [],
+        },
+      ],
+    };
+    const prepared = preparePartImport(part as never, () => true);
+    expect(prepared.anchorConnectors).toHaveLength(2);
+    // Round-trip: the anchor placement carries its part-frame transform
+    // verbatim on import, so composing the localized connector back must land
+    // on the PART-frame authoring position (0.5, 0, 0), facing +X.
+    const w = connectorWorld(prepared.anchorConnectors[0], {
+      position: anchor.position,
+      rotation: anchor.rotation,
+      scale: anchor.scale,
+    });
+    expect(w.position.x).toBeCloseTo(0.5);
+    expect(w.position.y).toBeCloseTo(0);
+    expect(w.position.z).toBeCloseTo(0);
+    expect(w.facing.x).toBeCloseTo(1);
+    const w2 = connectorWorld(prepared.anchorConnectors[1], {
+      position: anchor.position,
+      rotation: anchor.rotation,
+      scale: anchor.scale,
+    });
+    expect(w2.facing.x).toBeCloseTo(-1);
+  });
+
+  it('no importable anchor → connectors dropped, not crashed', () => {
+    const part = {
+      id: 'P',
+      editorTags: [],
+      placements: [
+        {
+          instanceId: 'x',
+          subPartTemplateId: 'Missing',
+          position: { x: 0, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+        },
+      ],
+      colliders: [],
+      connectors: [],
+    };
+    const prepared = preparePartImport(part as never, () => false);
+    expect(prepared.anchorConnectors).toEqual([]);
+  });
+});

@@ -82,8 +82,17 @@ only — in build mode the wires (when toggled) never steal clicks from pieces.
 the top bar's far-right buttons (backdrop tap closes); the top bar itself scrolls
 horizontally. Desktop is the primary target — phone is kept _usable_, not featureful.
 
-The catalog lives behind **Add ▸ Piece / part…** (`A`): one searched dialog over prefabs,
-static pieces, stock parts (layer target select) and vessel pieces.
+**The Library palette** (`ui/LibraryPanel.tsx`, `state/libraryEntries.ts`) is the fast
+add path: one click drops the entry just east of the current build (`spawnEast`),
+grounded and selected with the Move tool armed. Parts land exploded on their OWN new
+layer, which makes **double-click in the viewport = select the whole part** (it selects
+the piece's layer). Thumbnails are 96 px PNGs from `three/catalogThumbs.ts` — three
+sources, cheapest wins: build-time statics (`pnpm thumbs:icrp` →
+`public/thumbs-icrp/` + signature manifest, gitignored — licensed-asset renders),
+an IndexedDB session cache (the dev answer: first session renders live, later sessions
+are instant), then a live one-per-idle-tick shared offscreen renderer. The Add dialog
+(**Add ▸ Piece / part…**, `A`) stays for big-preview browsing with a layer-target
+select.
 
 **The Add browser** reuses flexo's catalog-browser shell (`BrowserPopup` cover modal +
 draggable list | preview / details splits + preview-first gestures): kind CHIPS
@@ -109,6 +118,25 @@ a piece outliner** — click a row to select that single placement, ⌘/Ctrl/Shi
 toggle it into the selection — so individual pieces are reachable without viewport
 clicking while the layer-level controls keep whole-group select/move. The active layer
 starts expanded.
+
+**Magnetic snapping** (`three/snapEngine.ts` — the lego/tank-farm journey, `M` toggles,
+default ON): while body-dragging, two mechanisms with connector priority. (1) **Connector
+docking** — stock-part imports carry their `<Connector>`s (localized onto the anchor
+placement like the part colliders; editor-only, never exported), and a dragged part's
+connectors dock to OPPOSING connectors (facing dot < −0.5) on stationary placements; the
+delta is full 3D, so dragging a tank over another tank's top node lifts it exactly onto
+the stack (KSA vehicle-editor feel). (2) **Box alignment** — per ground axis
+independently, the dragged group's AABB snaps flush-touching or center-aligned against
+nearby stationary boxes (proximity-gated on the cross axis). The radius is screen-space
+(~18 px at the grab point, clamped 0.25–4 m); the magnet OVERRIDES the grid increment
+when it engages; feedback = a magenta docking dot / amber guide lines. Locked layers
+still attract (the pad is usually locked); hidden layers don't.
+
+**Keyboard**: ⇧A/⇧D spin the selection 90° about up, ⇧W/⇧S tip it over east, ⇧Q/⇧E over
+north (⌥ = the fine rotate increment; the group re-grounds if tipping buried it) — the
+builder WASDQE convention shifted off the tool keys. Arrows nudge east/north by the snap
+increment (⇧ ×10, ⌥↑/⌥↓ = up/down), streaming one undo step per press-and-hold.
+Duplicates land 2 m east so ⌘D reads as "a copy appeared".
 
 **Moving things** (three ways, all streaming into the document with one undo step):
 **grab-anywhere** — with the translate tool, pointer-dragging a piece BODY slides the whole

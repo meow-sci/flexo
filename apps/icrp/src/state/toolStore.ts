@@ -37,6 +37,15 @@ export function toggleSnap(): void {
   $snap.set({ ...$snap.get(), enabled: !$snap.get().enabled });
 }
 
+/**
+ * Magnetic part snapping (default ON — the lego feel): while body-dragging,
+ * imported-part connectors dock to opposing connectors (full 3D, so a tank
+ * dragged over another CLIMBS onto its top node), and otherwise bounding boxes
+ * snap flush / center-aligned on the ground axes. `M` toggles; the magnet
+ * OVERRIDES the grid increment when it engages.
+ */
+export const $magnet = persistentJSON<boolean>('icrp:magnet', true);
+
 /** Site overlays (footprint disc, clutter/collider rings, spawn plane) visible? */
 export const $overlaysVisible = persistentJSON<boolean>('icrp:overlays', true);
 

@@ -30,3 +30,6 @@ dist-ssr
 .tmp-*/
 # Per-part thumbnail fingerprints (scripts/capture-part-thumbs.ts --reconcile)
 .thumbs-cache/
+
+# Generated ICRP library thumbnails (rendered from licensed KSA assets — never commit)
+public/thumbs-icrp/

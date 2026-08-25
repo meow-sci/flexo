@@ -245,10 +245,19 @@ export function duplicatePlacements(instanceIds: readonly string[]): string[] {
   pushUndo('Duplicate');
   const src = new Set(instanceIds);
   const copies: Placement[] = [];
+  // Copies land 2 m east so they are visibly A COPY (in-place duplicates read
+  // as "nothing happened"); magnet/grid snapping cleans the offset up on the
+  // very next drag.
+  const OFFSET_EAST_M = 2;
   for (const pl of $activeObject.get().placements) {
     if (!src.has(pl.instanceId)) continue;
+    const copy = structuredClone(pl) as Placement;
+    copy.transform.position = {
+      ...copy.transform.position,
+      y: copy.transform.position.y + OFFSET_EAST_M,
+    };
     copies.push({
-      ...structuredClone(pl),
+      ...copy,
       instanceId: `${pl.pieceId.replace(/^.*_Subpart_/, '').toLowerCase()}_${randomId().slice(0, 8)}`,
     });
   }
@@ -571,6 +580,8 @@ export function importStockPart(
    * needs quaternion math, which stays out of state/).
    */
   anchorColliders?: readonly import('../ksa/types').PartCollider[],
+  /** The part's `<Connector>`s, localized the same way — magnetic snap points. */
+  anchorConnectors?: readonly import('../ksa/types').SnapConnector[],
 ): StockPartImportResult {
   pushUndo('Import part');
 
@@ -606,6 +617,9 @@ export function importStockPart(
   }
   if (copies.length > 0 && anchorColliders && anchorColliders.length > 0) {
     copies[0].colliders = structuredClone(anchorColliders) as Placement['colliders'];
+  }
+  if (copies.length > 0 && anchorConnectors && anchorConnectors.length > 0) {
+    copies[0].connectors = structuredClone(anchorConnectors) as Placement['connectors'];
   }
   mutateActive((o) => ({ ...o, placements: [...o.placements, ...copies] }));
   $selection.set(copies.map((c) => c.instanceId));

@@ -2,8 +2,8 @@
  * ICRP app shell, flexo-style (plans/ICRP_PLAN.md P9 + the workspace-modes
  * revamp): top menu bar with the mode switcher, and MODE-ADAPTIVE sidebars —
  *
- *   build     LEFT details (selection transform, align, arrays, object metres)
- *             RIGHT layers-with-piece-outliner + objects
+ *   build     LEFT the Library palette (thumbnails, chips, fuzzy search)
+ *             RIGHT details + layers-with-piece-outliner + objects
  *   colliders LEFT collider authoring + inspector
  *             RIGHT the collider outliner + objects
  *   sites     LEFT object metres (the pad's ground contract)
@@ -19,19 +19,24 @@ import { useIsPhone } from '../../../src/ui/kit/useIsPhone';
 import {
   $colliderSelection,
   $selection,
+  beginGesture,
   duplicatePlacements,
   endGesture,
+  getPlacement,
   redo,
   removeCollider,
   removePlacements,
   selectAllVisible,
+  setPlacementTransformsBatch,
   undo,
 } from './state/docStore';
+import type { Transform } from './ksa/types';
 import { ensureStaticCatalogLoaded } from './state/catalogStore';
-import { $collidersVisible, $groundLock, setTool } from './state/toolStore';
+import { $collidersVisible, $groundLock, $magnet, $snap, setTool } from './state/toolStore';
 import { $mode, setMode } from './state/modeStore';
 import { $addOpen, $exportOpen, $leftPanelOpen, $rightPanelOpen } from './state/uiStore';
 import { TopBar } from './ui/TopBar';
+import { LibraryPanel } from './ui/LibraryPanel';
 import { AddDialog } from './ui/AddDialog';
 import { ExportDialog } from './ui/ExportDialog';
 import { DetailsPanel, ObjectInspector } from './ui/DetailsPanel';
@@ -71,7 +76,7 @@ function LeftPanelBody() {
       </>
     );
   }
-  return <DetailsPanel bare />;
+  return <LibraryPanel />;
 }
 
 /** The RIGHT sidebar body for the current mode. */
@@ -79,11 +84,11 @@ function RightPanelBody() {
   const mode = useStore($mode);
   return (
     <>
+      {mode === 'build' && <DetailsPanel bare />}
       {mode === 'build' && <LayersPanel />}
       {mode === 'colliders' && <ColliderOutliner />}
       {mode === 'sites' && <SitesPanel />}
       <ObjectsPanel />
-      {mode === 'build' && <SitesPanel />}
     </>
   );
 }
@@ -97,6 +102,48 @@ export function App() {
   const [, setTick] = useState(0);
   useEffect(() => {
     void ensureStaticCatalogLoaded().then(() => setTick((t) => t + 1));
+    // Arrow-key nudging streams as ONE undo step per press-and-hold (gesture
+    // opens on the first nudge, closes on Arrow keyup).
+    let nudging = false;
+    const nudgeSelection = (dUp: number, dEast: number, dNorth: number) => {
+      const ids = $selection.get();
+      if (ids.length === 0) return;
+      if (!nudging) {
+        beginGesture('Nudge');
+        nudging = true;
+      }
+      const updates = new Map<string, Transform>();
+      for (const id of ids) {
+        const pl = getPlacement(id);
+        if (!pl) continue;
+        updates.set(id, {
+          ...pl.transform,
+          position: {
+            x: pl.transform.position.x + dUp,
+            y: pl.transform.position.y + dEast,
+            z: pl.transform.position.z + dNorth,
+          },
+        });
+      }
+      setPlacementTransformsBatch(updates);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (nudging && e.key.startsWith('Arrow')) {
+        endGesture();
+        nudging = false;
+      }
+    };
+    // Builder-style re-orientation (KSP's WASDQE, shifted off the tool keys):
+    // ⇧A/⇧D spin on the ground, ⇧W/⇧S tip over east, ⇧Q/⇧E tip over north —
+    // 90° steps, ⌥ for the fine rotate increment.
+    const ROTATE_KEYS: Record<string, ['up' | 'east' | 'north', 1 | -1]> = {
+      A: ['up', 1],
+      D: ['up', -1],
+      W: ['east', -1],
+      S: ['east', 1],
+      Q: ['north', 1],
+      E: ['north', -1],
+    };
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
@@ -126,6 +173,26 @@ export function App() {
         setMode('colliders');
       } else if (e.key === '3') {
         setMode('sites');
+      } else if (e.shiftKey && !mod && ROTATE_KEYS[e.key] && $selection.get().length > 0) {
+        e.preventDefault();
+        const [axis, sign] = ROTATE_KEYS[e.key];
+        const deg = e.altKey ? $snap.get().rotateDeg : 90;
+        getScene()?.rotateSelection(axis, sign * deg);
+      } else if (e.key.startsWith('Arrow') && !mod && $selection.get().length > 0) {
+        e.preventDefault();
+        const base = $snap.get().enabled ? $snap.get().translateM : 0.1;
+        const step = base * (e.shiftKey ? 10 : 1);
+        if (e.altKey) {
+          if (e.key === 'ArrowUp') nudgeSelection(step, 0, 0);
+          else if (e.key === 'ArrowDown') nudgeSelection(-step, 0, 0);
+        } else {
+          if (e.key === 'ArrowUp') nudgeSelection(0, 0, step);
+          else if (e.key === 'ArrowDown') nudgeSelection(0, 0, -step);
+          else if (e.key === 'ArrowRight') nudgeSelection(0, step, 0);
+          else if (e.key === 'ArrowLeft') nudgeSelection(0, -step, 0);
+        }
+      } else if (e.key === 'm') {
+        $magnet.set(!$magnet.get());
       } else if (e.key === 'F') {
         getScene()?.frameAll();
       } else if (e.key === 'f') {
@@ -161,12 +228,14 @@ export function App() {
       }
     };
     window.addEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKeyUp);
     // A numeric-field typing session is one streaming gesture (beginGesture on
     // focus, streamed commits per keystroke); leaving the field closes it so the
     // NEXT session gets its own undo step.
     document.addEventListener('focusout', endGesture);
     return () => {
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKeyUp);
       document.removeEventListener('focusout', endGesture);
     };
   }, []);

@@ -6,6 +6,8 @@ import type { SectionMeta } from '../sectionMeta';
 import {
   pushUndo,
   setControllable,
+  setCrashTolerance,
+  setCrashToleranceEnabled,
   setDiameter,
   setDiameterEnabled,
   setDisplayName,
@@ -31,6 +33,7 @@ import type { EditingPart } from '../../../ksa/types';
 export function IdentitySection({ part, meta }: { part: EditingPart; meta: SectionMeta }) {
   const g = part.gameData;
   const diameterEnabled = g.diameterM != null;
+  const crashToleranceEnabled = g.crashTolerancePa != null;
 
   return (
     <DataSection sectionId="identity" count={meta.count} issue={meta.issue} defaultExpanded>
@@ -78,6 +81,27 @@ export function IdentitySection({ part, meta }: { part: EditingPart; meta: Secti
           </Field>
           <span className="text-xs text-fg-subtle">VAB filter only, no physics.</span>
           <ExtraDiameters values={g.extraDiametersM} />
+        </>
+      )}
+
+      <Switch isSelected={crashToleranceEnabled} onChange={setCrashToleranceEnabled}>
+        Crash tolerance override
+      </Switch>
+      {crashToleranceEnabled && (
+        <>
+          <Field label="Crash tolerance (Pa)">
+            <PreciseNumberInput
+              aria-label="Crash tolerance in pascals"
+              value={g.crashTolerancePa ?? 0}
+              min={0}
+              onInteractionStart={() => pushUndo('edit crash tolerance', '')}
+              onCommit={setCrashTolerance}
+            />
+          </Field>
+          <span className="text-xs text-fg-subtle">
+            Contact pressure that breaks the part. Off ⇒ KSA derives it from mass ÷ volume (0.1–20
+            MPa). Core engines author 3e6.
+          </span>
         </>
       )}
 

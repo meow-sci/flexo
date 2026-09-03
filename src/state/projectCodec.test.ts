@@ -126,6 +126,7 @@ function richPart(): EditingPart {
     },
   ];
   p.gameData.diameterM = 2.5;
+  p.gameData.crashTolerancePa = 3e6; // <Part CrashTolerance> (KSA 2026.9.7.5402)
   p.gameData.controllable = true;
   // Unmodeled passthrough on the part itself: a nested <Collider> (attrs + child tree).
   p.gameData.unknownChildren = [

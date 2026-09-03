@@ -4,7 +4,7 @@
 > data-only KSA mod that adds a celestial body with `<GroundClutter>` (cards/meshes scattered
 > on the terrain), using **no custom game code**. Reference scaffold for clutter modding.
 
-**Baseline:** re-verified against KSA build **2026.8.22.5348** (decomp @ 5348 + shipped Core XML).
+**Baseline:** re-verified against KSA build **2026.9.7.5402** (decomp @ 5402 + shipped Core XML).
 **Baseline status:** 🟡 **SCHEMA-DRIFT, scaffold unaffected (in-game re-check still pending)** —
 5117 (rev 5099) renamed the ecotype's `<Collideable Value>` to
 `<CollisionType Value="None|PrimitiveList|Mesh">` ahead of the Bepu physics integration. The
@@ -52,6 +52,16 @@ hand-authored mod XML + a build script).
 - **Opacity** cut where R < 0.5 (cutout cards).
 - First-wins + core-first load order, so a clutter mod can **add** a body & reuse textures by `Id`.
 - Loading is gated by the scenario's `<LoadFromLibrary>`.
+
+## What changed in 5402
+
+**Schema unchanged; runtime classes moved.** `GroundClutterReference` and every sibling
+`*Reference` schema class are byte-identical, and nothing under `Content/Core/GroundClutter/`
+changed. The runtime side did move — `ClutterEcotypePhysicalData`, `ClutterEcotypeRenderData`,
+`GroundClutterRenderer` and `BubbleClutterStatics` are in the diff — but they were not read further
+in this review (the scaffold already does not load: gap **R1** stands as at 5348).
+
+---
 
 ## What changed in 5348
 

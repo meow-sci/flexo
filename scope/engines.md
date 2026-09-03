@@ -5,8 +5,12 @@
 > **BREAKING** for the live thrust/Isp readout. Read alongside [docs/engines.md](../docs/engines.md)
 > and [analysis/KSA_ENGINE_DETAILS.md](../analysis/KSA_ENGINE_DETAILS.md).
 
-**Baseline:** re-vetted against KSA build **2026.8.22.5348** (decomp @ 5348 + shipped Core XML).
-**Baseline status:** ✅ **CURRENT** — 5348 added `<Nozzle AreaRatioMultiplier>`
+**Baseline:** re-vetted against KSA build **2026.9.7.5402** (decomp @ 5402 + shipped Core XML).
+**Baseline status:** ✅ **CURRENT** — 5402 left every ported class byte-identical;
+`PlumeTrailTemplate` gained `<Color>` / `DensityMultiplier` / `<Lifetime>` and Core added a second
+trail template, `LiquidEnginePlumeTrail`, so the static `PLUME_TRAIL_IDS` snapshot was refreshed
+(gap **U5**, COSMETIC, fixed — see [What changed in 5402](#what-changed-in-5402)).
+5348 added `<Nozzle AreaRatioMultiplier>`
 (`RocketNozzleReference`), which re-apportions a solid stack's throat through
 `SolidMotorNozzle.ThroatSizingArea`; **modeled and re-ported in this review** (see
 [What changed in 5348](#what-changed-in-5348)). 5261 landed the first ported-math BREAK since 5056,
@@ -171,6 +175,44 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   `<Combustor>` (flexo's SRB recipe now burns APCP) — but there is still no solid-motor
   hardware (no grain-regression thrust curve; the propellant reservoir is still a liquid-style
   tank), so a true SRB is still not reproducible.
+
+## What changed in 5402
+
+**Verdict: NONE on the ported physics; one COSMETIC snapshot refresh (U5, ✅ fixed).**
+
+Every verbatim-ported class is byte-identical: `DeLavalNozzleConfig`, `CombustorConfig`,
+`GasProperties`, `CombustionTable`, `NozzlePerformance`, `RocketDesign`, `RocketControllerData`,
+`DeLavalNozzleTemplate`, `RocketNozzleTemplate`, `RocketTemplate`, `RocketNozzleReference`, the
+whole reaction family + `Reactions.xml`, and the solid-motor + grain-geometry set. `EngineDesigner`
+changed by one ImGui window-size clamp; `Combustor` by an `IViewport` signature.
+
+**`PlumeTrailTemplate` grew three fields** (the plume-trail rework: new `PlumeBend.glsl`,
+`ExhaustPlumeDeformation` / `ExhaustPlumeGasDynamics`, and `Vehicle` now passes all three to
+`VolumetricTrailRenderer.SubmitEmitter`):
+
+```csharp
+[XmlElement("Color")]                 public ColorRgbReference Color = new(float3.One);
+[XmlAttribute("DensityMultiplier")]   public float DensityMultiplier = 1f;        // OnDataLoad: clamped 0–1
+[XmlElement]                          public TimeSpanReference Lifetime = new(1200.0); // floored at 0.001 s
+```
+
+`PlumeTrailAssets.xml` accordingly: `DefaultPlumeTrail` gained `DensityMultiplier="1"`,
+`<Color R="1" G="1" B="1"/>`, `<Lifetime Seconds="1200"/>`; and a NEW
+`<PlumeTrailTemplate Id="LiquidEnginePlumeTrail" DensityMultiplier="0.015">` with
+`<Color R="0.05" G="0.05" B="0.05"/>`, `<EndRadius M="80"/>`, `<Lifetime Seconds="20"/>` — a faint,
+short-lived dark trail that **no Core nozzle references yet** (all five `<PlumeTrail Id>` uses are
+still `DefaultPlumeTrail`). flexo references trails by id only, so the fields are inert for it, but
+`PLUME_TRAIL_IDS` (`src/ksa/types.ts`) is a static snapshot of that file and the nozzle editor's
+select was one entry short: refreshed to `['DefaultPlumeTrail', 'LiquidEnginePlumeTrail']`. It
+remains a snapshot to re-diff on every update.
+
+**Renderer-side, not ported:** `RocketNozzle` hoisted its plume-visual math into static
+`ComputeMinGasVisibilityDensity(template, fxExitRadius)` and `ComputePlumeData(gas, exhaust, inlet,
+…)` with identical bodies; `RocketNozzleState.AddExhaustInstance` now also passes `airVelocity` /
+`airDensity`; `ExhaustAssets.xml` recolored five `Color0`–`Color3` plume ramps (data only). None of
+it touches thrust/Isp, exhaust placement or `<ReactionPlume>`.
+
+---
 
 ## What changed in 5348
 

@@ -30,9 +30,18 @@ mirrors space-tape's `PartXmlSerializer.cs`, one `<Part>` element per entry:
 ```
 
 The geometry `<Part>` carries **only** SubPart placements and connectors (transform
-+ `<Flags>`). Editor tags, display name, mass, tanks, power and coupling all live on
-the separate `<PartGameData>` document (below) — matching KSA's split. (Connector
-`<Flags>` are emitted in **both** documents, mirroring space-tape's two serializers.)
++ `<Flags>`), plus one root attribute: `CrashTolerance` (Pa), emitted when
+`gameData.crashTolerancePa` is set and `> 0`. Editor tags, display name, mass, tanks, power and
+coupling all live on the separate `<PartGameData>` document (below) — matching KSA's split.
+(Connector `<Flags>` are emitted in **both** documents, mirroring space-tape's two serializers.)
+
+`CrashTolerance` (KSA 2026.9.7.5402's part-failure model) is the one GameData-shaped value that
+must NOT go on `<PartGameData>`: `PartTemplate.CrashTolerance` is a geometry-template field that
+`PartTemplate.ApplyGameData` never merges, so a GameData-side attribute would be silently dead.
+flexo therefore keeps it in `part.gameData` (it is edited in Data mode's Identity section) but
+serializes it on the `<Part>` element. `null` / `≤ 0` ⇒ omitted, and the game derives a tolerance
+from inert mass ÷ bounding-box volume (`PartStructuralLimits.DeriveCrashTolerance`, 0.1–20 MPa).
+Core authors `3e6` on the CorePropulsionA engines.
 
 Rules (verified against Core XML + the C# serializer):
 - `<Transform>` is **omitted** when position=0 ∧ rotation=0 ∧ scale=1.
@@ -149,6 +158,8 @@ keeps export byte-compatible. **Never** write raw `toString()`/`toFixed()` into 
 optional `parserImpl` lets tests inject `@xmldom/xmldom`'s `DOMParser`; the browser
 uses the global `DOMParser`. `connectorsFromPartElement` reads inline `<Flags>` via
 `parseConnectorFlags` (the `", "`-joined list → `ConnectorFlag[]`, unknowns dropped).
+`crashToleranceFromPartElement(partEl)` reads the `<Part CrashTolerance>` root attribute,
+mapping absent / non-numeric / `NaN` / `≤ 0` to `null` — exactly the inputs KSA derives from.
 `gameDataFromAssets(xmlText, partId, parserImpl?)` is the inverse of
 `serializeGameDataXml` for ONE part: it returns the `<PartGameData Id=partId>` block as
 `{ editorTags, connectorFlags: Map<id, ConnectorFlag[]>, gameData: PartGameData }`
@@ -166,7 +177,14 @@ silently) and `mergeGameData()` folds them into each `CatalogPart`:
 - connector `<Flags>` (a `ConnectorFlag[]` from `ToSurface`/`FromSurface`/`Internal`)
   are applied to the matching connector by `Id` (geometry is the source of truth —
   flags-only connectors with no geometry counterpart are ignored);
-- `<EditorTag Value="…">` values are unioned into `editorTags`.
+- `<EditorTag Value="…">` values are unioned into `editorTags`;
+- `<PartGameData><SubPart Id InstanceOf><Transform>` entries whose `Id` matches no geometry
+  placement are **appended** to `placements` — KSA's `PartTemplate.ApplyOrAddSubPartInstance`
+  does the same (a matching `Id` would only overlay Transform/Gimbal/SolarTracker, which Core
+  never authors with an `InstanceOf`). Core's parachute bay (2026.9.7.5402) gets its two packed
+  chutes only this way. The merge runs before the SubPartGameData / collider scoping so the added
+  template's data is carried, and on export every placement is emitted in the geometry `<Part>`,
+  which the game treats identically.
 
 `addPart(placements, connectors, editorTags)` then unions the imported editor tags
 into the current project. Without this merge the `ToSurface` flag (e.g. on solar

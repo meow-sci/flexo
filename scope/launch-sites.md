@@ -6,6 +6,10 @@ Full evidence: [analysis/icrp/KSA_LAUNCH_SITES_AND_MODS.md](../analysis/icrp/KSA
 and [analysis/icrp/PEBKAC_SYSTEM_MODS.md](../analysis/icrp/PEBKAC_SYSTEM_MODS.md);
 plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (L1–L9) + §Phase 7.
 
+**Baseline:** re-verified against KSA build **2026.9.7.5402** — schema classes byte-identical; the
+physics now collides against every launch pad on a body, not just the nearest; see
+[What changed in 5402](#what-changed-in-5402).
+
 ## Contract facts
 
 1. **A mod cannot patch a Core body** (L1): `<Landmark>`s and terrain `<Modifier>`s live
@@ -74,3 +78,15 @@ plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (L1–L9) + §Phase 7.
 and re-clones on export; drift = re-export), `SolSystem.xml` (**mixed**: `LoadFromLibrary` rows AND ~45 inline bodies carrying 21 Id'd
 `Path=` attrs — the texture rules run over EVERY inline body in ICRP's output),
 `mod.toml`, `manifest.toml`, `Textures/Planets/_Decals/circle.dds`.
+
+## What changed in 5402
+
+**Nothing in the schema.** `LandmarkReference`, `DecalModifierReference`, `SystemTemplate`,
+`Mod.cs`, `ModManifest` and `Astronomicals.xml` / `SolSystem.xml` are unchanged; `LocationReference`
+changed only by `IGameViewport` types and a cursor hit-test guard in its debug UI. One behavioural
+move worth knowing for site export: `ConstraintSim` used to pick the single nearest launch-pad
+landmark within 300 m as the static collider; at 5402 `ResolveLaunchPads` builds a `LaunchPadPose`
+list of **every** `LandmarkReference { IsLaunchPad }` on the current celestial whose
+`GetStaticObject().CollisionShape.Exists`, posed by `ForwardCcf × (MeanRadius + terrain height)`
+and `LandmarkReference.GetAxesCcf(out up, out east, out north)`. Two ICRP sites placed close
+together therefore both collide now, instead of the farther one being ignored.

@@ -235,3 +235,72 @@ describe.runIf(hasKsaAssets)('ASSET_FILES covers every Core part file in the liv
     expect(wronglyUnlisted).toEqual([]);
   });
 });
+
+// KSA 2026.9.7.5402: Core started authoring geometry <SubPart> TEMPLATES inside a *GameData.xml*
+// file (the parachute bay's StandaloneParachuteA/B in CoreUtilityAGameData.xml), referencing the
+// sibling Assets file's default atlas + <PbrMaterial> by id. KSA resolves those from one global
+// registry; flexo resolves them against the sibling Assets file's tables.
+describe('SubPart templates authored in the GameData sibling (KSA 2026.9.7.5402)', () => {
+  const xmlDoc = (xml: string) =>
+    new DOMParser().parseFromString(xml, 'application/xml') as unknown as Document;
+  const assets = xmlDoc(`<Assets>
+    <MeshAtlas Path="Meshes/CoreUtilityA_MeshAtlas.glb" />
+    <PbrMaterial Id="CoreUtilityA_Material">
+      <Diffuse Path="Textures/CoreUtilityA_Diffuse.ktx2" />
+    </PbrMaterial>
+    <SubPart Id="CoreUtilityA_Subpart_ParachutePackedA">
+      <PartModel Id="CoreUtilityA_Subpart_ParachutePackedA_Model">
+        <Mesh Id="CoreUtilityA_Subpart_ParachutePackedA" />
+        <Material Id="CoreUtilityA_Material" />
+      </PartModel>
+    </SubPart>
+  </Assets>`);
+  const gameData = xmlDoc(`<Assets>
+    <SubPart Id="CoreUtilityA_Subpart_StandaloneParachuteA">
+      <PartModel Id="CoreUtilityA_Subpart_StandaloneParachuteA_Model">
+        <Mesh Id="CoreUtilityA_Subpart_ParachutePackedA" />
+        <Material Id="CoreUtilityA_Material" />
+      </PartModel>
+    </SubPart>
+    <SubPartGameData Id="CoreUtilityA_Subpart_StandaloneParachuteA">
+      <Parachute Id="DrogueChute" DiameterM="5" />
+    </SubPartGameData>
+  </Assets>`);
+
+  it('resolves the sibling template against the Assets file’s atlas + materials, under its sourceFile', () => {
+    const out: CatalogSubPart[] = [];
+    parseAssetsFile(assets, 'CoreUtilityAAssets.xml', out, gameData);
+    expect(out.map((s) => s.id)).toEqual([
+      'CoreUtilityA_Subpart_ParachutePackedA',
+      'CoreUtilityA_Subpart_StandaloneParachuteA',
+    ]);
+    const [packed, standalone] = out;
+    expect(standalone.atlasUrl).toBe(packed.atlasUrl);
+    expect(standalone.meshNodeName).toBe('CoreUtilityA_Subpart_ParachutePackedA');
+    expect(standalone.diffuseUrl).toBe(packed.diffuseUrl);
+    expect(standalone.sourceFile).toBe('CoreUtilityAAssets.xml');
+  });
+
+  it('is a no-op without a sibling (the pre-5402 shape)', () => {
+    const out: CatalogSubPart[] = [];
+    parseAssetsFile(assets, 'CoreUtilityAAssets.xml', out);
+    expect(out.map((s) => s.id)).toEqual(['CoreUtilityA_Subpart_ParachutePackedA']);
+  });
+
+  it.runIf(hasKsaAssets)(
+    'live tree: catalogs the parachute-bay templates from CoreUtilityAGameData.xml',
+    () => {
+      const read = (name: string) => xmlDoc(readFileSync(ksaAsset(name), 'utf-8'));
+      const out: CatalogSubPart[] = [];
+      parseAssetsFile(
+        read('CoreUtilityAAssets.xml'),
+        'CoreUtilityAAssets.xml',
+        out,
+        read('CoreUtilityAGameData.xml'),
+      );
+      const ids = out.map((s) => s.id);
+      expect(ids).toContain('CoreUtilityA_Subpart_StandaloneParachuteA');
+      expect(ids).toContain('CoreUtilityA_Subpart_StandaloneParachuteB');
+    },
+  );
+});

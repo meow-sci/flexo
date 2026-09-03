@@ -3,6 +3,7 @@ import { DOMParser } from '@xmldom/xmldom';
 import {
   animationModulesFromGameData,
   connectorsFromPartElement,
+  crashToleranceFromPartElement,
   gameDataFromAssets,
   parseConnectorCapabilities,
   parseConnectorFlags,
@@ -1935,5 +1936,46 @@ describe('IVA seats', () => {
     expect(parsed.lights.slice(1).map((l) => l.disableInIva)).toEqual([true, true]);
     expect(parsed.lights[1].position).toEqual({ x: -0.1, y: 0.42, z: -0.6 });
     expect(parsed.lights[2].position).toEqual({ x: -0.1, y: -0.42, z: -0.6 });
+  });
+});
+
+// KSA 2026.9.7.5402 added `PartTemplate.CrashTolerance` (Pa) for its new part-failure model.
+// It is a GEOMETRY-<Part> root attribute that `ApplyGameData` never copies, so it must be read
+// from and written to the <Part> element — a <PartGameData CrashTolerance> would be dead.
+describe('<Part CrashTolerance> (KSA 2026.9.7.5402 part-failure model)', () => {
+  const partEl = (attrs: string): Element =>
+    new DOMParser()
+      .parseFromString(
+        `<Assets><Part Id="P" ${attrs}><SubPart Id="a_1" InstanceOf="Core.A"/></Part></Assets>`,
+        'application/xml',
+      )
+      .getElementsByTagName('Part')[0] as unknown as Element;
+
+  it('reads the value Core authors on its engines (3e6 Pa)', () => {
+    expect(crashToleranceFromPartElement(partEl('CrashTolerance="3e6"'))).toBe(3e6);
+  });
+
+  it('maps every input the game derives from (absent / NaN / ≤ 0 / junk) to null', () => {
+    expect(crashToleranceFromPartElement(partEl(''))).toBeNull();
+    expect(crashToleranceFromPartElement(partEl('CrashTolerance="NaN"'))).toBeNull();
+    expect(crashToleranceFromPartElement(partEl('CrashTolerance="0"'))).toBeNull();
+    expect(crashToleranceFromPartElement(partEl('CrashTolerance="-5"'))).toBeNull();
+    expect(crashToleranceFromPartElement(partEl('CrashTolerance="lots"'))).toBeNull();
+  });
+
+  it('round-trips on the <Part> ELEMENT and never appears in the GameData document', () => {
+    const authored = editingPart({
+      ...part,
+      gameData: { ...createEmptyGameData(), crashTolerancePa: 3e6 },
+    });
+    const doc = new DOMParser().parseFromString(serializePart(authored), 'application/xml');
+    const el = doc.getElementsByTagName('Part')[0] as unknown as Element;
+    expect(el.getAttribute('CrashTolerance')).toBe('3E+06');
+    expect(crashToleranceFromPartElement(el)).toBe(3e6);
+    expect(serializeGameData(authored)).not.toContain('CrashTolerance');
+  });
+
+  it('omits the attribute when unset, so the game derives it from mass ÷ volume', () => {
+    expect(serializePart(part)).not.toContain('CrashTolerance');
   });
 });

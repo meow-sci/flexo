@@ -8,10 +8,11 @@
  * Uses the browser DOMParser — no third-party XML lib, no build step.
  */
 
-import { ASSET_FILES, fetchXmlFile } from './catalog';
+import { ASSET_FILES, fetchXmlFile, gameDataSibling } from './catalog';
 import {
   collidersFromElement,
   connectorsFromPartElement,
+  crashToleranceFromPartElement,
   directChildren,
   ivaSeatsFromElement,
   parseGameDataElement,
@@ -90,6 +91,8 @@ export interface CatalogPart {
   diameterM: number | null;
   /** Extra `<Diameter M/>` size classes beyond {@link diameterM} (adapter prefabs), preserved for round-trip. */
   extraDiametersM: number[];
+  /** Geometry `<Part CrashTolerance>` (Pa), or null when the game derives it (KSA 2026.9.7.5402). */
+  crashTolerancePa: number | null;
   /** Command-capability marker (<Control/>): the part can pilot a vehicle. */
   controllable: boolean;
   /** Part-level `<CustomMass><Mass Kg>` override, or null (the part masses from its tanks/inert masses). */
@@ -157,6 +160,8 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
       evaDoor: null,
       diameterM: null,
       extraDiametersM: [],
+      // A geometry-<Part> root attribute (never merged from GameData), read right here.
+      crashTolerancePa: crashToleranceFromPartElement(part),
       controllable: false,
       customMass: null,
       customMassExtras: [],
@@ -202,6 +207,14 @@ export interface PartGameData {
   ivaSeats: IvaSeat[];
   /** `<PartGameData><Light>`s (part-level, `ownerTemplateId: null`). */
   lights: PartLight[];
+  /**
+   * `<PartGameData><SubPart Id InstanceOf><Transform>` — placements the GameData ADDS to the
+   * geometry template. `PartTemplate.ApplyOrAddSubPartInstance` appends an entry whose `Id`
+   * matches no geometry instance (a matched one only overlays Transform / Gimbal / SolarTracker,
+   * which flexo does not model). Core's parachute bay (KSA 2026.9.7.5402) gets its two packed
+   * chutes ONLY this way; the fuel port has authored its port SubPart like this since 5026.
+   */
+  subPartPlacements: SubPartPlacement[];
   /** Connector-bound coupling game-data, so built-in part imports carry them in. */
   decoupler: Decoupler | null;
   dockingPort: DockingPort | null;
@@ -248,7 +261,7 @@ interface ParsedGameDataFile {
 }
 
 /** GameData sibling of each catalog asset file (e.g. CoreElectricalAAssets.xml -> CoreElectricalAGameData.xml). Not every asset file has one. */
-const GAMEDATA_FILES = ASSET_FILES.map((f) => f.replace(/Assets\.xml$/, 'GameData.xml'));
+const GAMEDATA_FILES = ASSET_FILES.map(gameDataSibling);
 
 /**
  * Parses a GameData document: `<PartGameData>` entries (editor tags, connector
@@ -269,6 +282,7 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
       colliders: [],
       ivaSeats: [],
       lights: [],
+      subPartPlacements: [],
       decoupler: null,
       dockingPort: null,
       evaDoor: null,
@@ -305,6 +319,9 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
     entry.ivaSeats.push(...parsed.ivaSeats);
     // Duplicate-Id <PartGameData> entries merge additively in KSA — lights accumulate.
     entry.lights.push(...parsed.lights);
+    // Only children carrying InstanceOf are placements; the `<SubPart Id><Gimbal>` overlays
+    // Core authors on engines have none and are read by gimbalsFromGameData instead.
+    entry.subPartPlacements.push(...placementsFromPartElement(gd));
     entry.decoupler ??= parsed.gameData.decoupler;
     entry.dockingPort ??= parsed.gameData.dockingPort;
     entry.evaDoor ??= parsed.gameData.evaDoor;
@@ -428,6 +445,17 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
       });
       // Part-level <Light>s (Core: CoreCommandA headlights, CoreIVASpaceA interior light).
       part.lights.push(...gd.lights);
+      // GameData-ADDED placements (`ApplyOrAddSubPartInstance`: an Id matching no geometry
+      // instance is appended). Normalised into the one placement list exactly like colliders —
+      // flexo re-emits every placement in the geometry `<Part>`, which the game treats
+      // identically. A matching Id is NOT re-applied: KSA would only overlay its Transform /
+      // Gimbal / SolarTracker, and Core authors no such overlay with an InstanceOf.
+      const placed = new Set(part.placements.map((p) => p.instanceId));
+      for (const p of gd.subPartPlacements) {
+        if (placed.has(p.instanceId)) continue;
+        part.placements.push(p);
+        placed.add(p.instanceId);
+      }
     }
     // SubPart-template data is keyed globally by template id; carry only the entries
     // for templates this Part places (deduped — many instances share one template).

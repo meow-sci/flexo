@@ -6,11 +6,25 @@
 > [part-and-subpart-xml.md](part-and-subpart-xml.md) (which owns the surrounding `<Part>` /
 > `<PartGameData>` document structure).
 
-**Baseline:** re-verified against KSA build **2026.8.22.5348** (`decomp/` + shipped `Content/Core`)
+**Baseline:** re-verified against KSA build **2026.9.7.5402** (`decomp/` + shipped `Content/Core`)
 and the real GLB meshes in `flexo-private-assets/assets/Meshes`.
 **Baseline status:** 🟡 **MODELED, one primitive short.** The four analytic shapes are fully modeled
 (closing the 4939 geometry-template `<Collider>` gap **E**), but 5261 added a **fifth**,
 `<ConvexHull>` — gap **S1**, see [What changed in 5261](#what-changed-in-5261).
+
+## What changed in 5402
+
+**Nothing.** Every collider class — `ColliderModule`, `ColliderTemplate`, the four analytic
+templates, `MeshColliderTemplate` / `ConvexHullColliderTemplate` — is byte-identical, so the
+primitive list is still four analytic shapes + `<ConvexHull>` (gap **S1** unchanged) and the
+placement formula is unmoved. Content-side, the parachute bay's 14 new SubParts
+(`CoreUtilityAAssets.xml`) and the two `StandaloneParachute` templates authored in
+`CoreUtilityAGameData.xml` carry ordinary `<Box>` / `<Cylinder>` colliders in the SubPart-owned
+form — note the latter live in a GameData file, which the catalog now scans (see
+[part-and-subpart-xml.md](part-and-subpart-xml.md#what-changed-in-5402)). `ConstraintSim` gained
+the part-failure contact bookkeeping (`PartContactLoad`) and a launch-pad list — runtime only.
+
+---
 
 ## What changed in 5348
 

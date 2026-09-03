@@ -157,7 +157,21 @@ interface MaterialPaths {
   emissive?: string;
 }
 
-export function parseAssetsFile(doc: Document, sourceFile: string, out: CatalogSubPart[]): void {
+/**
+ * @param siblingGameDataDoc The file's `*GameData.xml` sibling, when it has one. Since KSA
+ *   2026.9.7.5402 Core authors geometry `<SubPart>` TEMPLATES there too (the parachute bay's
+ *   two `StandaloneParachute` templates in `CoreUtilityAGameData.xml`), referencing the
+ *   Assets file's default atlas + `<PbrMaterial>`s by id — KSA resolves every `<Mesh Id>` /
+ *   `<Material Id>` from one global registry, so the file split is invisible to it. flexo
+ *   resolves those templates against THIS file's atlas/material tables (the sibling has none)
+ *   and records them under this `sourceFile`, so the browsers group them with their pack.
+ */
+export function parseAssetsFile(
+  doc: Document,
+  sourceFile: string,
+  out: CatalogSubPart[],
+  siblingGameDataDoc: Document | null = null,
+): void {
   const root = doc.documentElement;
   if (!root) return;
 
@@ -189,7 +203,8 @@ export function parseAssetsFile(doc: Document, sourceFile: string, out: CatalogS
   // <PartModel>; movable engine parts (actuators, gimbals, flexipipes) use
   // <PartModelDynamic> with the same inner <Mesh>/<Material>. Instances carry only
   // InstanceOf and no model element, so they are naturally skipped.
-  for (const sub of Array.from(doc.getElementsByTagName('SubPart'))) {
+  const templateSources = siblingGameDataDoc ? [doc, siblingGameDataDoc] : [doc];
+  for (const sub of templateSources.flatMap((d) => Array.from(d.getElementsByTagName('SubPart')))) {
     const id = sub.getAttribute('Id');
     if (!id) continue;
     const partModel = firstChildByTag(sub, 'PartModel') ?? firstChildByTag(sub, 'PartModelDynamic');
@@ -253,17 +268,31 @@ export function parseAssetsFile(doc: Document, sourceFile: string, out: CatalogS
   }
 }
 
-/** Fetches and parses every Core asset file into a sorted SubPart catalog. */
+/** The `*GameData.xml` sibling of a Core asset file (not every asset file has one). */
+export function gameDataSibling(assetFile: string): string {
+  return assetFile.replace(/Assets\.xml$/, 'GameData.xml');
+}
+
+/**
+ * Fetches and parses every Core asset file (plus each one's GameData sibling, for the SubPart
+ * templates KSA 2026.9.7.5402 started authoring there) into a sorted SubPart catalog.
+ */
 export async function loadCoreCatalog(): Promise<CatalogSubPart[]> {
   const out: CatalogSubPart[] = [];
   await Promise.all(
     ASSET_FILES.map(async (file) => {
-      const r = await fetchXmlFile(file);
+      const [r, sibling] = await Promise.all([
+        fetchXmlFile(file),
+        fetchXmlFile(gameDataSibling(file)),
+      ]);
       if (r.kind === 'missing') {
         console.error(`catalog: required asset file ${file} not found`);
         return;
       }
-      if (r.kind === 'ok') parseAssetsFile(r.doc, file, out);
+      // A missing sibling is the common case and silent; parse errors are logged by fetchXmlFile.
+      if (r.kind === 'ok') {
+        parseAssetsFile(r.doc, file, out, sibling.kind === 'ok' ? sibling.doc : null);
+      }
     }),
   );
   out.sort((a, b) => a.id.localeCompare(b.id));

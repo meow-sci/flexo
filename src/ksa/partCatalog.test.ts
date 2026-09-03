@@ -562,3 +562,103 @@ describe('IVA seats merge both Part-level authoring sites', () => {
     ]);
   });
 });
+
+// KSA 2026.9.7.5402: `<Part CrashTolerance>` (part-failure model) and Core's first part whose
+// SubParts are ADDED by its <PartGameData> (`PartTemplate.ApplyOrAddSubPartInstance` appends a
+// `<SubPart Id InstanceOf>` whose Id matches no geometry instance) — the parachute bay's two
+// packed chutes. Before this, importing that part silently lost both chutes.
+describe('KSA 2026.9.7.5402 — <Part CrashTolerance> + GameData-added placements', () => {
+  const ASSETS = `<Assets>
+  <Part Id="CorePropulsionA_Prefab_EngineA2" CrashTolerance="3e6">
+    <SubPart Id="bell_1" InstanceOf="CorePropulsionA_Subpart_EngineA2Bell" />
+  </Part>
+  <Part Id="CoreUtilityA_Prefab_ParachuteBayB">
+    <SubPart Id="CoreUtilityA_Subpart_ParachuteBayB1" InstanceOf="CoreUtilityA_Subpart_ParachuteBayB" />
+  </Part>
+</Assets>`;
+  const GAMEDATA = `<Assets>
+  <PartGameData Id="CoreUtilityA_Prefab_ParachuteBayB" DisplayName="Parachute Bay">
+    <EditorTag Value="Landing"/>
+    <SubPart Id="CoreUtilityA_Subpart_StandaloneParachuteA1" InstanceOf="CoreUtilityA_Subpart_StandaloneParachuteA">
+      <Transform>
+        <Position X="0.5529" />
+        <Rotation X="-0.2618" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreUtilityA_Subpart_ParachuteBayB1" InstanceOf="CoreUtilityA_Subpart_ParachuteBayB">
+      <Transform><Position X="9" /></Transform>
+    </SubPart>
+    <SubPart Id="CoreUtilityA_Subpart_ParachuteBayB1" />
+  </PartGameData>
+  <SubPartGameData Id="CoreUtilityA_Subpart_StandaloneParachuteA" DisplayName="Drogue">
+    <CustomMass><Mass Kg="3" /></CustomMass>
+  </SubPartGameData>
+</Assets>`;
+  const parts: CatalogPart[] = [];
+  parsePartsFile(parse(ASSETS), 'CoreUtilityAAssets.xml', parts);
+  const gameData = emptyGameData();
+  parseGameDataFile(parse(GAMEDATA), gameData);
+  mergeGameData(parts, gameData);
+  const engine = parts.find((p) => p.id === 'CorePropulsionA_Prefab_EngineA2')!;
+  const bay = parts.find((p) => p.id === 'CoreUtilityA_Prefab_ParachuteBayB')!;
+
+  it('reads <Part CrashTolerance> off the geometry template (null when absent)', () => {
+    expect(engine.crashTolerancePa).toBe(3e6);
+    expect(bay.crashTolerancePa).toBeNull();
+  });
+
+  it('appends a <PartGameData><SubPart InstanceOf> whose Id matches no geometry instance', () => {
+    expect(bay.placements.map((p) => p.instanceId)).toEqual([
+      'CoreUtilityA_Subpart_ParachuteBayB1',
+      'CoreUtilityA_Subpart_StandaloneParachuteA1',
+    ]);
+    const chute = bay.placements[1];
+    expect(chute.subPartTemplateId).toBe('CoreUtilityA_Subpart_StandaloneParachuteA');
+    expect(chute.position).toEqual({ x: 0.5529, y: 0, z: 0 });
+    expect(chute.rotation).toEqual({ x: -0.2618, y: 0, z: 0 });
+    expect(chute.layerId).toBe(DEFAULT_LAYER_ID);
+  });
+
+  it('leaves a matching geometry instance alone (KSA only overlays it) and skips Id-only overlays', () => {
+    expect(bay.placements[0].position).toEqual({ x: 0, y: 0, z: 0 });
+    expect(bay.placements).toHaveLength(2);
+  });
+
+  it('scopes the SubPartGameData of the ADDED template into the part', () => {
+    expect(bay.subPartGameData.map((s) => s.subPartTemplateId)).toContain(
+      'CoreUtilityA_Subpart_StandaloneParachuteA',
+    );
+  });
+});
+
+// Live-tree guard for the same 5402 shape against the REAL Core files: the parachute bay's two
+// packed chutes exist only as GameData-added placements, so if this ever regresses the bay
+// imports without them again. Skipped without the private tree (open-source CI).
+describe.runIf(hasKsaAssets)(
+  'live tree: CoreUtilityA_Prefab_ParachuteBayB carries its GameData-added chutes',
+  () => {
+    it('merges the StandaloneParachuteA1/B1 placements onto the geometry part', () => {
+      const read = (name: string) => parse(readFileSync(ksaAsset(name), 'utf-8'));
+      const parts: CatalogPart[] = [];
+      parsePartsFile(read('CoreUtilityAAssets.xml'), 'CoreUtilityAAssets.xml', parts);
+      const gameData = emptyGameData();
+      parseGameDataFile(read('CoreUtilityAGameData.xml'), gameData);
+      mergeGameData(parts, gameData);
+      const bay = parts.find((p) => p.id === 'CoreUtilityA_Prefab_ParachuteBayB')!;
+      const byId = new Map(bay.placements.map((p) => [p.instanceId, p]));
+      expect(byId.get('CoreUtilityA_Subpart_StandaloneParachuteA1')?.subPartTemplateId).toBe(
+        'CoreUtilityA_Subpart_StandaloneParachuteA',
+      );
+      expect(byId.get('CoreUtilityA_Subpart_StandaloneParachuteB1')?.subPartTemplateId).toBe(
+        'CoreUtilityA_Subpart_StandaloneParachuteB',
+      );
+      // The added templates' own <SubPartGameData> (the <Parachute> passthrough) rides along.
+      expect(bay.subPartGameData.map((s) => s.subPartTemplateId)).toEqual(
+        expect.arrayContaining([
+          'CoreUtilityA_Subpart_StandaloneParachuteA',
+          'CoreUtilityA_Subpart_StandaloneParachuteB',
+        ]),
+      );
+    });
+  },
+);

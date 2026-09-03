@@ -11,7 +11,7 @@
 > alongside [engines.md](engines.md), [connectors-coordinates-iva.md](connectors-coordinates-iva.md)
 > and [gamedata-modules.md](gamedata-modules.md).
 
-**Baseline:** re-verified against KSA build **2026.8.22.5348** (decomp @ 5348 + shipped Core XML);
+**Baseline:** re-verified against KSA build **2026.9.7.5402** (decomp @ 5402 + shipped Core XML);
 surface introduced at **2026.7.9.5018**.
 **Baseline status:** ✅ **CURRENT** — modeled end-to-end (parse, serialize, import/paste
 remapping, project codec v4, authoring UI, export pre-flight) by the 5018 upgrade.
@@ -187,6 +187,16 @@ template-local `Components` id and is never regenerated, so it passes through un
   surfaces warnings, not just blocking errors.
 - **`Parent` on a part-level consumer is legal** and needs no wiring (it defers to whatever
   places the _part_), so flexo's "unwired consumer" check only fires for SubPart-level ones.
+
+---
+
+## What changed in 5402
+
+**Nothing.** `ConnectorCapability*`, `FeedsFromReference`, `ConsumerFeedWiring` and
+`RocketCoreTemplate` are byte-identical; `PartTemplate.ResolveConsumerFeedPoints` /
+`ResolveConsumerFeeds` / `AddResolvedFeed` moved only by source line numbers in their log calls.
+The new `<Parachute>` is a `Components` module, so its `Id` (`DrogueChute` / `MainChute`) shares the
+container id namespace `AddResolvedFeed` scans — one more reason not to name a tank like a chute.
 
 ---
 

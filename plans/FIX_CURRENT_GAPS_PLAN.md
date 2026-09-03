@@ -1,16 +1,207 @@
 # Plan — Fix flexo gaps from KSA updates (running)
 
-> **Latest review: `2026.8.19.5261` → `2026.8.22.5348` (see below). NO BREAKING gap; the two
-> MISSING-CAPABILITY gaps that touched live data are ✅ FIXED in the review itself** — KSA rev 5329
-> made `<Light Id>` load-bearing (duplicate `Components` ids now log an Error, and flexo emitted
-> every light unnamed) and added `<Nozzle AreaRatioMultiplier>`, which re-apportions a solid
-> motor's throat and which Core authors on the launch-escape tower (T0/T5 below).
-> Newly 📋 OPEN from 5348: the `<Alpha>` material slot (T1), `<PartModel><Terrain>` (T2),
-> `<PrimarySequenceModule>` (T3, passthrough-safe), and the retired kitten MMU asset (T4).
-> Still 📋 OPEN from 5261: the `<ConvexHull>` collider primitive (S1) and the `<Grab>` handhold
-> anchors (S2, passthrough-safe). Carried forward from 5168: the ground-clutter asset-bundler
-> rework (R1, scaffold-only, widened again at 5348) and the "Control From Here"
-> reference-orientation drift (R2, docs-only). Earlier reviews follow as history.
+> **Latest review: `2026.8.22.5348` → `2026.9.7.5402` (see below). NO BREAKING gap; the two
+> MISSING-CAPABILITY gaps that touched live Core data are ✅ FIXED in the review itself** — KSA's
+> new part-failure model added `<Part CrashTolerance>`, a geometry-root attribute `ApplyGameData`
+> never merges and Core authors on five engines (U1); and Core began authoring SubPart templates and
+> GameData-ADDED placements inside a `*GameData.xml` file, so the parachute bay imported without its
+> chutes (U4). Newly 📋 OPEN from 5402: the `<Parachute>` module (U2, passthrough-safe) and
+> `<SubPartGroup>` (U3, no consumer yet). Still 📋 OPEN from 5348: the `<Alpha>` material slot
+> (T1), `<PartModel><Terrain>` (T2), `<PrimarySequenceModule>` (T3, passthrough-safe) and the
+> retired kitten MMU asset (T4); from 5261: the `<ConvexHull>` collider primitive (S1) and the
+> `<Grab>` handhold anchors (S2, passthrough-safe). Carried forward from 5168: the ground-clutter
+> asset-bundler rework (R1, scaffold-only) and the "Control From Here" reference-orientation drift
+> (R2, docs-only). Earlier reviews follow as history.
+
+---
+
+
+# 5402 review — `2026.8.22.5348` → `2026.9.7.5402`
+
+**Derived from:** the [scope/](../scope/FULL_SCOPE.md) catalog review — `diff -rq` of the two
+provided asset trees (`ksa-game-assemblies_prev/current` @ 5348 vs `ksa-game-assemblies/current`
+@ 5402), a sweep of all **216 changed + 66 added `decomp/*.cs`** (0 removed) for `[XmlElement]` /
+`[XmlAttribute]` / `[XmlType]` / `[XmlIgnore]` / `[DefaultValue]` hunks, and byte-identity of every
+verbatim-ported class (none is in the diff). `version.json` @5402 documents ONE commit (rev 5401,
+the thumbnail data-stride crash fix; `fromRevision: 5400`) — revs 5349–5400 have no changelog, so
+the file diff is the authority.
+
+5402 is a **medium release with a tiny schema**: a `Viewport` → `IViewport`/`IGameViewport`
+multi-viewport refactor (the bulk of the 216 changed files), KSA's **parachute** system (~30
+`Chute*`/`Parachute*` classes on a Bepu cloth solver), a **part structural-failure** model
+(`PartStructuralLimits` / `PartFailure` / `PartContactLoad`) and a plume-trail rework — whose
+**entire XML schema delta is 5 declarations**, plus one new content *pattern* that turned out to be
+the larger flexo change.
+
+**What the added/changed file lists flagged first:** `Parachute.cs` (a `TemplateData` with
+`[XmlType]`) and the two `[XmlAttribute]`/`[XmlElement]` hunks in `PartTemplate.cs`. The
+`CorePropulsionAAssets.xml` diff is five identical one-attribute lines — and the attribute is on the
+geometry `<Part>`, which is what made U1 a real loss rather than a passthrough non-event.
+
+## Priority summary (5402)
+
+| # | Gap | Severity | Status | Scope doc |
+|---|---|---|---|---|
+| U1 | `PartTemplate.CrashTolerance` — `[XmlAttribute] double = NaN` on the **geometry `<Part>`**, never merged by `ApplyGameData`; feeds `PartStructuralLimits.ResolveCrashTolerance` / `PartFailure.Detect`. Core authors `3e6` on `CorePropulsionA_Prefab_EngineA2…A6`; flexo dropped it on round-trip | MISSING-CAPABILITY | ✅ **FIXED** (this review) | [part-and-subpart-xml](../scope/part-and-subpart-xml.md#what-changed-in-5402) |
+| U2 | New `Components` module `<Parachute>` (`Parachute.TemplateData`, 15 attributes + `<Attach X Y Z>`), authored by Core under `<PartGameData>` and `<SubPartGameData>`; both sites passthrough-safe, but the editor cannot author a chute | MISSING-CAPABILITY | 📋 **OPEN** | [gamedata-modules](../scope/gamedata-modules.md#what-changed-in-5402) |
+| U3 | `PartTemplate.SubPartGroups` — `<SubPartGroup><SubPartRef Id/></SubPartGroup>`, appended by `ApplyGameData`, read by nothing else in the decomp; Core authors none. Passthrough under GameData, dropped on a geometry `<Part>` | NONE (today) | 📋 **OPEN**, low | [part-and-subpart-xml](../scope/part-and-subpart-xml.md#what-changed-in-5402) |
+| U4 | `CoreUtilityAGameData.xml` authors geometry `<SubPart>` **templates** (`StandaloneParachuteA/B`) and `ParachuteBayB`'s `<PartGameData>` **adds** their placements (`PartTemplate.ApplyOrAddSubPartInstance`); flexo's catalog scanned only `ASSET_FILES` and `mergeGameData` dropped GameData-added placements, so the bay imported without its chutes | MISSING-CAPABILITY | ✅ **FIXED** (this review) | [part-and-subpart-xml](../scope/part-and-subpart-xml.md#what-changed-in-5402) |
+| U5 | `PlumeTrailTemplate` gained `<Color>` / `DensityMultiplier` / `<Lifetime>`; `PlumeTrailAssets.xml` added `LiquidEnginePlumeTrail` (unreferenced by Core). flexo uses trail ids only; its static `PLUME_TRAIL_IDS` snapshot was one entry short | COSMETIC | ✅ **FIXED** (this review) | [engines](../scope/engines.md#what-changed-in-5402) |
+| — | Everything else (`CharacterCoreReference.HeadMeshIndices` is a first-person head hide the kitten aide never needs) | NONE | ✅ re-verified INTACT | — |
+
+### U1 — `<Part CrashTolerance>` — ✅ FIXED
+
+**Severity: MISSING-CAPABILITY** — silent round-trip loss on five Core engines, and no way to author
+the value a real part now needs to survive a landing.
+
+Game-side (`decomp/KSA/PartTemplate.cs`):
+
+```csharp
+[XmlAttribute] public double CrashTolerance = double.NaN;
+```
+
+and its consumers (`Part.cs`, `PartStructuralLimits.cs`, `PartFailure.cs`):
+
+```csharp
+public double CrashTolerancePascals => PartStructuralLimits.ResolveCrashTolerance(Template.CrashTolerance, InertMassKg, BoundingBoxVolumeCubicMetres);
+// ResolveCrashTolerance: NaN or <= 0  ⇒  DeriveCrashTolerance(massKg, volume)
+//   = Clamp(3e6 * Clamp((massKg / Max(volume, 1e-6)) / 40, 0.5, 4), 1e5, 2e7)   // Pa
+// PartFailure.Detect: HasFailed(AccumulatedPressure(contact), part.CrashTolerancePascals) && !part.IsAttachedInternal  ⇒ shed
+```
+
+**Why the passthrough could not save it:** `PartTemplate.ApplyGameData` copies SubPartInstances,
+EditorTags, the engine lists, Connectors (flags/capabilities OR-merged), DockingPort,
+PrimarySequenceModule, EVADoor, Control, Diameters, Batteries/Generators/SolarPanels/SolarTrackers/
+PowerConsumers, Aligned, SymmetryGroups, SubPartGroups, Grabs, Thumbnail and DisplayName — and
+**not `CrashTolerance`**. So it exists ONLY on the geometry `<Part>`, exactly where flexo's fresh
+DOM rebuild keeps no unmodeled attributes. Core: `<Part Id="CorePropulsionA_Prefab_EngineA2" CrashTolerance="3e6">`
+… `EngineA6` (`CorePropulsionAAssets.xml`).
+
+**Fix (landed):**
+
+- `PartGameData.crashTolerancePa: number | null` (`src/ksa/types.ts:1294`; `createEmptyGameData`
+  at `:1451`) — it sits in the popup-only GameData bag for authoring convenience but is a
+  geometry-element attribute on the wire.
+- `crashToleranceFromPartElement(part)` (`src/ksa/partXmlParser.ts:121`) maps absent / non-numeric /
+  `NaN` / `≤ 0` to `null` — precisely the inputs `ResolveCrashTolerance` derives from, so flexo
+  never stores a value the game would ignore.
+- `serializePartsXml` writes `CrashTolerance` on the `<Part>` element via `formatG6`
+  (`src/ksa/partXmlSerializer.ts:134-140`; `3e6` → `3E+06`, which `XmlConvert` parses) and never on
+  `<PartGameData>`.
+- Import path: `CatalogPart.crashTolerancePa` read in `parsePartsFile`
+  (`src/ksa/partCatalog.ts:95`, `:164`), carried by `src/state/partImport.ts:99`,
+  `ImportedGameData.crashTolerancePa` + the paste-merge fill (`src/state/editorStore.ts:777`,
+  `:938`) and `projectTransfer.mergeGameData` (`src/state/projectTransfer.ts:981`).
+- Persisted as the optional compact-codec key `crt` (`src/state/projectCodec.ts:404`, `:434`,
+  `:475`). Additive and optional — an old document decodes to `null` — so **no
+  `PROJECT_SCHEMA_VERSION` bump** (the no-migration rule concerns changed *meaning*; this is a new
+  field with the game's own "unset" default).
+- Authoring: Data mode → Identity → "Crash tolerance override" switch + Pa field
+  (`src/ui/data/sections/IdentitySection.tsx:87-105`; `setCrashToleranceEnabled` /
+  `setCrashTolerance` in `src/state/editorStore.ts:2699-2710`, the switch defaults to Core's `3e6`).
+- Regression: `partXmlParser.test.ts` ('<Part CrashTolerance> (KSA 2026.9.7.5402 part-failure
+  model)' — parse table, round-trip on the `<Part>` element, absence from the GameData document,
+  omission when unset), `partCatalog.test.ts`, `projectCodec.test.ts`.
+
+### U4 — SubPart templates + ADDED placements authored in a GameData file — ✅ FIXED
+
+**Severity: MISSING-CAPABILITY** — a Core part (`CoreUtilityA_Prefab_ParachuteBayB`) imported
+without two of its SubParts, and two Core templates were invisible in the SubPart browser.
+
+This is a **content pattern**, not a schema change. `CoreUtilityAGameData.xml` @5402:
+
+```xml
+<PartGameData Id="CoreUtilityA_Prefab_ParachuteBayB" DisplayName="Parachute Bay">
+  <EditorTag Value="Landing"/>
+  <SubPart Id="CoreUtilityA_Subpart_StandaloneParachuteA1" InstanceOf="CoreUtilityA_Subpart_StandaloneParachuteA">
+    <Transform><Position X="0.5529" /><Rotation X="-0.2618" /></Transform>
+  </SubPart>
+  <SubPart Id="CoreUtilityA_Subpart_StandaloneParachuteB1" InstanceOf="CoreUtilityA_Subpart_StandaloneParachuteB">
+    <Transform><Position X="0.1746" /><Rotation X="-0.2618" /></Transform>
+  </SubPart>
+  <KeyframeAnimationModule Id="ParachuteBayDoorAnimation" ShowDeployRetract="true">…</KeyframeAnimationModule>
+</PartGameData>
+
+<SubPart Id="CoreUtilityA_Subpart_StandaloneParachuteA">            <!-- a TEMPLATE, in a GameData file -->
+  <PartModel Id="CoreUtilityA_Subpart_StandaloneParachuteA_Model">
+    <Mesh Id="CoreUtilityA_Subpart_ParachutePackedA" />              <!-- from CoreUtilityAAssets.xml's atlas -->
+    <Material Id="CoreUtilityA_Material" />                          <!-- from CoreUtilityAAssets.xml -->
+  </PartModel>
+  <MeshView><Mesh Id="CoreUtilityA_Subpart_ParachutePackedA_VM" /></MeshView>
+  <Collider Id="Collider1"><Cylinder Id="CylinderCollider1">…</Cylinder></Collider>
+</SubPart>
+```
+
+Game semantics: `PartTemplate.ApplyGameData` → `ApplyOrAddSubPartInstance(instance)` — an `Id`
+matching an existing `SubPartInstances` entry gets `PartInstance.ApplyGameData` (a Transform /
+Gimbal / SolarTracker overlay); an unmatched `Id` is **appended**. Templates resolve `<Mesh Id>` /
+`<Material Id>` from KSA's single global registry, so which file declares them is invisible to the
+game. (`CoreFuelPortGameData.xml` has authored a GameData-added `<SubPart Id InstanceOf/>` since
+5026 — pre-existing, and previously unhandled the same way.)
+
+flexo-side, both halves were lost: `loadCoreCatalog` scanned only `ASSET_FILES`, so the two
+templates never entered the SubPart catalog (invisible in the browser, unresolvable as a placement
+target); and `mergeGameData` ignored the GameData placements — `<SubPart>` is in
+`KNOWN_PART_GAMEDATA_CHILDREN` (read for `<Gimbal>` overlays only), so they were **dropped**, not
+passed through.
+
+**Fix (landed):**
+
+- `parseAssetsFile(doc, sourceFile, out, siblingGameDataDoc = null)` (`src/ksa/catalog.ts:161-206`)
+  iterates the `<SubPart>` templates of BOTH documents against the Assets file's atlas + material
+  tables (the GameData file has none) and records them under the Assets `sourceFile`, so the
+  browsers group them with their pack. `gameDataSibling(file)` (`:272`) names the sibling and
+  `loadCoreCatalog` fetches it in parallel (`:286`; a missing sibling is the silent common case).
+  `partCatalog.ts`'s `GAMEDATA_FILES` reuses the helper (`:264`).
+- `PartGameData.subPartPlacements` (`src/ksa/partCatalog.ts:217`), filled by
+  `placementsFromPartElement(gd)` in `parseGameDataFile` (`:324` — the `Id`-only gimbal overlays
+  have no `InstanceOf` and are skipped), and appended in `mergeGameData` when the `instanceId`
+  matches no geometry placement (`:454`), BEFORE the SubPartGameData / collider scoping so the added
+  template's own data is carried in. A matching `Id` is deliberately NOT re-applied: KSA would only
+  overlay Transform/Gimbal/SolarTracker, and Core authors no such overlay with an `InstanceOf`.
+- Export is unchanged: flexo emits every placement in the geometry `<Part>`, which the game treats
+  identically — the same normalisation colliders already get.
+- Regression: `catalog.test.ts` ('SubPart templates authored in the GameData sibling (KSA
+  2026.9.7.5402)' — synthetic Assets/GameData pair, the no-sibling no-op, and a live-tree check
+  that `CoreUtilityAGameData.xml` yields `StandaloneParachuteA/B`), `partCatalog.test.ts` ('KSA
+  2026.9.7.5402 — <Part CrashTolerance> + GameData-added placements').
+
+### U5 — `PLUME_TRAIL_IDS` snapshot refresh — ✅ FIXED
+
+`PlumeTrailTemplate` gained `[XmlElement("Color")] ColorRgbReference Color` (default white),
+`[XmlAttribute("DensityMultiplier")] float DensityMultiplier = 1` (clamped 0–1 in `OnDataLoad`) and
+`[XmlElement] TimeSpanReference Lifetime` (1200 s, floored at 0.001 s), all passed straight to
+`VolumetricTrailRenderer.SubmitEmitter`. `PlumeTrailAssets.xml` added
+`<PlumeTrailTemplate Id="LiquidEnginePlumeTrail" DensityMultiplier="0.015">` (`<Color 0.05/0.05/0.05>`,
+`<EndRadius M="80"/>`, `<Lifetime Seconds="20"/>`); no Core nozzle references it yet. flexo consumes
+trail templates by id only (`<ReactionPlume><PlumeTrail Id>`), and `PLUME_TRAIL_IDS`
+(`src/ksa/types.ts:839`) — a **static** snapshot of that file feeding the nozzle editor's select —
+now lists both. Re-diff the snapshot on every update.
+
+### U2 — `<Parachute>` module — 📋 OPEN
+
+`Parachute.TemplateData` (`decomp/KSA/Parachute.cs`, `[XmlType(TypeName = "Parachute")]`, a
+`Components` module registered through `ModuleList.CreateComponents`): attributes `DiameterM`,
+`MinDiameterM`, `MaxDiameterM`, `ReefRatio`, `ReefDurationS`, `BurstPressurePa`, `LineRatingN`,
+`RiserLengthM`, `DeployAltitudeM` (floats, defaults from `ChuteTuning.Default`), `CutInSequence`
+(`true`), `Drogue`, `CutsDrogues`, `CanopyCount` / `MaxCanopyCount` (`1`), `CanopyRadiusM`; child
+`[XmlElement("Attach")] Vector3Reference Attach` (the canopy attach point in the part assembly
+frame, `AttachCenterPartAsmb`). Core authors it under `<PartGameData>` on the four radial chutes
+and under `<SubPartGameData>` on `StandaloneParachuteA/B`; both ride flexo's `RawXmlNode`
+passthrough (`PassthroughViewer` shows them), so **nothing is lost today**. Closing it means a
+`Parachute` type in `src/ksa/types.ts`, parse/emit at both GameData sites in
+`src/ksa/partXmlParser.ts` / `partXmlSerializer.ts` (removing `'Parachute'` from the passthrough by
+adding it to the known-children sets), a Data-mode section under `src/ui/data/sections/`, and a
+3D handle for `<Attach>` in the workspace. The save-side `ParachuteData` / `ParachuteDeployData` /
+`ParachuteCutData` are vehicle state, out of scope.
+
+### U3 — `<SubPartGroup>` — 📋 OPEN (low)
+
+`PartTemplate.SubPartGroups` (`[XmlElement("SubPartGroup")] List<Part.SubPartGroupRef>`, with
+`Part.SubPartGroupRef.GroupedParts = [XmlElement("SubPartRef")] List<SubPartIdReference>`) is
+appended by `ApplyGameData` and read by nothing else in the decomp; Core authors none. Under
+`<PartGameData>` the passthrough preserves it; on a geometry `<Part>` flexo drops it — the S2/T3
+pattern. Revisit when a consumer appears.
 
 ---
 

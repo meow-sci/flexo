@@ -96,6 +96,7 @@ export async function importBuiltInPart(
       evaDoor: part.evaDoor,
       diameterM: part.diameterM,
       extraDiametersM: part.extraDiametersM,
+      crashTolerancePa: part.crashTolerancePa,
       controllable: part.controllable,
       customMass: part.customMass,
       customMassExtras: part.customMassExtras,

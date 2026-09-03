@@ -7,7 +7,7 @@
 > `<Internal>` flag) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
-**Baseline:** re-vetted against KSA build **2026.8.22.5348** (decomp @ 5348 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.9.7.5402** (decomp @ 5402 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — the coordinate calibration survived rev 5067's deletion of
 `Double3Ex.Up/Forward/Right` (the vectors moved to `Camera.ForwardView`/`RightView`/`UpView` with
 identical values), the connector/`<Internal>` contracts are byte-identical, and 5117's crew
@@ -296,6 +296,21 @@ follows the root part.
 8. **Interior geometry with no seat anywhere in the vehicle is invisible in EVERY camera mode** — `<Internal>` hides it outside IVA, and with no seat the IVA mode is never offered. This is the failure mode the deleted automatic rewrite used to mask.
 9. **`<IVASeat Id>` shares the feed-container id namespace** (`PartTemplate.AddResolvedFeed` scans every `Components[].Id`) **and, since 5117, is the target of `<EVADoor SeatId>`**. flexo models it as `IvaSeat.ksaId` and emits it only when the user authored one; ids minted by the "align this door to a seat" action (`setEvaDoorSeat`) are uniquified against that shared namespace — tank feed ids, solid grain-segment ids and the other seats' ids.
 10. **There is no in-game editor IVA preview.** The KSA vehicle editor has no IVA mode; the only in-game check is launch → **Shift+C** twice → **C** to cycle. This is why flexo ships its own seat preview (above) — and why that preview's honest limits matter.
+
+## What changed in 5402
+
+**Nothing on the contract.** `QuaternionEx` changed only by a decompiler shape in `Normalize`
+(`x.Equals(0.0)` → `num == 0f`); `CreateFromXyzRadians` is untouched, so `coords.ts`'s
+`EULER_ORDER` calibration stands. `Double3Ex`, `IVASeatTemplate`, `EVADoorTemplate`,
+`DockingPortTemplate`, `Input.cs` and `Control` / `ControlTemplate` are byte-identical;
+`FlightComputer` changed only by an `IGameViewport` signature and still aims body **+X**.
+`IVASeat` gained one line — `_renderable.HideHead = IsCameraInThisSeat(viewport)` (the seat basis
+is unchanged); `IVAController` gained a default constructor name (`"IVA"`) and lost one
+`CursorPositionScreen` assignment, with both view clamps untouched, so the `ivaLook.ts` port stands.
+`PartModelModule`'s is still the only `[XmlElement("Internal")]` in the tree. Gap **R2** carries
+forward unchanged.
+
+---
 
 ## What changed in 5348
 

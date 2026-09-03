@@ -773,6 +773,8 @@ export interface ImportedGameData {
   diameterM: number | null;
   /** Extra `<Diameter M/>` size classes (adapter prefabs) carried in on import. */
   extraDiametersM: number[];
+  /** Geometry `<Part CrashTolerance>` (Pa) carried in on import; null ⇒ the game derives it. */
+  crashTolerancePa: number | null;
   controllable: boolean;
   /** Part-level `<CustomMass>` mass override (Kg) + its preserved unmodeled children (inertia). */
   customMass: number | null;
@@ -932,6 +934,10 @@ function applyImportedGameData(
     game.extraDiametersM = src.extraDiametersM;
   }
   if (!game.controllable && src.controllable) game.controllable = true;
+  // Crash tolerance: a whole-part scalar, so the first authored value wins.
+  if (game.crashTolerancePa == null && src.crashTolerancePa != null) {
+    game.crashTolerancePa = src.crashTolerancePa;
+  }
   // Custom mass: filled only when not already set; the preserved extras (inertia) ride along.
   if (game.customMass == null && src.customMass != null) {
     game.customMass = src.customMass;
@@ -2631,6 +2637,8 @@ const DEFAULT_PUSHOFF_IMPULSE_NS = 5000;
 const DEFAULT_CUSTOM_MASS_KG = 100;
 /** Default diameter (m) when the part-diameter size class is first enabled (Core's most common value). */
 const DEFAULT_DIAMETER_M = 1;
+/** What Core authors on every CorePropulsionA engine (`<Part CrashTolerance="3e6">`). */
+const DEFAULT_CRASH_TOLERANCE_PA = 3e6;
 
 /** Streaming gameData mutation: no undo push (caller focus-pushes). */
 function mutateGameData(mutate: (g: PartGameData) => void): void {
@@ -2681,6 +2689,23 @@ export function setDiameterEnabled(enabled: boolean): void {
 export function setDiameter(diameterM: number): void {
   mutateGameData((g) => {
     g.diameterM = diameterM;
+  });
+}
+
+/**
+ * Discrete: enable/disable the authored `<Part CrashTolerance>` (off → null, i.e. the game
+ * derives it from mass ÷ volume; on → Core's 3 MPa engine value).
+ */
+export function setCrashToleranceEnabled(enabled: boolean): void {
+  commitGameData('crash tolerance', enabled ? 'on' : 'off', (g) => {
+    g.crashTolerancePa = enabled ? (g.crashTolerancePa ?? DEFAULT_CRASH_TOLERANCE_PA) : null;
+  });
+}
+
+/** Streaming: set the authored crash tolerance in Pa. Caller pushes undo on field focus. */
+export function setCrashTolerance(pa: number): void {
+  mutateGameData((g) => {
+    g.crashTolerancePa = pa;
   });
 }
 

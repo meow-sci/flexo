@@ -4,8 +4,12 @@
 > `<PartGameData>` / `<SubPartGameData>` documents. Each block maps to a KSA `*Template`
 > class. Engine modules have their own file ([engines.md](engines.md)).
 
-**Baseline:** re-vetted against KSA build **2026.8.22.5348** (decomp @ 5348 + shipped Core XML).
-**Baseline status:** ✅ **INTACT** — 5348 made `<Light Id>` load-bearing
+**Baseline:** re-vetted against KSA build **2026.9.7.5402** (decomp @ 5402 + shipped Core XML).
+**Baseline status:** ✅ **INTACT, one new module opaque** — 5402 added exactly one `Components`
+module, `<Parachute>` (gap **U2**): Core authors it under both `<PartGameData>` and
+`<SubPartGameData>`, where the `RawXmlNode` passthrough round-trips it verbatim but the editor
+cannot author it — see [What changed in 5402](#what-changed-in-5402). Every unit token, scale
+factor and modeled element form is byte-identical. 5348 made `<Light Id>` load-bearing
 (`PartTemplate.WarnOnDuplicateModuleIds`) and moved the decoupler into `Components` without moving
 its wire form; the id is now modeled as `PartLight.ksaId` and ALWAYS emitted — see
 [What changed in 5348](#what-changed-in-5348). 5261's added `<Light><DisableInIva>` is modeled
@@ -76,7 +80,7 @@ ships a new `FuelPort` module (passthrough-preserved) — see
 
 **Enums / strings**: `TankShape` `'Cylindrical'|'Spherical'`; `ConnectorFlag` `'Internal'|'ToSurface'|'FromSurface'`; `LightType` `'Spot'|'Point'`.
 
-**Round-trip safety:** see the ⭐ master invariant in [part-and-subpart-xml.md](part-and-subpart-xml.md#-master-invariant--flexo-rebuilds-a-fresh-dom-now-with-gamedata-passthrough). As of gap 6, unmodeled `<PartGameData>`/`<SubPartGameData>` **child elements + root attrs are preserved** verbatim (`RawXmlNode` passthrough) — e.g. the `SolidSphereMass`… mass family, `<AttachedInternal>`, `<SubstanceStorageVolume>`, a SubPart's `DisplayName`. (`<Collider>` and — at PART level — `<IVASeat>` are MODELED; see [colliders.md](colliders.md) and [connectors-coordinates-iva.md](connectors-coordinates-iva.md). A **SubPart-level** `<IVASeat>` is deliberately still passthrough.) (Unmodeled elements OUTSIDE these two containers are still dropped.)
+**Round-trip safety:** see the ⭐ master invariant in [part-and-subpart-xml.md](part-and-subpart-xml.md#-master-invariant--flexo-rebuilds-a-fresh-dom-now-with-gamedata-passthrough). As of gap 6, unmodeled `<PartGameData>`/`<SubPartGameData>` **child elements + root attrs are preserved** verbatim (`RawXmlNode` passthrough) — e.g. the `SolidSphereMass`… mass family, `<AttachedInternal>`, `<SubstanceStorageVolume>`, a SubPart's `DisplayName`, and (since 5402) `<Parachute>` with its `<Attach>` child. (`<Collider>` and — at PART level — `<IVASeat>` are MODELED; see [colliders.md](colliders.md) and [connectors-coordinates-iva.md](connectors-coordinates-iva.md). A **SubPart-level** `<IVASeat>` is deliberately still passthrough.) (Unmodeled elements OUTSIDE these two containers are still dropped.)
 
 ## Known gotchas
 
@@ -125,6 +129,57 @@ re-check the validator's strings alongside the two evaluators.
 
 On each game update, re-verify per the checklist item in
 [GAME_UPDATE_CHECKLIST.md](GAME_UPDATE_CHECKLIST.md) (grep anchors are listed there).
+
+## What changed in 5402
+
+**One new `Components` module: `<Parachute>` — gap U2 (MISSING-CAPABILITY, 📋 OPEN, passthrough-safe).**
+Rev range 5349–5400 (no changelog) landed KSA's parachute system (~30 `Chute*`/`Parachute*` classes
+
+- a Bepu cloth solver). The authored template is `Parachute.TemplateData`
+  (`[XmlType(TypeName = "Parachute")] : TemplateDataBase`), registered like every Components module
+  (`ModuleList.CreateComponents` now calls `Parachute.CreateComponents`):
+
+| `<Parachute …>`                                                                                                                        | Type / default                                                                               |
+| -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `Id`                                                                                                                                   | `TemplateDataBase.Id` (Core: `DrogueChute`, `MainChute`)                                     |
+| `DiameterM` `MinDiameterM` `MaxDiameterM` `ReefRatio` `ReefDurationS` `BurstPressurePa` `LineRatingN` `RiserLengthM` `DeployAltitudeM` | `float`, defaults from `ChuteTuning.Default`                                                 |
+| `CutInSequence`                                                                                                                        | `bool = true`                                                                                |
+| `Drogue`, `CutsDrogues`                                                                                                                | `bool = false`                                                                               |
+| `CanopyCount`, `MaxCanopyCount`                                                                                                        | `int = 1`                                                                                    |
+| `CanopyRadiusM`                                                                                                                        | `float`                                                                                      |
+| child `<Attach X Y Z>`                                                                                                                 | `Vector3Reference` — canopy attach point in the part assembly frame (`AttachCenterPartAsmb`) |
+
+Core authors it at both GameData sites:
+
+```xml
+<!-- CoreUtilityAGameData.xml — <PartGameData Id="CoreUtilityA_Prefab_RadialParachuteSmallA"> -->
+<Parachute Id="DrogueChute" DiameterM="5" Drogue="true" MinDiameterM="1" MaxDiameterM="15"
+           ReefRatio="0.5" ReefDurationS="3" BurstPressurePa="15000" LineRatingN="100000">
+  <Attach X="0" Y="0" Z="-0.141" />
+</Parachute>
+<!-- <SubPartGameData Id="CoreUtilityA_Subpart_StandaloneParachuteB" DisplayName="Main Parachutes"> -->
+<Parachute Id="MainChute" DeployAltitudeM="800" DiameterM="25" MinDiameterM="20" MaxDiameterM="40"
+           ReefRatio="0.4" BurstPressurePa="15000" LineRatingN="200000" CanopyCount="3"
+           MaxCanopyCount="4" CanopyRadiusM="0.243" CutInSequence="false" CutsDrogues="true">
+  <Attach X="0.221" Y="0" Z="0" />
+</Parachute>
+```
+
+Both sites ride flexo's `RawXmlNode` passthrough, so an imported chute round-trips verbatim
+(`PassthroughViewer` shows it) — **nothing is lost today**, but flexo cannot author one. The
+`ParachuteData` / `ParachuteDeployData` / `ParachuteCutData` `SaveData` classes are vehicle save
+state, out of scope; `VehicleEditor.DrawParachuteSection` lets the player retune canopies,
+diameter and reef ratio at runtime. Closing U2 needs a Parachute GameData section
+(`src/ksa/types.ts` + parser/serializer + `src/ui/data/sections/`) and a 3D handle for `<Attach>`.
+
+**Everything else is intact.** `BatteryTemplate`, `DockingPortTemplate`, `EVADoorTemplate`,
+`IVASeatTemplate`, every unit reference and `Lighting/Light.cs` + `LightPrePass.comp` /
+`LightData.glsl` are byte-identical. `LightModule`, `PartModelModule` and `PartModelDynamicModule`
+changed only by the `Viewport` → `IViewport` refactor and by collapsing the light-switch test into
+the new `Part.IsLightSwitchedOff()` (same three conditions: no switch ⇒ on; `!LightIsActive` or the
+switch's power state inactive ⇒ off) — no schema, no falloff/aim math.
+
+---
 
 ## What changed in 5348
 

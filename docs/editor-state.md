@@ -284,7 +284,10 @@ templates are skipped (`isGlassTemplate`, exported so the menus can *disable* th
 than silently drop the write).
 
 **GameData actions** (`part.gameData`, used by Data mode's scope form): `setDisplayName`,
-`setCustomMassEnabled` / `setCustomMass`, tanks `addTank` / `removeTank` /
+`setCustomMassEnabled` / `setCustomMass`, `setDiameterEnabled` / `setDiameter`,
+`setCrashToleranceEnabled` / `setCrashTolerance` (the `<Part CrashTolerance>` override, Pa —
+stored in `gameData` but serialized on the geometry `<Part>`; off ⇒ `null` ⇒ the game derives it),
+`setControllable`, tanks `addTank` / `removeTank` /
 `setTankShape` / `updateTank`, power `add*`/`remove*`/`set*` for batteries / generators
 / power-consumers, and coupling `set{Decoupler,DockingPort,EvaDoor}Enabled` /
 `set*Connector` / `setDecouplerForce` / `setDockingPort{LatchingImpulse,PushoffForce}`.

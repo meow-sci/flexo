@@ -21,8 +21,9 @@ Composite `<Part>` definitions list `<SubPart InstanceOf="templateId">` with
 ## Runtime catalog loader — `src/ksa/catalog.ts`
 
 `loadCoreCatalog()` fetches a fixed list (`ASSET_FILES`) of Core `*Assets.xml` files
-from `/ksa/...`, parses each with the browser `DOMParser`, and produces
-`CatalogSubPart[]`:
+from `/ksa/...` — each together with its `*GameData.xml` sibling (`gameDataSibling(file)`;
+a missing sibling is the silent common case) — parses them with the browser `DOMParser`,
+and produces `CatalogSubPart[]`:
 
 ```ts
 interface CatalogSubPart {
@@ -43,6 +44,14 @@ Resolution rules per file:
   `meshNodeName=null`, else `atlasUrl`=default atlas and `meshNodeName=<Mesh Id>`.
   Resolve the `<Material>` to texture URLs. Skip (warn) entries with no `<PartModel>`
   or no resolvable atlas.
+
+- **Templates in the GameData sibling** (`parseAssetsFile(doc, sourceFile, out, siblingGameDataDoc)`):
+  since KSA 2026.9.7.5402 Core also declares geometry `<SubPart>` templates at the top level of a
+  `*GameData.xml` file (the parachute bay's `CoreUtilityA_Subpart_StandaloneParachuteA/B` in
+  `CoreUtilityAGameData.xml`), referencing the Assets file's default atlas and `<PbrMaterial>` by
+  id — KSA resolves both from one global registry. The loader walks the sibling's `<SubPart>`
+  templates with the **Assets file's** atlas/material tables (the GameData file has none) and
+  records them under the Assets `sourceFile`, so the browsers group them with their pack.
 
 `indexCatalog(entries)` builds an `id → entry` map.
 

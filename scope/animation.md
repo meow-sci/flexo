@@ -4,7 +4,7 @@
 > lets the user edit them, and re-exports animation GLBs that KSA's `KeyframeAnimationModule`
 > loads. The load-bearing integration is the **animation-GLB node-structure convention**.
 
-**Baseline:** re-verified against KSA build **2026.8.22.5348** (decomp @ 5348 + shipped Core XML);
+**Baseline:** re-verified against KSA build **2026.9.7.5402** (decomp @ 5402 + shipped Core XML);
 contract established at **2026.7.10.5056** and unchanged since.
 **Baseline status:** ✅ **INTACT** — but 5056 rewrote KSA's own GLB loader (rev 5034) to the
 semantics flexo already implemented, and in doing so made the scene ROOT node's transform
@@ -77,6 +77,18 @@ GameData schema (`KeyframeAnimationModule`) and the bone/transform math are unch
 3. **CubicSpline clips import APPROXIMATED, not corrupted** (was: silent corruption). KSA supports **CubicSpline** (`KeyframeAnimationData.cs` `SampleType {Linear, Step, CubicSpline}`); glTF stores such a sampler's output as `[inTangent, value, outTangent]` triplets (3× the input count). `decodeAnimationGlb` now **detects** `interpolation === 'CUBICSPLINE'`, keeps only the middle (VALUE) row of each triplet and treats the segments as LINEAR — so the keyframes are exact and only the in-between motion is approximated (the tangents are dropped; flexo has no tangent model). The clip is flagged `PartAnimation.cubicSplineApprox`, which feeds the KSA import report and the clip diagnostics (`computeClipIssues` → "clip imported with CubicSpline sampling — approximated"). Still unverifiable against a real asset from the snapshots (the `Animations/*.glb` are not shipped in the decomp); every shipped clip checked through flexo's mirror is LINEAR. flexo still handles FLOAT accessors only.
 4. Only `animations[0]` is read on both sides.
 5. Wrong rest anchor re-applies the deploy (the reason `restKeyframeId` exists).
+
+## What changed in 5402
+
+**Nothing.** `KeyframeAnimationData.cs` and `KeyframeAnimationModule.cs` are byte-identical, and
+`RenderCore.Animation/Skeleton.cs` only gained `CloneRig()` (each `AnimatedRenderable` now owns a
+copy of its rig). The loader contract, the schema shape and the root-node TRS constraint stand.
+Core's new `CoreUtilityA_Prefab_ParachuteBayB` reuses the 5348 door clip through an ordinary
+`<KeyframeAnimationModule Id="ParachuteBayDoorAnimation" ShowDeployRetract="true">`; the parachute
+canopy GLBs in the new `ParachuteAssets.xml` are `<GltfFile>`s with a `<Skeleton Id>` (the kitten
+convention), driven by the runtime cloth solver — not `KeyframeAnimationModule` data.
+
+---
 
 ## What changed in 5348
 

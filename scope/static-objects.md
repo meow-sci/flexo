@@ -6,6 +6,9 @@ Full evidence with decomp citations: [analysis/icrp/KSA_STATIC_OBJECTS.md](../an
 and [analysis/icrp/STATIC_ASSET_INVENTORY.md](../analysis/icrp/STATIC_ASSET_INVENTORY.md);
 plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (facts F1–F14).
 
+**Baseline:** re-verified against KSA build **2026.9.7.5402** — schema classes byte-identical, one
+renderer-side shader split; see [What changed in 5402](#what-changed-in-5402).
+
 ## Contract facts ICRP bakes in
 
 1. **Schema** (`AssetBundle.cs:32-34`): `<StaticObject>` = `StaticObjectTemplate`
@@ -77,10 +80,26 @@ plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (facts F1–F14).
 `StaticObjectGameDataReference.cs`, `StaticObject.cs`, `StaticObjectModel.cs`,
 `StaticObjectRenderer.cs`, `PartModelModule.cs`, `PbrMaterialReference.cs`,
 `TransformReference.cs`, `DistanceReference.cs`, `LocationReference.cs`,
-`Vehicle.cs` (`GetLaunchPadHeightAtDirCcf`), `ConstraintSim.cs` (`UpdateStaticObjectCollider`),
+`Vehicle.cs` (`GetLaunchPadHeightAtDirCcf`), `ConstraintSim.cs` (`BeginStaticObjectPass` / `ResolveLaunchPads`, was `UpdateStaticObjectCollider` before 5402),
 `GroundClutterPlacementData.cs`, `MeshAtlasFileReference.cs`, `ModLibrary.cs` (static
 registries + `AttachGameData`). `D/KSA.GlbImport/`: `StaticObjectAssetBundler.cs`,
 `GlbColliders.cs`, `GlbTransforms.cs`, `PartInputSet.cs`, `ToolXml.cs`.
 `C/Core/`: `CoreLaunchPad{A,B,C}Assets.xml`, `CoreLaunchPadAGameData.xml` (vendored
 byte-identical in `src/ksa/__fixtures__/`, drift-tested), `Shaders/Mesh/StaticObject.{vert,frag}`,
-`DefaultAssets.xml:57-61`.
+`DefaultAssets.xml` (the static-object shader rows, since 5402 including `StaticObjectPrePassIndirectFrag`).
+
+## What changed in 5402
+
+**Nothing in the contract.** `StaticObjectTemplate`, `StaticSubObjectTemplate`,
+`StaticSubObjectInstance`, `StaticObjectGameDataReference`, `KSA.GlbImport/StaticObjectAssetBundler`
+and `PbrMaterialReference` are byte-identical; `StaticObject` / `StaticObjectModel` /
+`LocationReference` changed only by the `Viewport` → `IViewport` refactor. Two renderer-side notes:
+`StaticObjectRenderer` now loads a dedicated pre-pass shader,
+`ModLibrary.Get<ShaderReference>("StaticObjectPrePassIndirectFrag")` → `DefaultAssets.xml`'s new
+`<Shader Id="StaticObjectPrePassIndirectFrag" Path="Shaders/Mesh/StaticObjectNormalIndirect.frag"/>`
+(was the shared `PrePassIndirectFrag`); and `ConstraintSim` replaced `UpdateStaticObjectCollider`'s
+nearest-pad-within-300 m search with `BeginStaticObjectPass` / `ResolveLaunchPads`, a per-celestial
+`LaunchPadPose` list (position + `LandmarkReference.GetAxesCcf` up/east/north) covering **every**
+launch-pad landmark with a collision shape — see
+[launch-sites.md](launch-sites.md#what-changed-in-5402). The four vendored `CoreLaunchPad*` fixtures
+are byte-identical to 5402.

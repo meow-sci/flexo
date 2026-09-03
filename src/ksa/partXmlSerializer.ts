@@ -131,6 +131,13 @@ export function serializePartsXml(
   for (const { part, remap } of entries) {
     const partEl = doc.createElement('Part');
     partEl.setAttribute('Id', part.partId);
+    // `<Part CrashTolerance>` (Pa) is a GEOMETRY-template attribute — `PartTemplate.CrashTolerance`
+    // is never copied by `ApplyGameData`, so authoring it on <PartGameData> would be silently
+    // ignored. KSA treats NaN / ≤ 0 as "derive from mass ÷ volume", so those are just omitted.
+    const crashTolerancePa = part.gameData.crashTolerancePa;
+    if (crashTolerancePa != null && crashTolerancePa > 0) {
+      partEl.setAttribute('CrashTolerance', formatG6(crashTolerancePa));
+    }
 
     // A `<Gimbal>` must be DECLARED here, on the geometry instance — `PartInstance.ApplyGameData`
     // merges the GameData one with `Gimbal?.Apply(...)`, so without this the GameData block has

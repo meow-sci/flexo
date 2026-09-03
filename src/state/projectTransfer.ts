@@ -978,6 +978,8 @@ function mergeGameData(
     target.customMassExtras = structuredClone(src.customMassExtras ?? []);
   }
   if (target.diameterM == null && src.diameterM != null) target.diameterM = src.diameterM;
+  if (target.crashTolerancePa == null && src.crashTolerancePa != null)
+    target.crashTolerancePa = src.crashTolerancePa;
   if (!target.controllable && src.controllable) target.controllable = true;
   // Unmodeled passthrough XML: fill only when the target has none (first part's leftover wins).
   // Connector refs inside the raw XML (<Aligned>/<SymmetryGroup> <ConnectorRef>s) are in the

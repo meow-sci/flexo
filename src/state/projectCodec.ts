@@ -401,6 +401,7 @@ interface CGameData {
   cmx?: RawXmlNode[]; // customMassExtras (unmodeled <CustomMass> children, passthrough)
   dm?: number; // diameterM (omitted when null)
   xdm?: number[]; // extraDiametersM (adapter size classes; omitted when empty)
+  crt?: number; // crashTolerancePa (<Part CrashTolerance>; omitted when null = derived in-game)
   co?: 1; // controllable (<Control/>); present ⇒ true
   bt?: number[]; // batteries → capacityWh[]
   gn?: number[]; // generators → outputWatts[]
@@ -430,6 +431,7 @@ function encGameData(g: PartGameData): CGameData {
   if (g.customMass != null && g.customMassExtras.length) o.cmx = g.customMassExtras;
   if (g.diameterM != null) o.dm = round(g.diameterM);
   if (g.extraDiametersM.length) o.xdm = g.extraDiametersM.map(round);
+  if (g.crashTolerancePa != null) o.crt = round(g.crashTolerancePa);
   if (g.controllable) o.co = 1;
   if (g.batteries.length) o.bt = g.batteries.map((b) => round(b.capacityWh));
   if (g.generators.length) o.gn = g.generators.map((x) => round(x.outputWatts));
@@ -470,6 +472,7 @@ function decGameData(c: CGameData | undefined): PartGameData {
   g.customMassExtras = g.customMass != null ? decRawNodes(c.cmx) : [];
   g.diameterM = typeof c.dm === 'number' ? c.dm : null;
   g.extraDiametersM = arr<number>(c.xdm).map(num);
+  g.crashTolerancePa = typeof c.crt === 'number' ? c.crt : null;
   g.controllable = !!c.co;
   g.batteries = arr<number>(c.bt).map((wh): Battery => ({ capacityWh: num(wh) }));
   g.generators = arr<number>(c.gn).map((w): Generator => ({ outputWatts: num(w) }));

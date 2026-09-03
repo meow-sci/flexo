@@ -830,10 +830,13 @@ export const VOLUMETRIC_EXHAUST_IDS: readonly string[] = [
  * a nozzle's `<PlumeTrail Id>`). KSA 2026.7.9 moved the template out of
  * `CorePropulsionAGameData.xml` into its own `Content/Core/PlumeTrailAssets.xml`,
  * renamed it `DefaultEngine` → `DefaultPlumeTrail` (it gained an `<EndRadius M>`), and
- * now assigns it ONLY to solid-motor nozzles ("Only use plume trails on SRBs", rev 4996)
- * — every liquid nozzle in Core carries none.
+ * assigns it ONLY to solid-motor nozzles ("Only use plume trails on SRBs", rev 4996).
+ * KSA 2026.9.7.5402 added a second template, `LiquidEnginePlumeTrail` (a faint, short-lived
+ * dark trail: `DensityMultiplier="0.015"`, `<Color R=G=B=0.05>`, `<Lifetime Seconds="20">`),
+ * which no Core nozzle references yet. This is a STATIC snapshot of `PlumeTrailAssets.xml`,
+ * not a live parse — refresh it on each game update (scope/engines.md).
  */
-export const PLUME_TRAIL_IDS: readonly string[] = ['DefaultPlumeTrail'];
+export const PLUME_TRAIL_IDS: readonly string[] = ['DefaultPlumeTrail', 'LiquidEnginePlumeTrail'];
 
 /**
  * One `<ReactionPlume>` entry on a nozzle — the reaction-keyed exhaust FX bucket KSA
@@ -1278,6 +1281,18 @@ export interface PartGameData {
    */
   extraDiametersM: number[];
   /**
+   * `<Part CrashTolerance="…">` — the contact pressure (Pa) at which KSA 2026.9.7.5402's
+   * part-failure model breaks the part (`PartStructuralLimits.HasFailed`: filtered peak contact
+   * pressure ≥ tolerance ⇒ `PartFailure` sheds it). It is a **geometry `<Part>` root
+   * attribute**, NOT GameData: `PartTemplate.CrashTolerance` (default `NaN`) is never copied by
+   * `ApplyGameData`, so the serializer emits it on the `<Part>` element even though it lives in
+   * this popup-only bag. `null` — or `≤ 0`, which the game treats like `NaN` — ⇒ derived
+   * in-game from inert mass ÷ bounding-box volume (`PartStructuralLimits.DeriveCrashTolerance`:
+   * 3 MPa × clamp(density ÷ 40, 0.5, 4), clamped to 0.1–20 MPa). Core authors `3e6` on the five
+   * CorePropulsionA engines.
+   */
+  crashTolerancePa: number | null;
+  /**
    * Command-capability marker, serialized as a bare <Control/>. When true the part
    * can pilot a vehicle (KSA `Vehicle.IsControllable`). KSA's ControlTemplate is an
    * empty marker with no fields, so this is a plain on/off flag.
@@ -1433,6 +1448,7 @@ export function createEmptyGameData(): PartGameData {
     customMassExtras: [],
     diameterM: null,
     extraDiametersM: [],
+    crashTolerancePa: null,
     controllable: false,
     batteries: [],
     generators: [],

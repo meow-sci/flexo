@@ -104,8 +104,8 @@ and `version.json` (a commit-by-commit changelog — the fastest first read on a
 > (both already in `EDITOR_TAG_DEFS`); `mod.toml` lists the new `ParachuteAssets.xml` (canopy
 > `<GltfFile>`s + one `<PbrMaterial>`, no `<Part>`/`<SubPart>`, so `ASSET_FILES` is unchanged);
 > `ExhaustAssets.xml` recolored five plume ramps; `Part.DisplayName` now prefers
-> `Template.DisplayName` over the instance id. Gate: `test` / `typecheck` / `lint` / `fmt:check` /
-> `smoke` — run in the same review (see the review report).
+> `Template.DisplayName` over the instance id. Gate green on the review commit: **2426 tests**,
+> `typecheck` / `lint` / `fmt:check` clean, `smoke` passed.
 
 > **5348 review method.** Full `5261 → 5348` diff via `diff -rq` of the two provided asset trees
 > (`ksa-game-assemblies_prev/current` @ 5261 vs `ksa-game-assemblies/current` @ 5348), a sweep of

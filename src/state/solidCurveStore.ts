@@ -1,4 +1,5 @@
 import { atom, computed } from 'nanostores';
+import { persistentAtom } from '@nanostores/persistent';
 import {
   loadGrainGeometryCatalog,
   loadSolidPropellantDensities,
@@ -12,13 +13,25 @@ import {
  * Mirrors `reactionStore`'s contract exactly, because it has the same shape and the same
  * tolerance: lazily loaded ONCE on demand, empty until it resolves, and **legitimately empty
  * forever** in the open-source build where the licensed `/ksa/` tree is not served. An empty
- * catalog is not an error — it is the card's "preview unavailable — the engine still exports
- * correctly" hint.
+ * catalog is not an error — the card names the unavailable preview dependency.
  *
  * **Layering (constitution)**: zero react / three imports.
  *
- * **Undo enrollment: NONE. Persistence: NONE.** Read-only game data.
+ * **Undo enrollment: NONE.** Catalogs are read-only session data; the plot metric is a
+ * persisted view preference.
  */
+
+export type SolidCurveMetric = 'thrust' | 'pressure' | 'isp';
+
+/** Saved view preference; the sampled physics and project document are unchanged. */
+export const $solidCurveMetric = persistentAtom<SolidCurveMetric>(
+  'flexo:solidCurveMetric',
+  'thrust',
+  {
+    encode: (value) => value,
+    decode: (value) => (value === 'pressure' || value === 'isp' ? value : 'thrust'),
+  },
+);
 
 export const $grainCatalog = atom<GrainGeometryTable[]>([]);
 

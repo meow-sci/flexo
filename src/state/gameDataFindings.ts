@@ -38,7 +38,7 @@ export interface GameDataFinding {
 
 /**
  * Modules whose fix lives on the PART's Wiring section rather than on the module's own
- * editor: controllers, `<ConsumerFeedWiring>` entries and gimbals are all part-level
+ * editor: part controllers, `<ConsumerFeedWiring>` entries and gimbals
  * (design §A4.1 Wiring).
  */
 const WIRING_MODULES = new Set(['controller', 'wiring', 'gimbal']);
@@ -50,7 +50,11 @@ function targetOf(issue: EngineIssue): GameDataFinding['target'] {
     source?.module && source.index !== undefined ? `${source.module}:${source.index}` : undefined;
 
   if (!source) return { scope: { kind: 'part' }, sectionId: 'advanced' };
-  if (source.module && WIRING_MODULES.has(source.module)) {
+  if (
+    source.module &&
+    WIRING_MODULES.has(source.module) &&
+    (source.module !== 'controller' || source.templateId === null)
+  ) {
     return { scope: { kind: 'part' }, sectionId: 'wiring', cardKey };
   }
   if (source.templateId !== null) {

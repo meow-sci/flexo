@@ -14,18 +14,19 @@ the implementation map is [`plans/KSA_ENGINE_DESIGNER_PLAN.md`](../plans/KSA_ENG
 An "engine" is a small graph of cooperating GameData modules (see `src/ksa/types.ts`):
 
 - **`Combustor`** (`<Combustor>`) — the chamber: burns a combustion process → hot gas.
-  Knobs: `combustionId`, `maxPressurePa`, `thermalEfficiency`, `minimumThrottle`
+  Knobs: `reactionId`, `mixtureRatio`, `maxPressurePa`, `thermalEfficiency`, `minimumThrottle`
   (1.0 ⇒ on/off), `minimumPulseTimeS`.
 - **`DeLavalNozzle`** (`<DeLavalNozzle>`) — expands the gas → thrust; owns the exhaust
-  geometry + plume/light/sound FX. Knobs: `exitDiameterM`, `areaRatio` (required, no
-  NaN), flow/expansion efficiencies, `exhaustLocation`/`exhaustDirection`, the optional
+  geometry + plume/light/sound FX. Knobs: `exitDiameterM`, `areaRatio` (unset/non-positive
+  uses KSA's ratio-1 fallback), flow/expansion efficiencies, `exhaustLocation`/`exhaustDirection`, the optional
   `fxExhaustLocation`/`fxExhaustDirection` override pair, `reactionPlumes`, sound,
   light. A part or SubPart carries a **list** of nozzles, not one.
   `reactionPlumes` is a list of `<ReactionPlume>` entries, each optionally keyed to a
   reaction id and each carrying a volumetric-exhaust and/or plume-trail template. KSA picks
   the entry matching the core's configured reaction, else the one flagged default. The
-  Engine panel's two plume selects edit the **default** entry; reaction-keyed entries
-  imported from Core round-trip untouched but are not editable in the UI yet.
+  Engine panel's two plume selects edit the **default** entry. The Plume entries disclosure
+  edits every keyed/default row and its order; the first matching entry wins. Sound settings
+  expose both SoundId and Action.
 - **`Rocket`** (`<Rocket>`) — binds one `core` (combustor) + N `nozzles` into one firing
   unit. Refs are `SubPartIdRef` (`{ id, subPartInstanceId }`).
 - **`RocketController`** (`<RocketEngineController>` / `<RocketThrusterController>`) — what
@@ -41,13 +42,61 @@ An "engine" is a small graph of cooperating GameData modules (see `src/ksa/types
 | Module | flexo home |
 |---|---|
 | `Combustor` / `DeLavalNozzle` / `Rocket` (reusable thrust chamber, travels with a mesh) | `SubPartGameData` (next to tanks/lights) |
-| `RocketController`, gas-generator `Rocket`/`Combustor`/`Nozzle`, `Gimbal` (per-variant) | `PartGameData` (`part.gameData`), referencing placement **instance ids** |
+| `RocketController`, `Rocket`, combustors, nozzles, solid motors and grain segments | Both `PartGameData` and `SubPartGameData`; references are relative to that owner |
+| `Gimbal`, `ConsumerFeedWiring` | `PartGameData`, referencing placement **instance ids** |
 | `CustomReaction` | `part.customReactions` (top-level) |
 
 Two reference kinds the feature introduces — both remapped on import/paste: module→SubPart
 **instance id** (`SubPartIdRef.subPartInstanceId` → `placement.instanceId`) and the
 `Gimbal.subPartInstanceId`. See the remap in `editorStore.applyImportedGameData` /
 `projectTransfer.mergeGameData`.
+
+### Built-in engine import and export
+
+Adding a catalog SubPart copies its authored GameData into the document in the same undo
+step as its placement. This includes combustors, nozzles, rockets, solid modules, feed points,
+and preserved unsupported modules. Additional placements share that template's data and keep
+the user's edits. A bare thrust chamber still needs the parent controller and feed wiring;
+import the complete built-in Part to bring in the assembled engine and its connections.
+
+Importing a complete Part selects its main chamber scope for the next visit to Engine mode,
+replacing any previously open engine scope without changing modes. This matters for engines
+such as `CorePropulsionA_Prefab_EngineA3`, which also place a turbine exhaust with no local
+combustor. Engine mode prefers a chamber among multiple selected templates; with no selection,
+it opens the first chamber scope. An explicitly selected nozzle-only scope remains accessible.
+The browser smoke test imports EngineA3 through Add ▸ Built-in Part and verifies that its
+combustor and live performance are visible immediately after switching modes.
+
+Geometry and GameData files contribute additively to each template. Gimbals combine the
+geometry's pivot and axis rotation with the GameData's angle limits; all survive project save,
+import and export, and the Gimbal editor exposes the pivot and axes. The mod export creates
+isolated SubPart variants carrying the imported hardware, so editing an engine does not
+redefine Core's templates. Launch-escape parts retain both authored decouplers: the first is
+editable, and additional ones pass through with their connector references remapped.
+
+Cloning a mixture propellant bakes both its gas table and its reactant mass shares at the
+clamped default mixture ratio. For example, cloned Hydrolox retains 1:5.5 fuel/oxidizer mass
+shares, matching its baked performance.
+
+Preflight resolves rocket cores, nozzles and controller references by their complete scope.
+Missing references and hardware bound to more than one rocket are blockers, matching KSA's
+load exceptions. Matching module names on unrelated templates cannot satisfy those references.
+Core RCS controllers authored on SubParts import as editable modules, with their
+owner-relative rocket references. The controller editor exposes all twelve manual control-map
+directions. Automatic mode omits `<ControlMap>`; manual mode with no checked directions emits
+`<ControlMap CSV=""/>`, which deliberately disables all directions. Imported numeric flags
+remain readable and raw CSV is available for correcting unsupported tokens.
+
+These additions keep the project schema versions unchanged. Previously saved controller XML
+in passthrough remains intact on save, export, and paste; it is not converted into typed
+modules. Fresh built-in imports expose the new controller editor. See the field-by-field
+[coverage audit](../plans/ENGINE_DATA_COVERAGE.md) for the current contract and boundaries.
+
+Portable tests use verbatim `CorePropulsion{A,B,C}{Assets,GameData}.xml` fixtures. The additional
+`engineImport.integration.test.ts` exercises the production catalog loaders and built-in Part
+import against the live private Core tree, validates all engine assemblies, and compares each
+rocket's performance before and after mod XML export/reimport. The 5402 census is 38 Parts,
+35 liquid rocket definitions and 16 solid rocket definitions across their imported scopes.
 
 ## Physics — `src/ksa/enginePhysics.ts`
 
@@ -63,9 +112,9 @@ Headline API: `predictPerformance({ lut, maxPressurePa, exitDiameterM, areaRatio
 flowSeparationSeveritySL, optimumExpansionPa, … }`. Also `deriveAreaRatioForExhaustPressure`
 (atmospheric design) and the building blocks (`lutLookup`, `solveMachFromAreaRatio`, …).
 
-Reproduces a real KSA quirk faithfully: the LUT lookup clamps the **topmost** pressure
-interval to the ceiling row instead of interpolating (immaterial for real chamber
-pressures, far below the table top). Mixture reactions are baked to a 1-D slice at the
+The LUT lookup interpolates in log pressure in every interval, including the topmost,
+and preserves the requested chamber pressure even outside the table's bounds; only the
+gas properties clamp. Mixture reactions are baked to a 1-D slice at the
 combustor's O/F ratio first (`sliceLutAtMixtureRatio`, the `MixtureReactionTable.SliceAt`
 port — exactly what KSA's combustor does at load). Tests in `enginePhysics.test.ts`
 validate closed-form identities + real-Hydrolox-at-5.5 parity (≈445 s vacuum Isp).
@@ -103,8 +152,9 @@ the project's `customReactions` (custom wins on id).
       one row with an instance sub-pick that only decides which placement the controller
       references. Each kind is ONE undo step.
     - The *module tree* has eight fixed groups — Combustors · Nozzles · Solid motor ·
-      Rockets · Controllers · Feed wiring · Gimbals · Custom propellants. The last four are
-      always part-level whatever scope is open, and wear a `[Part]` chip that says so. Rows
+      Rockets · Controllers · Feed wiring · Gimbals · Custom propellants. Controllers include
+      both the selected template and Part, each labeled with its scope. Feed wiring, gimbals,
+      and custom propellants belong to the Part. Rows
       carry a caption (a combustor's propellant, a nozzle's exit ⌀, a rocket's core) and a
       ⚠ dot when validation names them; the ⋮ menu offers Duplicate / Copy id / Remove, and
       a nozzle also offers "Show exhaust handle". Feed wiring additionally lists a synthetic
@@ -113,16 +163,20 @@ the project's `customReactions` (custom wins on id).
       finding opens its scope, focuses its module and flashes the offending field.
     - *Performance* aggregates over the selected `<Rocket>`'s chamber+nozzle pairs (Σ thrust,
       Σ mass flow, `Isp = ΣF / (g0·Σṁ)`), with a per-pair breakdown when there is more than
-      one; a scope with no `<Rocket>` falls back to the first combustor + first nozzle.
+      one. Opening a scope selects its first rocket; only a scope with no `<Rocket>`
+      falls back to the first combustor + first nozzle. References resolve by both module
+      id and placement id, relative to the rocket's owner. A part-level rocket naming two
+      instances of the same vernier template counts two nozzles. A template-owned rocket
+      repeats with each placement of that template.
   - **Left — the Module Editor** (`src/ui/engine/ModuleEditor.tsx`): exactly ONE module's
     fields at a time, with a header carrying its scope chip (`[Template ×N]` / `[Part]`) and
     the same ⋮ menu. With nothing focused it is the engine summary: module counts, the first
     blocker with a jump, the solid-motor-vs-SRB-preset guidance, and quick actions.
   - Picking a mixture reaction exposes an **O/F mixture-ratio** field, defaulted and bounded
     by the reaction's LUT rows with a micro-slider spanning them and a tick at the default —
-    KSA refuses to load a ratio-less mixture combustor, and the UI warns. A nozzle's
-    **area ratio** renders EMPTY when unset (KSA's default is NaN and it refuses to load),
-    rather than as a misleading `0`.
+    KSA refuses to load a ratio-less mixture combustor, and export reports a blocker. A nozzle's
+    **area ratio** renders EMPTY when unset. Current KSA substitutes ratio 1 in that case;
+    the readout matches it and a warning asks for the intended nozzle ratio.
   - `X` toggles the exhaust-placement tool while the mode is active, `,` / `.` cycle the
     target handle, `Esc` disarms; leaving the mode kills the exhaust handles.
   - The propellant picker is searchable and grouped — **project propellants first**, then the
@@ -139,7 +193,7 @@ the project's `customReactions` (custom wins on id).
     **Data ▸ Part ▸ Advanced**.
 - **Data mode sections** (the same `src/ui/engine/*Editor.tsx` components, rendered as a
   card list instead of one-at-a-time): the
-  thrust-chamber editors under **Data ▸ \<template\> ▸ Engine**, and the controllers, feed
+  thrust-chamber editors and template controllers under **Data ▸ \<template\> ▸ Engine**, and the Part controllers, feed
   wiring and gimbals under **Data ▸ Part ▸ Wiring** with the solid motor and gas generator
   under **Data ▸ Part ▸ Advanced**. Each carries an "Open in Engine mode →" link, and the
   two routes render the identical components so they cannot diverge in capability. (The v1
@@ -285,7 +339,10 @@ designer's **part-level entry** ("Solid motor hardware") — or under **Data ▸
   `BoostSustain`, `BoostSustainBoost` — the thrust curve over the burn), a default chamber
   pressure, and its feed points.
 - **`<SolidGrainSegment>`** — the propellant, and the container a motor feeds from. Stacks
-  in the VAB across connectors that declare `SolidMotorCase`.
+  in the VAB across connectors that declare `SolidMotorCase`. The Grain editor includes
+  dimensions, casing material, optional casing mass/density, assembly location and axis
+  rotation. KSA prefers Material over Density over Mass; these describe the casing, while
+  propellant density comes from the reaction's solid substance.
 - **`<SolidMotorNozzle>`** — like a De Laval nozzle but with **no area ratio**: KSA sizes
   the throat as `exitArea / 12`.
 
@@ -305,8 +362,11 @@ says so. Cloning a shipped solid fills them in.
 A solid motor's thrust is not a number, it is a **curve**: as the flame front eats into the
 grain the burning area changes, which changes the chamber pressure, which changes the burn
 rate — and the grain profile is exactly the shape of that feedback. So the Engine designer
-draws it. Under Performance, a scope carrying a `<SolidMotor>` gets a **thrust-vs-time
-sparkline** plus peak thrust, burn time and vacuum Isp.
+draws it. Under Performance, the selected solid rocket gets a curve with a selector for
+**vacuum thrust, chamber pressure, or vacuum specific impulse** over time, plus peak thrust,
+burn time and vacuum Isp. When a template has multiple placements, an instance selector
+chooses which parent wiring to evaluate. The preview follows owner-relative core/nozzle
+references, direct grain containers, and instance-specific or unscoped parent feed wiring.
 
 The numbers come from `src/ksa/solidMotorPhysics.ts`, a verbatim port of KSA's own
 `SolidMotor.TrySampleThrustCurve` on the same terms as the liquid physics: 256 depth steps to
@@ -327,18 +387,17 @@ KSA logs an error for a non-1 multiplier on a De Laval nozzle.
 
 The preview needs two Core data files served under `/ksa/` alongside `Reactions.xml`:
 `GrainGeometries.xml` (the burn-area-vs-depth profiles) and `SolidPropellants.xml` (the grain
-`<StorageDensity>`). Like the reaction catalog they are licensed content and may be absent —
-the card then says *"preview unavailable — the engine still exports correctly"* and nothing
-else changes. It also says so for a **custom propellant**, which has no storage density to
-read; flexo will not invent one. And because a grain stack can grow across `SolidMotorCase`
-connectors into neighbouring parts in the VAB, the preview is explicitly of THIS part's own
-grain segments.
+`<StorageDensity>`). Missing catalog data produces a specific unavailable reason. Custom
+reactions using a known solid phase can preview using that phase's density. Unknown phases
+cannot: Flexo never invents density. Connector-fed stacks require an assembled vehicle and
+are explicitly unavailable in the single-Part preview, even if some local grain is present.
+A partial local curve would misrepresent the full motor.
 
 ## XML I/O
 
 `serializeGameDataXml` emits `<Rocket>`/`<Combustor>`/`<DeLavalNozzle>` and the solid trio
 `<SolidMotor>`/`<SolidMotorNozzle>`/`<SolidGrainSegment>` per SubPartGameData, the
-part-level controllers + gas-generator + `<SubPart Id><Gimbal>` overlays +
+controllers at both scopes + gas-generator + `<SubPart Id><Gimbal>` overlays +
 `<ConsumerFeedWiring>`, and top-level `<FixedReaction>` for each custom propellant (a
 solid one that KSA would refuse to load is skipped with a console warning). Defaults are omitted (efficiencies 1,
 `ExhaustDirection` −X, `ExhaustLight` true, `ConstrainToCircle` true, a 0/0 gimbal) — and the

@@ -131,8 +131,7 @@ function lerp(a: number, b: number, t: number): number {
 /**
  * Looks up gas properties + conditions at a chamber pressure, interpolating in
  * ln(pressure). Below the lowest / above the highest tabulated pressure it clamps to
- * the end row's gas properties but keeps the queried pressure (FixedReactionTable.Lookup —
- * behavior-identical to the pre-4892 CombustionTable.Lookup this was ported from).
+ * the end row's gas properties but keeps the queried pressure (FixedReactionTable.Lookup).
  */
 export function lutLookup(
   lut: CombustionLut,
@@ -142,46 +141,19 @@ export function lutLookup(
   conditions: GasConditions;
 } {
   const rows = lut.rows;
-  const n = rows.length;
   const lnP = pressure <= 0 ? rows[0].lnPressure : Math.log(pressure);
-  // Build/scan the lnPressure column. (n is tiny — ≤ ~24 rows — so this is cheap.)
-  const idx = binarySearchAscending(
-    rows.map((r) => r.lnPressure),
+  const { lower, upper, interp } = findSegment(
+    rows.map((row) => row.lnPressure),
     lnP,
   );
-  if (idx <= -n) {
-    const last = rows[Math.max(n, 1) - 1];
-    return {
-      props: { gamma: last.gamma, specificGasConstant: last.specificGasConstant },
-      conditions: { pressure, temperature: last.temperature },
-    };
-  }
-  if (idx >= 0) {
-    const r = rows[idx];
-    return {
-      props: { gamma: r.gamma, specificGasConstant: r.specificGasConstant },
-      conditions: { pressure: r.pressure, temperature: r.temperature },
-    };
-  }
-  const upper = ~idx;
-  if (upper === 0) {
-    const r = rows[0];
-    return {
-      props: { gamma: r.gamma, specificGasConstant: r.specificGasConstant },
-      conditions: { pressure, temperature: r.temperature },
-    };
-  }
-  const lowerIdx = upper - 1;
-  const a = rows[lowerIdx];
+  const a = rows[lower];
   const b = rows[upper];
-  let t = (lnP - a.lnPressure) / (b.lnPressure - a.lnPressure);
-  t = Math.min(1, Math.max(0, t));
   return {
     props: {
-      gamma: lerp(a.gamma, b.gamma, t),
-      specificGasConstant: lerp(a.specificGasConstant, b.specificGasConstant, t),
+      gamma: lerp(a.gamma, b.gamma, interp),
+      specificGasConstant: lerp(a.specificGasConstant, b.specificGasConstant, interp),
     },
-    conditions: { pressure, temperature: lerp(a.temperature, b.temperature, t) },
+    conditions: { pressure, temperature: lerp(a.temperature, b.temperature, interp) },
   };
 }
 
@@ -477,7 +449,7 @@ export interface EnginePredictionInput {
   maxPressurePa: number;
   /** Nozzle exit diameter (m). */
   exitDiameterM: number;
-  /** Exit/throat area ratio (must be finite & > 0). */
+  /** Authored exit/throat area ratio; KSA uses 1 for NaN or non-positive values. */
   areaRatio: number;
   thermalEfficiency: number;
   flowEfficiency: number;
@@ -536,11 +508,12 @@ const ZERO_ENGINE_PERFORMANCE: EnginePerformance = {
  * Returns zeroed performance when the inputs can't sustain a choked flow.
  */
 export function predictPerformance(input: EnginePredictionInput): EnginePerformance {
-  const { lut, maxPressurePa, exitDiameterM, areaRatio } = input;
+  const { lut, maxPressurePa, exitDiameterM } = input;
+  // DeLavalNozzle.ComputeThroatArea: a missing/non-positive ratio uses the exit area.
+  const areaRatio = input.areaRatio > 0 ? input.areaRatio : 1;
   if (
     !(maxPressurePa > 0) ||
     !(exitDiameterM > 0) ||
-    !(areaRatio > 0) ||
     !Number.isFinite(areaRatio) ||
     lut.rows.length === 0
   ) {

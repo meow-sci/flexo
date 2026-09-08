@@ -298,3 +298,9 @@ offers **Export archive instead…** when the project has binary assets. Both ar
 - [editor-state.md](./editor-state.md) — core nanostores atoms and actions
 - [projects.md](./projects.md) — project-based workspace persistence (multi-project, autosave, boot restore)
 - [@nanostores/persistent docs](https://github.com/nanostores/persistent)
+
+### Solid burn plot metric
+
+`$solidCurveMetric` in `src/state/solidCurveStore.ts` persists the Engine burn plot's
+thrust/pressure/Isp display choice at `flexo:solidCurveMetric` (default `thrust`). This
+is a view preference only: it never changes the Part, sampled physics, or undo history.

@@ -16,6 +16,17 @@ update, this is the checklist you diff against to find what breaks flexo.**
 > coordinate mapping, renderer-quirk workaround) MUST update the relevant `scope/*.md` in the
 > same change. A new integration ⇒ a new `scope/*.md` + a row in the map below.
 
+> **Engine re-audit, 2026-09-07:** the clean end-to-end check at build 5402 corrected
+> missing GameData on direct SubPart import, scoped rocket resolution/readout selection,
+> gimbal transform loss, cloned mixture mass shares, pressure-table interpolation,
+> nozzle-ratio defaults, and named launch-escape decoupler preservation. See
+> [the engine re-audit](engines.md#end-to-end-re-audit-at-5402-2026-09-07).
+> The follow-up [field/UI coverage audit](../plans/ENGINE_DATA_COVERAGE.md) also closes
+> SubPart controller editing, manual RCS maps, inherited grain mass/rotation, sound/FX/plume
+> controls, reaction descriptions, and scoped solid preview with thrust/pressure/Isp channels.
+> These findings qualify the earlier incremental-diff claims below: unchanged files between
+> the two latest builds did not prove the existing import/export or numeric port complete.
+
 ---
 
 ## Baseline game version

@@ -36,6 +36,42 @@ moved — so `enginePhysics.ts` needed one new port (`sliceLutAtMixtureRatio`), 
 
 ---
 
+## End-to-end re-audit at 5402 (2026-09-07)
+
+A clean source-to-import-to-export audit found gaps that the previous incremental game
+diff checks missed. These are fixed without changing the persisted schema versions:
+
+| Contract and current game evidence                                                                                                                                                                | Corrected flexo behavior                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Content/Core/CorePropulsionAGameData.xml`, `CorePropulsionBGameData.xml`, `CorePropulsionCGameData.xml`: template `<Combustor>`, `<DeLavalNozzle>`, `<Rocket>`, solid hardware and `<FeedsFrom>` | Direct SubPart placement imports the template's GameData in the placement's undo step. Complete Part import brings its parent controllers/wiring. Cross-file template data merges additively in deterministic file order.                               |
+| `decomp/KSA/SubPartIdReference.cs`, `RocketTemplate.Create`: `<Core Id SubPartId>`, `<Nozzle Id SubPartId>`, `<RocketReference Id SubPartId>`                                                     | Readout and preflight resolve the owner-relative scope. A part-level reference names one placement, not every placement of its template. Template-local rockets repeat per placement. Missing references and multiply bound cores/nozzles are blockers. |
+| `decomp/KSA/GimbalReference.cs` `Create`/`Apply`, `TransformReference.Apply`: geometry `<SubPart><Gimbal><Transform>` plus GameData angle overlays                                                | Preserve pivot `<Position>` and axis `<Rotation>` while applying only present overlay fields. Save/default-fill/codec, editing, and geometry export retain the full transform.                                                                          |
+| `decomp/KSA/MixtureReaction.cs` `AtMixtureRatio`: mass shares are `1/(1+ratio)` and `ratio/(1+ratio)`                                                                                             | Cloning `<MixtureReaction>` into `<FixedReaction>` bakes reactant shares at the same clamped ratio as its pressure table; source placeholder `<Reactant MassShare="1">` entries are not copied as a 1:1 mixture.                                        |
+| `decomp/KSA/FixedReactionTable.cs` `Lookup`/`FindSegment`                                                                                                                                         | Interpolate all log-pressure intervals, including the highest, and retain the requested pressure. Removed the obsolete ceiling-interval clamp inherited from an older port.                                                                             |
+| `decomp/KSA/DeLavalNozzle.cs` `ComputeThroatArea`                                                                                                                                                 | Missing/non-positive `<AreaRatio>` means effective ratio 1. Preview matches this; UI/preflight warn instead of claiming a load exception.                                                                                                               |
+| `decomp/KSA/CombustorTemplate.cs` `ResolveReaction`                                                                                                                                               | A known mixture reaction without `<MixtureRatio>` is an export blocker because KSA throws.                                                                                                                                                              |
+| `Content/Core/CorePropulsionAGameData.xml`: LES `<Decoupler Id="NoseconeMount">` and `<Decoupler Id="SkirtMount">`                                                                                | Keep the editable decoupler's id and preserve additional decouplers, remapping every `ConnectorId` on import.                                                                                                                                           |
+
+The performance card now defaults to an actual rocket when the scope has one. This matters
+for stock gas generators whose combustor is on the Part and nozzle is on a SubPart: the old
+first-local-pair fallback could show no performance despite a complete imported assembly.
+
+Verification includes vendored A/B/C propulsion XML bundle round trips and the production
+catalog/import/export path over all 38 live Core engine parts (35 liquid and 16 solid rocket
+definitions across their imported scopes). Template-owned `<RocketThrusterController>` /
+`<RocketEngineController>` nodes are first-class editable modules; validation resolves their
+`<RocketReference>` bindings per placement. Previously saved raw controller XML remains
+preserved without conversion, including scoped references on paste.
+The solid-motor pressure solve,
+nozzle sizing, burn curve and two-phase loss remain aligned with current decompiled sources.
+This is source/automated-test verification; it does not assert an in-game load was performed.
+
+The follow-up field/UI audit is catalogued in
+[ENGINE_DATA_COVERAGE.md](../plans/ENGINE_DATA_COVERAGE.md). It closes controller scope and
+manual ControlMap editing; grain inherited mass/density/orientation; reaction description;
+nozzle SoundEvent fields and ordered plume editing; and selected-rocket solid preview
+resolution. Additive constructor defaults preserve compatible saved projects.
+
 ## Flexo modules
 
 | Path                                             | Role                                                                                                                                                                                                                |
@@ -108,7 +144,7 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   editor must draw a handle per placement and write back through the clicked placement's frame
   (N views of one document entity — edits move all of them), and a "1 nozzle = 1 thruster"
   assumption is wrong for essentially all stock RCS.
-- **The FX pair is an inherit-vs-override switch, not two more fields.**
+- **FX location and direction each independently inherit or override.**
   `RocketNozzleTemplate.OnDataLoad` copies `ExhaustLocation`/`ExhaustDirection` into whichever
   of `FxExhaustLocation`/`FxExhaustDirection` is ABSENT. So flexo must emit them **iff
   overridden** (`Vec3 | null` in `types.ts`); writing them at their inherited values would
@@ -120,7 +156,7 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
 - `<Gimbal>` (under `<SubPart Id>`): `<MaxAngleY Degrees>`, `<MaxAngleZ Degrees>`, `<ConstrainToCircle Value>`.
 - `<FixedReaction>` (custom propellants; also Core monoprops/solids): `Id`, `Category` attr
   (Bipropellant/Hypergolic/Monopropellant[default]/Solid/Thermal), `<Name Value>`,
-  `<Reactant Id MassShare>`, `<PressureCondition>`→`<LnPressure Value>`/`<Temperature K>`/`<Gamma Value>`/`<MolarMass GPerMol>`.
+  `<Description Value>`, `<Reactant Id MassShare>`, `<PressureCondition>`→`<LnPressure Value>`/`<Temperature K>`/`<Gamma Value>`/`<MolarMass GPerMol>`.
 - `<MixtureReaction>` (Core bipropellants; parse-only via the catalog, flexo never authors one):
   adds `<DefaultMixtureRatio>` (text) and wraps the pressure rows in `<MixtureRatioCondition Value>`
   rows (2-D LUT: O/F ratio × lnP, rectangular, exactly 2 reactants = fuel then oxidizer).
@@ -129,14 +165,14 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
 
 **Numeric defaults**: Combustor `maxPressurePa 5e6`, `thermalEfficiency 1`, `minimumThrottle 1`; Nozzle `exitDiameterM 1`, `flow/expansionEfficiency 1`, `exhaustDirection (−1,0,0)`, `exhaustLight true`, `AreaRatio` NaN-in-KSA (flexo defaults + validates); Gimbal `constrainToCircle true`.
 
-**Enum**: `ThrusterMapFlags` = `None, RollRight/Left, PitchUp/Down, YawRight/Left, TranslateForward/Backward/Right/Left/Down/Up`. Flexo treats `<ControlMap CSV>` as **verbatim string passthrough** (no enum validation).
+**Enum**: `ThrusterMapFlags` = `None, RollRight/Left, PitchUp/Down, YawRight/Left, TranslateForward/Backward/Right/Left/Down/Up`. The UI exposes all twelve directions and raw CSV. `ThrusterMapFlagsReference.cs` also accepts signed integer tokens. Omitted `<ControlMap>` means automatic assignment; explicit `<ControlMap CSV=""/>` means `None` and must survive XML and project codecs.
 
 **File convention**: `Reactions.xml` served under `/ksa/`, referenced by `<Reaction Id>` (not path). May be absent in the OSS build → `$hasReactionData=false`, live readout disabled, authoring/export still work.
 
 ## Known gotchas
 
 - `MinimumThrottle` default **1.0** ⇒ on/off (EngineDesigner doesn't emit it).
-- `AreaRatio` default **NaN** ⇒ must be supplied.
+- `AreaRatio` default **NaN** ⇒ KSA substitutes ratio 1; author the intended ratio to avoid that fallback.
 - `FxExitDiameter` is plume-visual only, ≠ `ExitDiameter`.
 - `ExhaustDirection` is the direction exhaust _leaves_; thrust acts along `−ExhaustDirection`.
 - **Exhaust vectors are NOT normalized at load, and thrust is applied unnormalized.**
@@ -264,8 +300,8 @@ instance-side `ComputeFromRockets` is byte-identical and the physics it performs
 **A new NaN guard on the De Laval throat.** `DeLavalNozzleTemplate.Create` now routes through
 `DeLavalNozzle.ComputeThroatArea(exitArea, areaRatio)` = `areaRatio > 0 ? exitArea / areaRatio :
 exitArea`, so a NaN or zero `<AreaRatio>` degrades to ratio 1 rather than producing NaN thrust.
-`<AreaRatio>` remains **required** in practice and `engineValidation.ts`'s finding stays correct —
-ratio 1 is not a usable engine, it just no longer poisons the frame.
+The end-to-end 5402 audit aligned the preview with this fallback and added a warning asking
+for the intended ratio; missing/non-positive values do not throw at load.
 
 Everything else re-verified byte-identical: `DeLavalNozzleConfig`, `CombustorConfig`,
 `GasProperties`, `NozzlePerformance`, `RocketDesign`, `EngineDesigner`, the whole reaction family
@@ -374,8 +410,7 @@ Three changelog items that _sound_ like engine-contract movement and are not:
 - **rev 5125 solid-motor editor info** — `SolidMotor.TrySampleThrustCurve` changed signature from
   `Span<float> thrustNewtons` to a `ThrustCurveSamples` ref-struct carrying **three** parallel spans
   (`ThrustNewtons`, `IspSeconds`, `ChamberPressurePascals`). This is the game's own editor preview,
-  which flexo does not port — but it is worth recording against the still-open _solid thrust-curve
-  preview_ gap: if flexo ever builds that preview, KSA now shows Isp and chamber pressure alongside
+  now ported in full by the 5402 field audit: Flexo shows Isp and chamber pressure alongside
   thrust, and `ThrustCurveSamples.IsValid` requires `Length >= 2` with all three spans equal-length.
 
 Electric engines remain impossible data-only; nothing in 5168 opens a data path for them.
@@ -418,9 +453,9 @@ Two deliberate narrowings, so a new warning never duplicates an existing finding
   `feed-unknown-connector` codes; `consumer-not-wired` still covers a `Parent="true"` consumer
   with no wiring entry at all (`PartTemplate.cs:468-483`).
 
-Nozzle/core reference matching is by **id only**, where KSA matches a full `SubPartIdReference`
-(id + scope): a scope mismatch is a different authoring mistake, and reporting "referenced by
-nothing" for a nozzle that is plainly named would read as a false alarm.
+The end-to-end 5402 audit replaced the original id-only reverse indexes with full
+owner-relative `SubPartIdReference` matching. Same-named modules on unrelated templates cannot
+satisfy a reference, and unresolved references are reported as load blockers.
 
 **Substance data (informational).** `Volatiles.xml` / `SolidPropellants.xml` gained
 `<Substance DefaultPhase="Gas|Liquid|Solid">` and a `<Color R G B>` child (`SubstanceTemplate.cs`
@@ -557,7 +592,10 @@ the throat itself as `exitArea / 12`. flexo's `SolidMotorNozzle` deliberately om
 field and the two nozzle builders/parsers share one body so they cannot drift.
 `<SolidGrainSegment>`'s inner `<Grain>` is a `SolidGrainSegmentTemplate` (an
 `AsmbVolumetricMassTemplate`): `<Material Id>` + `<OuterRadius M>` + `<WallThickness Mm>` +
-`<Length M>` + the inherited `<LocationAsmb>`.
+`<Length M>` + inherited `<LocationAsmb X Y Z>`, `<Paf2Asmb X Y Z>` (radians),
+`<Mass Kg>` and `<Density KgPerM3>`. All are modeled and editable.
+`AsmbVolumetricMassTemplate.GetMassFromVolume` prefers Material, then Density, then Mass;
+these determine casing mass, not the propellant storage density used by the burn solve.
 
 ⚠️ **`exitArea / 12` is only the SEED.** `PartTree.ResolveSolidMotorStacks` calls
 `SolidMotor.ResizeNozzles()` whenever a motor's grain stack resolves, and that RE-DERIVES the
@@ -602,15 +640,21 @@ entry):
 | `GrainGeometries.xml`  | `<GrainGeometry Id>` → `<DepthCondition><Depth/><Perimeter/><PortArea/>` triplets |
 | `SolidPropellants.xml` | `<Substance Id><Solid><StorageDensity KgPerM3>` — the grain density               |
 
-Both are OPTIONAL at runtime, the same tolerance contract `Reactions.xml` has: absent ⇒ empty
-catalog ⇒ the card shows "preview unavailable — the engine still exports correctly". The
-preview also returns nothing for a **custom propellant**, which has no `<StorageDensity>` to
-read; flexo never invents a density.
+Both are optional served assets. Missing grain tables or solid phase density produces an
+explicit preview-unavailable reason. A custom reaction using a known solid phase can use its
+shipped storage density. Unknown density is never guessed.
 
-**Deliberate scope limit**: in game a motor's grain stack also grows across `SolidMotorCase`
-connectors into neighbouring PARTS (`PartTree.ResolveSolidMotorStack`). That is a
-vehicle-assembly fact a single-part editor cannot know, so flexo's stack is exactly the grain
-segments the motor's own `<FeedsFrom Container>` names.
+`solidCurveResolution.ts` follows the selected `<Rocket>` and `SubPartIdReference` owner scope
+for core and nozzle lookup. Grain feeds resolve `<FeedsFrom Container SubPart>` and
+`Parent="true"` through `PartTemplate.ResolveConsumerFeeds`: matching instance-specific
+`<ConsumerFeedWiring Id SubPartId>` entries take precedence over unscoped ones. Repeated
+container references count once. Template placement selection matters because wiring can
+differ between instances. The curve exposes the current `SolidMotor.ThrustCurveSamples`
+`ThrustNewtons`, `IspSeconds`, and `ChamberPressurePascals` channels.
+
+**Deliberate scope limit:** a connector-fed stack can include other Parts
+(`PartTree.ResolveSolidMotorStacks`). Such a preview is unavailable in this single-Part
+editor, rather than silently integrating only the local fraction of the stack.
 
 ### Solid reactions REQUIRE burn-rate data — BREAKING (crash-class)
 

@@ -149,6 +149,7 @@ function TemplateSections({ part, templateId }: { part: EditingPart; templateId:
         spd.combustors.length +
         spd.nozzles.length +
         spd.rockets.length +
+        spd.rocketControllers.length +
         spd.solidMotors.length +
         spd.solidNozzles.length +
         spd.solidGrainSegments.length +

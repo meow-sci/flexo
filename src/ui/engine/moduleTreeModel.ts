@@ -21,8 +21,8 @@ import {
  * eight groups in one order, never sorted or filtered, so the same module sits in the same
  * place every time you come back to it.
  *
- * **Four groups are always part-level** regardless of the open scope — controllers, feed
- * wiring, gimbals and custom propellants. KSA authors all four on `<PartGameData>` only, so
+ * **Three groups are always part-level** regardless of the open scope — feed
+ * wiring, gimbals and custom propellants. KSA authors these on `<PartGameData>` only, so
  * a SubPart scope shows them too, wearing the `[Part]` chip that says why (§A5's chip
  * system, not a prose banner).
  */
@@ -205,8 +205,6 @@ function listFor(
 ): Record<string, unknown>[] {
   const g = part.gameData;
   switch (group) {
-    case 'controller':
-      return g.rocketControllers as unknown as Record<string, unknown>[];
     case 'wiring':
       return g.consumerFeedWiring as unknown as Record<string, unknown>[];
     case 'gimbal':
@@ -219,6 +217,8 @@ function listFor(
   const owner = entry?.kind === 'part' ? g : scopeData(part, entry);
   if (!owner) return [];
   switch (group) {
+    case 'controller':
+      return owner.rocketControllers as unknown as Record<string, unknown>[];
     case 'combustor':
       return owner.combustors as unknown as Record<string, unknown>[];
     case 'nozzle':
@@ -258,6 +258,13 @@ export function buildModuleTree(
   for (const issue of findings) {
     const target = moduleRefForIssue(issue, part);
     if (!target) continue;
+    if (
+      target.module.scope === 'sub' &&
+      (entry?.kind !== 'subpart' ||
+        target.entry.kind !== 'subpart' ||
+        target.entry.templateId !== entry.templateId)
+    )
+      continue;
     const key = moduleRefKey(target.module);
     dots.set(key, worse(dots.get(key) ?? null, issue.severity));
   }
@@ -267,20 +274,26 @@ export function buildModuleTree(
   return MODULE_TREE_GROUP_ORDER.map((id): ModuleTreeGroup => {
     const rows: ModuleTreeRow[] = [];
     for (const group of GROUP_SOURCES[id]) {
-      const scope = scopeOfGroup(group, entry);
-      const list = listFor(part, entry, group);
-      list.forEach((module, index) => {
-        const ref: EngineModuleRef = { group, scope, index };
-        const key = moduleRefKey(ref);
-        rows.push({
-          key,
-          ref,
-          label: labelFor(group, module),
-          caption: captionFor(group, module, reactionNames),
-          issue: dots.get(key) ?? null,
-          canDuplicate: group !== 'wiring' && group !== 'gimbal',
+      const scopes =
+        group === 'controller' && entry?.kind === 'subpart'
+          ? [entry, { kind: 'part' } as const]
+          : [entry];
+      for (const rowEntry of scopes) {
+        const scope = scopeOfGroup(group, rowEntry);
+        const list = listFor(part, rowEntry, group);
+        list.forEach((module, index) => {
+          const ref: EngineModuleRef = { group, scope, index };
+          const key = moduleRefKey(ref);
+          rows.push({
+            key,
+            ref,
+            label: labelFor(group, module),
+            caption: captionFor(group, module, reactionNames),
+            issue: dots.get(key) ?? null,
+            canDuplicate: group !== 'wiring' && group !== 'gimbal',
+          });
         });
-      });
+      }
     }
     const groupUnwired: UnwiredRow[] =
       id === 'wiring'
@@ -355,6 +368,8 @@ export function totalModuleCount(part: EditingPart, entry: EngineEntry | null): 
   for (const groups of Object.values(GROUP_SOURCES)) {
     for (const group of groups) {
       total += engineModuleCount(part, entry, group, scopeOfGroup(group, entry));
+      if (group === 'controller' && entry?.kind === 'subpart')
+        total += engineModuleCount(part, entry, group, 'part');
     }
   }
   return total;

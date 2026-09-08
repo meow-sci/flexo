@@ -71,6 +71,9 @@ export interface EngineIssue {
 
 /** What a reaction lookup needs to answer; a subset of {@link ReactionData}. */
 interface ReactionFacts {
+  kind: 'Fixed' | 'Mixture';
+  reactantPhaseIds?: string[];
+  hasBurnRate?: boolean;
   category: ReactionCategory;
   minimumBurnPressurePa: number | null;
   maxStablePressurePa: number | null;
@@ -91,15 +94,26 @@ function reactionFacts(
   if (live) {
     return live.kind === 'Fixed'
       ? {
+          kind: live.kind,
+          reactantPhaseIds: live.reactants.map((r) => r.phaseId),
+          hasBurnRate: live.burnRate !== null,
           category: live.category,
           minimumBurnPressurePa: live.minimumBurnPressurePa,
           maxStablePressurePa: live.maxStablePressurePa,
         }
-      : { category: live.category, minimumBurnPressurePa: null, maxStablePressurePa: null };
+      : {
+          kind: live.kind,
+          category: live.category,
+          minimumBurnPressurePa: null,
+          maxStablePressurePa: null,
+        };
   }
   const custom = part.customReactions.find((r) => r.id === id);
   if (custom) {
     return {
+      kind: 'Fixed',
+      reactantPhaseIds: custom.reactants.map((r) => r.phaseId),
+      hasBurnRate: custom.burnRate !== null,
       category: custom.category,
       minimumBurnPressurePa: custom.minimumBurnPressurePa,
       maxStablePressurePa: custom.maxStablePressurePa,
@@ -108,7 +122,12 @@ function reactionFacts(
   const known = KNOWN_REACTIONS.find((k) => k.id === id);
   // The static snapshot carries no pressure limits — category-only checks still run.
   return known
-    ? { category: known.category, minimumBurnPressurePa: null, maxStablePressurePa: null }
+    ? {
+        kind: known.kind,
+        category: known.category,
+        minimumBurnPressurePa: null,
+        maxStablePressurePa: null,
+      }
     : null;
 }
 
@@ -202,19 +221,6 @@ function locateNozzleModules(
   return out;
 }
 
-/** Nozzle ids on the part, split by family (a `<Nozzle Id>` may name either). */
-function locateNozzles(part: EditingPart): { liquid: Set<string>; solid: Set<string> } {
-  const liquid = new Set<string>();
-  const solid = new Set<string>();
-  for (const n of part.gameData.nozzles) liquid.add(n.id);
-  for (const n of part.gameData.solidNozzles) solid.add(n.id);
-  for (const spd of part.subPartGameData) {
-    for (const n of spd.nozzles) liquid.add(n.id);
-    for (const n of spd.solidNozzles) solid.add(n.id);
-  }
-  return { liquid, solid };
-}
-
 /** Container ids addressable within a given scope (null ⇒ the root part's own). */
 function containersInScope(part: EditingPart, subPartInstanceId: string | null): Set<string> {
   const ids = new Set<string>();
@@ -245,15 +251,29 @@ function wiringFeedResolves(part: EditingPart, feed: FeedSource): boolean {
   return containersInScope(part, feed.subPartInstanceId ?? null).has(feed.containerId);
 }
 
-/** True when the rocket's `<Core Id>` resolves to a solid motor rather than a combustor. */
-function coreIsSolid(rocket: Rocket, consumers: LocatedConsumer[]): boolean | null {
-  const match = consumers.find((c) => matchesRef(c.id, c.subPartInstanceId, rocket.core));
-  return match ? match.isSolid : null;
+/** One Rocket instance, with references relative to its owning Part/SubPart. */
+interface LocatedRocket {
+  rocket: Rocket;
+  subPartInstanceId: string | null;
+  source: EngineIssueSource;
 }
 
-/** KSA's `SubPartIdReference` match: same template id, and same scope (empty ⇒ root). */
-function matchesRef(id: string, scope: string | null, ref: SubPartIdRef): boolean {
-  return id === ref.id && (ref.subPartInstanceId ?? null) === scope;
+/** KSA SubPartIdReference resolves an empty scope on the owner, otherwise its child. */
+function matchesRef(
+  id: string,
+  scope: string | null,
+  ref: SubPartIdRef,
+  ownerScope: string | null = null,
+): boolean {
+  // flexo SubParts are flat: a SubPart has no nested children to resolve a scoped ref on.
+  if (ownerScope !== null && ref.subPartInstanceId) return false;
+  return id === ref.id && scope === (ref.subPartInstanceId || ownerScope);
+}
+
+function resolveCore(located: LocatedRocket, consumers: LocatedConsumer[]) {
+  return consumers.find((c) =>
+    matchesRef(c.id, c.subPartInstanceId, located.rocket.core, located.subPartInstanceId),
+  );
 }
 
 /**
@@ -271,40 +291,149 @@ export function validateEngines(
     issues.push({ severity: 'warn', code, message, source });
 
   const consumers = locateConsumers(part);
-  const nozzles = locateNozzles(part);
+  const nozzles = locateNozzleModules(part).flatMap((located) => {
+    const scopes =
+      located.source.templateId === null
+        ? [null]
+        : part.placements
+            .filter((p) => p.subPartTemplateId === located.source.templateId)
+            .map((p) => p.instanceId);
+    return scopes.map((subPartInstanceId) => ({
+      ...located,
+      subPartInstanceId,
+      isSolid: located.source.module === 'solidNozzle',
+    }));
+  });
   const connectors = new Map(part.connectors.map((c) => [c.id, c]));
-  const rockets: { rocket: Rocket; source: EngineIssueSource }[] = [
+  const rockets: LocatedRocket[] = [
     ...part.gameData.rockets.map((rocket, index) => ({
       rocket,
+      subPartInstanceId: null,
       source: { templateId: null, module: 'rocket' as const, index },
     })),
-    ...part.subPartGameData.flatMap((s) =>
-      s.rockets.map((rocket, index) => ({
+    ...part.placements.flatMap((placement) => {
+      const data = part.subPartGameData.find(
+        (s) => s.subPartTemplateId === placement.subPartTemplateId,
+      );
+      return (data?.rockets ?? []).map((rocket, index) => ({
         rocket,
-        source: { templateId: s.subPartTemplateId, module: 'rocket' as const, index },
-      })),
-    ),
+        subPartInstanceId: placement.instanceId,
+        source: { templateId: placement.subPartTemplateId, module: 'rocket' as const, index },
+      }));
+    }),
   ];
+  // Older saved documents can retain controllers as preserved XML. Include those
+  // without converting them, alongside newly modeled controllers.
+  const controllers = [
+    ...part.gameData.rocketControllers.map((controller, index) => ({
+      controller,
+      subPartInstanceId: null as string | null,
+      source: { templateId: null, module: 'controller', index } as EngineIssueSource,
+    })),
+    ...part.placements.flatMap((placement) => {
+      const data = part.subPartGameData.find(
+        (s) => s.subPartTemplateId === placement.subPartTemplateId,
+      );
+      return [
+        ...(data?.rocketControllers ?? []).map((controller, index) => ({
+          controller,
+          subPartInstanceId: placement.instanceId,
+          source: {
+            templateId: placement.subPartTemplateId,
+            module: 'controller',
+            index,
+          } as EngineIssueSource,
+        })),
+        ...(data?.unknownChildren ?? [])
+          .filter(
+            (node) =>
+              node.tag === 'RocketEngineController' || node.tag === 'RocketThrusterController',
+          )
+          .map((node) => ({
+            controller: {
+              id: node.attrs.Id ?? '',
+              kind: node.tag === 'RocketThrusterController' ? 'thruster' : 'engine',
+              rocketRefs: node.children
+                .filter((child) => child.tag === 'RocketReference')
+                .map((ref) => ({
+                  id: ref.attrs.Id ?? '',
+                  subPartInstanceId: ref.attrs.SubPartId || null,
+                })),
+            },
+            subPartInstanceId: placement.instanceId,
+            // Passthrough controllers have no editable controller row in the module tree.
+            source: { templateId: placement.subPartTemplateId } as EngineIssueSource,
+          })),
+      ];
+    }),
+  ];
+  const controllerIds = new Set<string>();
+  for (const { controller, subPartInstanceId, source } of controllers) {
+    const key = JSON.stringify([subPartInstanceId, controller.id]);
+    if (controllerIds.has(key)) {
+      block(
+        'duplicate-controller-id',
+        `Controller ${controller.id} appears more than once in the same scope.`,
+        source,
+      );
+    }
+    controllerIds.add(key);
+  }
+  const referencedCores = new Set<LocatedConsumer>();
+  const referencedNozzles = new Set<(typeof nozzles)[number]>();
+  const drivenRockets = new Set<LocatedRocket>();
 
-  // --- Rocket assembly (RocketTemplate.Create — all THROW) ---
-  for (const { rocket, source } of rockets) {
-    const solidCore = coreIsSolid(rocket, consumers);
-    if (solidCore === null) continue; // unknown core: not a solid/liquid question
-    for (const n of rocket.nozzles) {
-      const isSolidNozzle = nozzles.solid.has(n.id);
-      const isLiquidNozzle = nozzles.liquid.has(n.id);
-      if (!isSolidNozzle && !isLiquidNozzle) continue; // unresolvable id — a different bug
-      if (solidCore !== isSolidNozzle) {
+  // RocketTemplate.Create and SubPartIdReference.FindModuleById: all THROW.
+  for (const located of rockets) {
+    const { rocket, source } = located;
+    const core = resolveCore(located, consumers);
+    if (!core) {
+      block(
+        'rocket-core-unresolvable',
+        `KSA throws: Rocket ${rocket.id} references unknown core ${rocket.core.id} in its declared scope.`,
+        source,
+      );
+    } else {
+      if (referencedCores.has(core)) {
+        block(
+          'core-used-by-multiple-rockets',
+          `KSA throws: core ${core.id} is referenced by more than one Rocket.`,
+          source,
+        );
+      }
+      referencedCores.add(core);
+    }
+    for (const ref of rocket.nozzles) {
+      const nozzle = nozzles.find((n) =>
+        matchesRef(n.nozzle.id, n.subPartInstanceId, ref, located.subPartInstanceId),
+      );
+      if (!nozzle) {
+        block(
+          'rocket-nozzle-unresolvable',
+          `KSA throws: Rocket ${rocket.id} references unknown nozzle ${ref.id} in its declared scope.`,
+          source,
+        );
+        continue;
+      }
+      if (referencedNozzles.has(nozzle)) {
+        block(
+          'nozzle-used-by-multiple-rockets',
+          `KSA throws: nozzle ${ref.id} is referenced by more than one Rocket.`,
+          source,
+        );
+      }
+      referencedNozzles.add(nozzle);
+      if (core && core.isSolid !== nozzle.isSolid) {
         block(
           'rocket-mixes-solid-and-liquid',
           `KSA throws: Rocket ${rocket.id} mixes solid and liquid components — core ` +
-            `${rocket.core.id} is ${solidCore ? 'solid' : 'liquid'} but nozzle ${n.id} is ` +
-            `${isSolidNozzle ? 'solid' : 'liquid'}.`,
+            `${rocket.core.id} is ${core.isSolid ? 'solid' : 'liquid'} but nozzle ${ref.id} is ` +
+            `${nozzle.isSolid ? 'solid' : 'liquid'}.`,
           source,
         );
       }
     }
-    if (solidCore && rocket.nozzles.length === 0) {
+    if (core?.isSolid && rocket.nozzles.length === 0) {
       block(
         'solid-rocket-needs-nozzle',
         `KSA throws: Solid motor rocket ${rocket.id} needs at least one nozzle.`,
@@ -313,39 +442,52 @@ export function validateEngines(
     }
   }
 
+  controllers.forEach(({ controller, subPartInstanceId, source }) => {
+    for (const ref of controller.rocketRefs) {
+      const located = rockets.find((r) =>
+        matchesRef(r.rocket.id, r.subPartInstanceId, ref, subPartInstanceId),
+      );
+      if (!located) {
+        block(
+          'controller-rocket-unresolvable',
+          `KSA throws: controller ${controller.id} references unknown Rocket ${ref.id} in its declared scope.`,
+          source,
+        );
+        continue;
+      }
+      drivenRockets.add(located);
+      if (controller.kind === 'thruster' && resolveCore(located, consumers)?.isSolid) {
+        block(
+          'solid-motor-on-thruster-controller',
+          `KSA throws: Solid motor ${located.rocket.core.id} cannot be driven by thruster controller ${controller.id}.`,
+          source,
+        );
+      }
+    }
+  });
+
   // --- Wiring parity with KSA rev 5091 (all LOG at Warning; scope/engines.md "5117") ---
   //
   // Five "wired up wrong" checks the game added in 5091. Every one of them LOADS and then
   // silently produces no thrust — exactly the class this validator exists for — so they are
   // `warn`, not `block`.
 
-  // A `<Rocket>` may be named by many controllers, and a nozzle/core by one rocket; build the
-  // reverse indexes once. Matching is by ID only: KSA matches a full `SubPartIdReference`
-  // (id + scope), but a scope mismatch is a DIFFERENT authoring mistake, and reporting
-  // "referenced by nothing" for a nozzle that is plainly named would read as a false alarm.
-  const nozzleIdsNamedByRockets = new Set(
-    rockets.flatMap((r) => r.rocket.nozzles.map((n) => n.id)),
-  );
-  const coreIdsNamedByRockets = new Set(rockets.map((r) => r.rocket.core.id));
-  const rocketIdsNamedByControllers = new Set(
-    part.gameData.rocketControllers.flatMap((c) => c.rocketRefs.map((r) => r.id)),
-  );
-
   // RocketControllerTemplate.OnDataLoad — "references no Rockets; it will drive nothing".
-  part.gameData.rocketControllers.forEach((controller, index) => {
+  controllers.forEach(({ controller, source }) => {
     if (controller.rocketRefs.length > 0) return;
     warn(
       'controller-no-rockets',
       `KSA logs: rocket controller ${controller.id} references no Rockets; it will drive nothing.`,
-      { templateId: null, module: 'controller', index },
+      source,
     );
   });
 
   // Rocket.OnFullPartCreated — "has core '…' but no nozzles; it will produce no thrust".
   // A SOLID core with no nozzle is already a `block` above (RocketTemplate.Create throws), so
   // this covers the liquid/unresolved case only.
-  for (const { rocket, source } of rockets) {
-    if (rocket.nozzles.length > 0 || coreIsSolid(rocket, consumers) === true) continue;
+  for (const located of rockets) {
+    const { rocket, source } = located;
+    if (rocket.nozzles.length > 0 || resolveCore(located, consumers)?.isSolid) continue;
     warn(
       'rocket-no-nozzles',
       `KSA logs: Rocket ${rocket.id} has core ${rocket.core.id} but no nozzles; it will ` +
@@ -355,8 +497,9 @@ export function validateEngines(
   }
 
   // RocketNozzle.OnFullPartCreated — "is referenced by no Rocket … will produce no thrust".
-  for (const { nozzle, scope, source } of locateNozzleModules(part)) {
-    if (nozzleIdsNamedByRockets.has(nozzle.id)) continue;
+  for (const located of nozzles) {
+    const { nozzle, scope, source } = located;
+    if (referencedNozzles.has(located)) continue;
     warn(
       'nozzle-not-referenced',
       `KSA logs: nozzle ${nozzle.id} on ${scope} is referenced by no Rocket (no Rocket names ` +
@@ -372,7 +515,7 @@ export function validateEngines(
       templateId: c.subPartTemplateId,
       module: c.isSolid ? 'solidMotor' : 'combustor',
     };
-    if (!coreIdsNamedByRockets.has(c.id)) {
+    if (!referencedCores.has(c)) {
       warn(
         'core-not-referenced',
         `KSA logs: rocket core ${c.id} is referenced by no Rocket (no Rocket names it as its ` +
@@ -381,9 +524,7 @@ export function validateEngines(
       );
       continue;
     }
-    const driven = rockets.some(
-      (r) => r.rocket.core.id === c.id && rocketIdsNamedByControllers.has(r.rocket.id),
-    );
+    const driven = rockets.some((r) => resolveCore(r, consumers) === c && drivenRockets.has(r));
     if (driven) continue;
     warn(
       'core-not-referenced',
@@ -428,20 +569,22 @@ export function validateEngines(
     }
   });
 
-  // --- Thruster controllers may not drive a solid motor (RocketThrusterControllerTemplate.Create) ---
-  part.gameData.rocketControllers.forEach((controller, index) => {
-    if (controller.kind !== 'thruster') return;
-    for (const ref of controller.rocketRefs) {
-      const rocket = rockets.find((r) => r.rocket.id === ref.id)?.rocket;
-      if (!rocket || coreIsSolid(rocket, consumers) !== true) continue;
-      block(
-        'solid-motor-on-thruster-controller',
-        `KSA throws: Solid motor ${rocket.core.id} cannot be driven by thruster controller ` +
-          `${controller.id}.`,
-        { templateId: null, module: 'controller', index },
-      );
-    }
-  });
+  // CombustorTemplate.ResolveReaction requires an explicit ratio for mixture reactions.
+  for (const consumer of consumers) {
+    const combustor = consumer.combustor;
+    if (!combustor || combustor.mixtureRatio !== null) continue;
+    // Project-authored reactions are FixedReaction, including clones of mixtures.
+    if (part.customReactions.some((r) => r.id === combustor.reactionId)) continue;
+    const reaction =
+      reactions?.get(combustor.reactionId) ??
+      KNOWN_REACTIONS.find((r) => r.id === combustor.reactionId);
+    if (reaction?.kind !== 'Mixture') continue;
+    block(
+      'combustor-mixture-ratio-required',
+      `KSA throws: combustor ${combustor.id} must specify a MixtureRatio for mixture reaction ${combustor.reactionId}.`,
+      { templateId: consumer.subPartTemplateId, module: 'combustor' },
+    );
+  }
 
   // --- Solid motor reaction + pressure (SolidMotorTemplate.Create — both THROW) ---
   for (const c of consumers) {
@@ -452,13 +595,32 @@ export function validateEngines(
       module: 'solidMotor',
     };
     const facts = reactionFacts(motor.reactionId, part, reactions);
-    if (facts && facts.category !== 'Solid') {
+    if (facts && (facts.category !== 'Solid' || facts.kind !== 'Fixed')) {
       block(
         'solid-motor-needs-solid-reaction',
         `KSA throws: Solid motor ${motor.id} requires a solid reaction; got ` +
           `${motor.reactionId} (${facts.category}).`,
         motorSource,
       );
+    }
+    if (facts?.kind === 'Fixed' && facts.category === 'Solid') {
+      if (facts.hasBurnRate === false) {
+        block(
+          'solid-motor-needs-burn-rate',
+          `KSA throws: solid reaction ${motor.reactionId} driving motor ${motor.id} has no burn rate law.`,
+          motorSource,
+        );
+      }
+      // SubstanceTemplate.Create names every solid phase `${Id}(s)`; other phases
+      // cannot be the single Solid instance required by SolidMotorTemplate.Create.
+      const phases = facts.reactantPhaseIds;
+      if (phases && (phases.length !== 1 || !phases[0].endsWith('(s)'))) {
+        block(
+          'solid-motor-needs-one-solid-reactant',
+          `KSA throws: solid reaction ${motor.reactionId} driving motor ${motor.id} must have exactly one solid reactant.`,
+          motorSource,
+        );
+      }
     }
     // KSA: throws when pressure <= MinimumBurnPressure or > MaxStablePressure.
     const min = facts?.minimumBurnPressurePa;
@@ -476,6 +638,44 @@ export function validateEngines(
         motorSource,
       );
     }
+  }
+
+  // AsmbVolumetricMassTemplate.GetMassFromVolume uses material, then positive density,
+  // then positive mass, and throws when none is supplied. A material must be incompressible.
+  for (const [templateId, grains] of [
+    [null, part.gameData.solidGrainSegments],
+    ...part.subPartGameData.map((s) => [s.subPartTemplateId, s.solidGrainSegments] as const),
+  ] as const) {
+    grains.forEach((grain, index) => {
+      const source: EngineIssueSource = { templateId, module: 'grain', index };
+      if (grain.wallMaterialId) {
+        if (!grain.wallMaterialId.endsWith('(s)') && !grain.wallMaterialId.endsWith('(l)'))
+          block(
+            'grain-material-not-incompressible',
+            `KSA throws: grain ${grain.id} casing material must be a solid or liquid phase.`,
+            source,
+          );
+      } else if (
+        !(grain.densityKgM3 != null && grain.densityKgM3 > 0) &&
+        !(grain.massKg != null && grain.massKg > 0)
+      ) {
+        block(
+          'grain-mass-unspecified',
+          `KSA throws: grain ${grain.id} casing needs a material, positive density, or positive mass.`,
+          source,
+        );
+      }
+    });
+  }
+
+  // DeLavalNozzle.ComputeThroatArea substitutes exitArea when AreaRatio is NaN or <= 0.
+  for (const { nozzle, source } of locateNozzleModules(part)) {
+    if (!('areaRatio' in nozzle) || (nozzle.areaRatio as number) > 0) continue;
+    warn(
+      'nozzle-area-ratio-default',
+      `Nozzle ${nozzle.id} has no positive area ratio — KSA uses 1, so its throat is as wide as its exit. Set the intended nozzle ratio.`,
+      source,
+    );
   }
 
   // --- Exhaust direction magnitude (RocketNozzle.ResetState + VehicleUpdateState) ---

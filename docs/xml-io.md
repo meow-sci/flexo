@@ -90,6 +90,24 @@ gas-generator `<Rocket>`/`<Combustor>` + `<SubPart Id><Gimbal>` overlays, and to
 `<FixedReaction>` for custom propellants — all round-tripped by the parser. See
 [engines.md](engines.md) for the schema, units, and default-omission rules.
 
+A gimbal's pivot position and axis rotation are preserved from the geometry
+`<SubPart><Gimbal><Transform>` declaration, merged with any explicitly authored GameData
+transform fields, and emitted back on that declaration. The angle limits remain in the
+GameData overlay. This keeps LR91 turbine exhausts and verniers rotating around their
+authored pivots; an absent transform defaults to identity. The Engine gimbal editor exposes
+the pivot in metres and axis rotation in degrees.
+
+Launch escape systems carry multiple `<Decoupler>` components. The first remains editable
+through Coupling and retains its authored `Id`; additional components round-trip through
+the XML passthrough, with `ConnectorId` remapped when an import or project merge regenerates
+connector ids. Both `NoseconeMount` and `SkirtMount` therefore survive a stock LES export.
+
+The vendored propulsion regressions in `modExport.test.ts` run all three Core propulsion
+packs through import, the Part/GameData serializers and the Assets bundle builder. They
+verify complete engine fields at the export's six-significant-digit precision, preserve
+gimbal pivots and LES decouplers, and require every engine-bearing built-in SubPart to have
+its own declared export variant so exported GameData cannot modify the shared Core template.
+
 ### Both documents hold N parts
 
 A project holds **N parts** and exports all the included ones into the same two files, as

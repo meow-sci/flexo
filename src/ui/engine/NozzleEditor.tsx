@@ -7,6 +7,7 @@ import {
   ListBoxItem,
   Select,
   Switch,
+  TextField,
   cn,
   noteBox,
   warningBox,
@@ -40,6 +41,7 @@ import {
   withDefaultReactionPlume,
   type DeLavalNozzle,
   type ReactionPlume,
+  type RocketSoundAction,
   type SolidMotorNozzle,
   type Vec3,
 } from '../../ksa/types';
@@ -54,15 +56,14 @@ import {
  *
  * Three census invariants live in here and nowhere else:
  *
- * - **`AreaRatio` is honest-NaN.** KSA's default is NaN and `DeLavalNozzleTemplate.Create`
- *   refuses it, so an unset ratio renders an EMPTY field plus a "required" warning rather than
- *   v1's misleading `0`.
+ * - **`AreaRatio` is honest-NaN.** KSA's default is NaN and `DeLavalNozzle.ComputeThroatArea`
+ *   uses ratio 1. An unset ratio renders an empty field and explains that runtime default.
  * - **The physics direction is never auto-rewritten.** KSA applies thrust as
  *   `TotalThrust · -ExhaustDirection` UNNORMALIZED, so a non-unit vector silently scales the
  *   engine — it is warned about, with a one-click Normalize, and left verbatim otherwise
  *   (imports must round-trip).
- * - **The FX pair is ONE authoring decision.** The switch seeds both fields from the physics
- *   pair or nulls both; KSA inherits the physics pair when they are absent.
+ * - **The FX overrides inherit independently.** The master switch seeds or resets both;
+ *   the location and direction switches can reset either override separately.
  *
  * **Undo enrollment**: field edits stream (push at interaction start); Normalize, the FX
  * override toggle and every plume-entry mutation are discrete pushes (§B11).
@@ -92,8 +93,7 @@ export function NozzleEditor({ templateId, index }: { templateId: string | null;
               aria-label="Nozzle area ratio"
               value={nozzle.areaRatio}
               min={1}
-              // Empty, not `0`: KSA's own default is NaN and it refuses to load such a
-              // nozzle, so the field says "unset" instead of showing a plausible number.
+              // KSA defaults to NaN and uses ratio 1; keep the field empty to show it is unset.
               format={(n) => (Number.isFinite(n) ? String(n) : '')}
               onInteractionStart={() => pushUndo('edit nozzle', nozzle.id)}
               onCommit={(ar) => update({ areaRatio: ar })}
@@ -101,7 +101,7 @@ export function NozzleEditor({ templateId, index }: { templateId: string | null;
           </Field>
           {!Number.isFinite(nozzle.areaRatio) && (
             <p className="text-[11px] leading-snug text-warning">
-              Required — KSA refuses a nozzle whose area ratio is NaN, and the engine will not load.
+              Unset — KSA uses an area ratio of 1. Set the ratio to match the intended nozzle.
             </p>
           )}
         </FlashField>
@@ -268,27 +268,52 @@ function NozzleBody({
         <div className="flex flex-col gap-2 rounded-md border border-border bg-panel-sunken p-2">
           <p className="text-[11px] leading-snug text-fg-subtle">
             Where the visible plume comes from, independent of where thrust is applied — stock uses
-            it to cant an RCS plume off the hull while thrust stays axial. Off ⇒ both inherit the
-            physics pair (KSA&rsquo;s own fallback). Cyan handle in the 3D viewport.
+            it to cant an RCS plume off the hull while thrust stays axial. Location and direction
+            each inherit their physics value when their override is off. Cyan handle in the 3D
+            viewport.
           </p>
-          <div className="flex flex-col gap-1">
-            <VecLabel>FX location (m)</VecLabel>
-            <Vec3Field
-              value={fxLocation}
-              onInteractionStart={begin}
-              onCommit={(axis, v) => onUpdate({ fxExhaustLocation: { ...fxLocation, [axis]: v } })}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <VecLabel>FX direction (any length — visual only)</VecLabel>
-            <Vec3Field
-              value={fxDirection}
-              onInteractionStart={begin}
-              onCommit={(axis, v) =>
-                onUpdate({ fxExhaustDirection: { ...fxDirection, [axis]: v } })
-              }
-            />
-          </div>
+          <Switch
+            isSelected={nozzle.fxExhaustLocation !== null}
+            onChange={(on) => {
+              begin();
+              onUpdate({ fxExhaustLocation: on ? { ...nozzle.exhaustLocation } : null });
+            }}
+          >
+            Override FX location
+          </Switch>
+          {nozzle.fxExhaustLocation !== null && (
+            <div className="flex flex-col gap-1">
+              <VecLabel>FX location (m)</VecLabel>
+              <Vec3Field
+                value={fxLocation}
+                onInteractionStart={begin}
+                onCommit={(axis, v) =>
+                  onUpdate({ fxExhaustLocation: { ...fxLocation, [axis]: v } })
+                }
+              />
+            </div>
+          )}
+          <Switch
+            isSelected={nozzle.fxExhaustDirection !== null}
+            onChange={(on) => {
+              begin();
+              onUpdate({ fxExhaustDirection: on ? { ...nozzle.exhaustDirection } : null });
+            }}
+          >
+            Override FX direction
+          </Switch>
+          {nozzle.fxExhaustDirection !== null && (
+            <div className="flex flex-col gap-1">
+              <VecLabel>FX direction (any length — visual only)</VecLabel>
+              <Vec3Field
+                value={fxDirection}
+                onInteractionStart={begin}
+                onCommit={(axis, v) =>
+                  onUpdate({ fxExhaustDirection: { ...fxDirection, [axis]: v } })
+                }
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -309,11 +334,12 @@ function NozzleBody({
           aria-label="Exhaust plume template"
           value={defaultReactionPlume(nozzle.reactionPlumes)?.volumetricExhaustId ?? NONE}
           onChange={(k) =>
-            onUpdate({
-              reactionPlumes: withDefaultReactionPlume(nozzle.reactionPlumes, {
+            updateReactionPlumes(
+              { templateId, kind, index },
+              withDefaultReactionPlume(nozzle.reactionPlumes, {
                 volumetricExhaustId: k === NONE ? null : String(k),
               }),
-            })
+            )
           }
         >
           <ListBoxItem id={NONE}>(none)</ListBoxItem>
@@ -330,11 +356,12 @@ function NozzleBody({
           aria-label="Plume trail template"
           value={defaultReactionPlume(nozzle.reactionPlumes)?.plumeTrailId ?? NONE}
           onChange={(k) =>
-            onUpdate({
-              reactionPlumes: withDefaultReactionPlume(nozzle.reactionPlumes, {
+            updateReactionPlumes(
+              { templateId, kind, index },
+              withDefaultReactionPlume(nozzle.reactionPlumes, {
                 plumeTrailId: k === NONE ? null : String(k),
               }),
-            })
+            )
           }
         >
           <ListBoxItem id={NONE}>(none)</ListBoxItem>
@@ -357,6 +384,34 @@ function NozzleBody({
       >
         Engine sound
       </Switch>
+      {nozzle.sound && (
+        <div className="flex flex-col gap-2">
+          <Field label="Sound event action">
+            <Select
+              size="sm"
+              aria-label="Sound event action"
+              value={nozzle.sound.action}
+              onChange={(action) => {
+                begin();
+                onUpdate({ sound: { ...nozzle.sound!, action: action as RocketSoundAction } });
+              }}
+            >
+              <ListBoxItem id="On">On</ListBoxItem>
+              <ListBoxItem id="Off">Off</ListBoxItem>
+              <ListBoxItem id="None">None</ListBoxItem>
+            </Select>
+          </Field>
+          <Field label="Sound behavior id">
+            <TextField
+              size="sm"
+              aria-label="Sound behavior id"
+              value={nozzle.sound.soundId}
+              onFocus={begin}
+              onChange={(soundId) => onUpdate({ sound: { ...nozzle.sound!, soundId } })}
+            />
+          </Field>
+        </div>
+      )}
       <Switch
         isSelected={nozzle.exhaustLight}
         onChange={(on) => {
@@ -422,6 +477,12 @@ function PlumeEntries({
   const write = (next: ReactionPlume[]) => updateReactionPlumes({ templateId, kind, index }, next);
   const patch = (i: number, part: Partial<ReactionPlume>) =>
     write(plumes.map((p, j) => (j === i ? { ...p, ...part } : p)));
+  const move = (index: number, offset: number) => {
+    const next = [...plumes];
+    const [entry] = next.splice(index, 1);
+    next.splice(index + offset, 0, entry);
+    write(next);
+  };
 
   return (
     <DisclosureSection title="Plume entries" badge={plumes.length || ''}>
@@ -447,6 +508,24 @@ function PlumeEntries({
               size="sm"
               variant="ghost"
               className="ml-auto shrink-0"
+              aria-label={`Move plume entry ${i + 1} up`}
+              isDisabled={i === 0}
+              onPress={() => move(i, -1)}
+            >
+              Up
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={`Move plume entry ${i + 1} down`}
+              isDisabled={i === plumes.length - 1}
+              onPress={() => move(i, 1)}
+            >
+              Down
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
               aria-label={`Remove plume entry ${i + 1}`}
               onPress={() => write(plumes.filter((_, j) => j !== i))}
             >

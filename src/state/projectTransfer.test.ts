@@ -113,6 +113,7 @@ function sourcePart(): EditingPart {
   });
   p.gameData.gimbals.push({
     subPartInstanceId: 'trussbara_2',
+    transform: identityTransform(),
     maxAngleYDeg: 3,
     maxAngleZDeg: 3,
     constrainToCircle: false,
@@ -120,6 +121,7 @@ function sourcePart(): EditingPart {
   p.customReactions.push({
     id: 'MyKerolox_2.6',
     name: 'Custom Kerolox',
+    description: '',
     category: 'Bipropellant',
     reactants: [{ phaseId: 'Kerosene(l)', massShare: 1 }],
     lut: [{ lnPressure: 9.5, temperatureK: 3200, gamma: 1.22, molarMassGPerMol: 22.4 }],
@@ -917,6 +919,31 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
     });
     src.subPartGameData.push({
       ...createSubPartGameData('Core.Wing'),
+      unknownAttrs: { DisplayName: 'Wing hardware' },
+      unknownChildren: [
+        {
+          tag: 'RocketThrusterController',
+          attrs: { Id: 'Preserved' },
+          children: [
+            {
+              tag: 'RocketReference',
+              attrs: { Id: 'PeerRocket', SubPartId: 'wing_1' },
+              children: [],
+            },
+          ],
+        },
+      ],
+      rocketControllers: [
+        {
+          id: 'TemplateController',
+          kind: 'thruster',
+          controlMapFlags: [],
+          rocketRefs: [
+            { id: 'PeerRocket', subPartInstanceId: 'wing_1' },
+            { id: 'LocalRocket', subPartInstanceId: null },
+          ],
+        },
+      ],
       combustors: [{ ...createCombustor('ThrustChamber'), feeds: [{ kind: 'parent' }] }],
       solidMotors: [
         {
@@ -967,6 +994,12 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
       },
     ]);
     const spd = part.subPartGameData.find((x) => x.subPartTemplateId === 'Core.Wing')!;
+    expect(spd.unknownAttrs).toEqual({ DisplayName: 'Wing hardware' });
+    expect(spd.unknownChildren[0].children[0].attrs.SubPartId).toBe(newWingId);
+    expect(spd.rocketControllers[0].rocketRefs).toEqual([
+      { id: 'PeerRocket', subPartInstanceId: newWingId },
+      { id: 'LocalRocket', subPartInstanceId: null },
+    ]);
     expect(spd.combustors[0].feeds).toEqual([{ kind: 'parent' }]); // nothing to remap
     expect(spd.solidMotors[0].feeds).toEqual([{ kind: 'connector', connectorId: newConnectorId }]);
   });

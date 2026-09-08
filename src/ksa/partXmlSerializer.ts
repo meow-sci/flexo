@@ -142,12 +142,12 @@ export function serializePartsXml(
     // A `<Gimbal>` must be DECLARED here, on the geometry instance — `PartInstance.ApplyGameData`
     // merges the GameData one with `Gimbal?.Apply(...)`, so without this the GameData block has
     // nothing to apply to and the gimbal silently does not exist in game.
-    const gimballed = new Set(
-      part.gameData.gimbals.filter(gimbalIsExported).map((g) => g.subPartInstanceId),
+    const gimballed = new Map(
+      part.gameData.gimbals.filter(gimbalIsExported).map((g) => [g.subPartInstanceId, g]),
     );
     for (const placement of part.placements) {
       partEl.appendChild(
-        buildSubPartElement(doc, placement, remap, gimballed.has(placement.instanceId)),
+        buildSubPartElement(doc, placement, remap, gimballed.get(placement.instanceId)),
       );
     }
 
@@ -318,6 +318,7 @@ function appendPartGameData(
 
   if (game.decoupler) {
     const el = doc.createElement('Decoupler');
+    if (game.decoupler.ksaId) el.setAttribute('Id', game.decoupler.ksaId);
     el.setAttribute('ConnectorId', game.decoupler.connectorId);
     el.setAttribute('Force', formatG6(game.decoupler.force));
     gd.appendChild(el);
@@ -411,6 +412,8 @@ function appendPartGameData(
     for (const sp of spd.solarPanels) spdEl.appendChild(buildSolarPanelElement(doc, sp));
     for (const light of ownedLights) spdEl.appendChild(buildLightElement(doc, light));
     // Reusable thrust-chamber / solid-motor modules that travel with this mesh.
+    for (const controller of spd.rocketControllers)
+      spdEl.appendChild(buildControllerElement(doc, controller));
     for (const rocket of spd.rockets) spdEl.appendChild(buildRocketElement(doc, rocket));
     for (const combustor of spd.combustors)
       spdEl.appendChild(buildCombustorElement(doc, combustor));
@@ -904,6 +907,11 @@ function buildSolidGrainSegmentElement(doc: XmlDocument, s: SolidGrainSegment): 
   if (s.wallMaterialId.trim()) {
     grain.appendChild(elWithAttr(doc, 'Material', 'Id', s.wallMaterialId));
   }
+  if (s.massKg != null) grain.appendChild(elWithAttr(doc, 'Mass', 'Kg', formatG6(s.massKg)));
+  if (s.densityKgM3 != null)
+    grain.appendChild(elWithAttr(doc, 'Density', 'KgPerM3', formatG6(s.densityKgM3)));
+  const rotation = buildEngineVec3(doc, 'Paf2Asmb', s.paf2Asmb, { x: 0, y: 0, z: 0 });
+  if (rotation) grain.appendChild(rotation);
   grain.appendChild(elWithAttr(doc, 'OuterRadius', 'M', formatG6(s.outerRadiusM)));
   grain.appendChild(elWithAttr(doc, 'WallThickness', 'Mm', formatG6(s.wallThicknessMm)));
   grain.appendChild(elWithAttr(doc, 'Length', 'M', formatG6(s.lengthM)));
@@ -967,7 +975,7 @@ function buildControllerElement(doc: XmlDocument, c: RocketController): XmlEleme
     setRefAttrs(r, ref);
     el.appendChild(r);
   }
-  if (c.kind === 'thruster' && c.controlMapFlags && c.controlMapFlags.length > 0) {
+  if (c.kind === 'thruster' && c.controlMapFlags !== null) {
     el.appendChild(elWithAttr(doc, 'ControlMap', 'CSV', c.controlMapFlags.join(',')));
   }
   return el;
@@ -1010,6 +1018,8 @@ function buildFixedReactionElement(doc: XmlDocument, reaction: CustomReaction): 
   if (reaction.name.trim() && reaction.name !== reaction.id) {
     el.appendChild(elWithAttr(doc, 'Name', 'Value', reaction.name));
   }
+  if (reaction.description)
+    el.appendChild(elWithAttr(doc, 'Description', 'Value', reaction.description));
   for (const r of reaction.reactants) {
     const re = doc.createElement('Reactant');
     re.setAttribute('Id', r.phaseId);
@@ -1101,14 +1111,13 @@ function buildAnimationModuleElement(
  * `PartInstance.ApplyGameData` folds the `<PartGameData>` copy in with `Gimbal?.Apply(other)` —
  * a null-conditional, so a GameData `<Gimbal>` with no geometry counterpart is DISCARDED without
  * a log. Core ships the pair the same way: an empty-but-present `<Gimbal>` (carrying only its
- * pivot `<Transform>`) on the geometry instance, and the angles in `<PartGameData>`. flexo does
- * not model the pivot, so the declaration is bare and the gimbal pivots on the SubPart origin.
+ * pivot `<Transform>`) on the geometry instance, and the angles in `<PartGameData>`.
  */
 function buildSubPartElement(
   doc: XmlDocument,
   placement: SubPartPlacement,
   templateRemap: TemplateRemap,
-  hasGimbal: boolean,
+  gimbal: Gimbal | undefined,
 ): XmlElement {
   const el = doc.createElement('SubPart');
   el.setAttribute('Id', placement.instanceId);
@@ -1118,7 +1127,12 @@ function buildSubPartElement(
   );
   const transform = buildTransformElement(doc, placement);
   if (transform) el.appendChild(transform);
-  if (hasGimbal) el.appendChild(doc.createElement('Gimbal'));
+  if (gimbal) {
+    const declaration = doc.createElement('Gimbal');
+    const pivot = buildTransformElement(doc, gimbal.transform);
+    if (pivot) declaration.appendChild(pivot);
+    el.appendChild(declaration);
+  }
   return el;
 }
 

@@ -21,6 +21,9 @@ import {
   createEmptyGameData,
   createEmptyPart,
   createGlow,
+  createSolidGrainSegment,
+  createCustomReaction,
+  createGimbal,
   createSubPartGameData,
   DEFAULT_LAYER_ID,
 } from '../ksa/types';
@@ -229,7 +232,19 @@ function normalizePart(part: EditingPart): EditingPart {
       // converted (nothing reads the key either way; this just stops it being re-persisted).
       evaDoor: gameData.evaDoor ? { seatId: gameData.evaDoor.seatId ?? null } : null,
       rockets: normalizeRockets(gameData.rockets),
+      solidGrainSegments: gameData.solidGrainSegments.map((grain) => ({
+        ...createSolidGrainSegment(grain.id),
+        ...grain,
+      })),
+      gimbals: gameData.gimbals.map((gimbal) => ({
+        ...createGimbal(gimbal.subPartInstanceId),
+        ...gimbal,
+      })),
     },
+    customReactions: filled.customReactions.map((reaction) => ({
+      ...createCustomReaction(reaction.id, reaction.name),
+      ...reaction,
+    })),
     ivaSeats: (filled.ivaSeats ?? []).map((seat) => ({ ...seat, ksaId: seat.ksaId ?? null })),
     // `<Light Id>`, modeled in KSA 2026.8.22.5348 — additive, and below the constructor
     // spread (a light has no constructor of its own), so it needs its own default here.
@@ -238,6 +253,10 @@ function normalizePart(part: EditingPart): EditingPart {
       ...createSubPartGameData(spd.subPartTemplateId ?? ''),
       ...spd,
       rockets: normalizeRockets(spd.rockets),
+      solidGrainSegments: (spd.solidGrainSegments ?? []).map((grain) => ({
+        ...createSolidGrainSegment(grain.id),
+        ...grain,
+      })),
     })),
     // A glow authored before coverage/strength were split would composite as an
     // all-or-nothing white blowout without its missing half.

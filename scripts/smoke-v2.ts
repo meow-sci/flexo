@@ -16,6 +16,8 @@
  *   6. Export to KSA — ⌘E opens it, Escape closes it
  *   7. Projects — ⌘O opens it, Escape closes it
  *   8. parts — ⌘K "New Part" adds one, ⌥1 goes back to it, the palette switches forward
+ *   9. EngineA3 — a real built-in import shows its combustor and calculated performance
+ *  10. RCS — a real built-in import exposes its template controller and editable control map
  *
  * WHY DOM-ONLY: screenshots are noise under a live WebGL canvas, so every assertion is
  * a role/name or text query against react-aria's semantics. Accessible names come from
@@ -54,7 +56,7 @@ async function step(name: string, body: () => Promise<void>): Promise<void> {
   } catch (err) {
     failures++
     console.log(`  FAIL  ${name}`)
-    console.log(`        ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`)
+    console.log(`        ${err instanceof Error ? err.message : String(err)}`)
   }
 }
 
@@ -207,6 +209,72 @@ async function run(page: Page): Promise<void> {
     await runFromPalette(page, 'Switch to part: Part 2')
     await partChip(page, 'Part 2').waitFor({ timeout: 15_000 })
   })
+
+  await step('built-in EngineA3 — imported combustor and live performance appear in Engine mode', async () => {
+    await page.getByRole('button', { name: 'Add', exact: true }).first().click()
+    await page.getByRole('menuitem', { name: 'Built-in Part…' }).click()
+    await page.getByRole('searchbox', { name: 'Search Parts' }).fill('CorePropulsionA_Prefab_EngineA3')
+    await page.getByRole('grid', { name: 'Parts' }).getByRole('row').filter({ hasText: 'CorePropulsionA_Prefab_EngineA3' }).click()
+    await page.getByRole('button', { name: 'Add & Close' }).click()
+    await page.getByRole('grid', { name: 'Parts' }).waitFor({ state: 'hidden' })
+    await page.keyboard.press('Digit4')
+    await modeChip(page, 'Engine').waitFor({ timeout: 10_000 })
+    await page.locator('[data-surface="engine-tree"]').getByText('ThrustChamber', { exact: true }).first().waitFor({ timeout: 10_000 })
+    await page.getByText('932.6 kN vac · Isp 445.4 s', { exact: true }).first().waitFor({ timeout: 15_000 })
+    await page.keyboard.press('Digit1')
+    await modeChip(page, 'Build').waitFor({ timeout: 10_000 })
+  })
+
+  await step('built-in RCS — template controller and manual control map are editable', async () => {
+    await runFromPalette(page, 'New Part')
+    await page.getByRole('button', { name: 'Add', exact: true }).first().click()
+    await page.getByRole('menuitem', { name: 'Built-in Part…' }).click()
+    await page.getByRole('searchbox', { name: 'Search Parts' }).fill('CorePropulsionB_Prefab_RCSALargeA')
+    await page.getByRole('grid', { name: 'Parts' }).getByRole('row').filter({ hasText: 'CorePropulsionB_Prefab_RCSALargeA' }).click()
+    await page.getByRole('button', { name: 'Add & Close' }).click()
+    await page.getByRole('grid', { name: 'Parts' }).waitFor({ state: 'hidden' })
+    await page.keyboard.press('Digit4')
+    await modeChip(page, 'Engine').waitFor({ timeout: 10_000 })
+    const tree = page.locator('[data-surface="engine-tree"]')
+    const expand = tree.getByRole('button', { name: 'Expand Controllers', exact: true })
+    if (await expand.count()) await expand.click()
+    const controller = tree.getByRole('row').filter({ has: page.getByText('RD-4', { exact: true }) })
+    await controller.waitFor({ timeout: 10_000 })
+    await controller.getByText('[Template]', { exact: true }).waitFor()
+    await controller.click()
+    const id = page.getByRole('textbox', { name: 'Controller id', exact: true })
+    await id.waitFor({ timeout: 10_000 })
+    assert(await id.inputValue() === 'RD-4', 'the template controller did not open')
+    const manual = page.getByRole('checkbox', { name: 'Manual control map', exact: true })
+    assert(!(await manual.isChecked()), 'stock RCS should use automatic geometry mapping')
+    await page.getByText('Manual control map', { exact: true }).click()
+    assert(await manual.isChecked(), 'manual mapping toggle did not enable')
+    const csv = page.getByRole('textbox', { name: 'Control map CSV', exact: true })
+    await csv.waitFor()
+    assert(await csv.inputValue() === '', 'manual mapping must start with no selected directions')
+    await page.getByText('Pitch up', { exact: true }).click()
+    await page.getByText('Translate forward', { exact: true }).click()
+    assert(await csv.inputValue() === 'PitchUp,TranslateForward', 'direction edits did not update the controller map')
+    await page.getByText('Pitch up', { exact: true }).click()
+    assert(await csv.inputValue() === 'TranslateForward', 'clearing a direction removed another mapping')
+    await tree.getByRole('row', { name: 'Nozzle', exact: true }).click()
+    await page.getByText('Override FX placement (plume ≠ thrust)', { exact: true }).click()
+    await page.getByText('Override FX location', { exact: true }).click()
+    assert(!(await page.getByRole('switch', { name: 'Override FX location', exact: true }).isChecked()), 'FX location override did not clear independently')
+    assert(await page.getByRole('switch', { name: 'Override FX direction', exact: true }).isChecked(), 'clearing FX location also cleared FX direction')
+    await page.getByText('FX location (m)', { exact: true }).waitFor({ state: 'hidden' })
+    await page.getByText('FX direction (any length — visual only)', { exact: true }).waitFor()
+    await page.getByText('Override FX placement (plume ≠ thrust)', { exact: true }).click()
+    await controller.click()
+    assert(await csv.inputValue() === 'TranslateForward', 'the map edit did not survive changing focused modules')
+    await page.getByText('Manual control map', { exact: true }).click()
+    assert(!(await manual.isChecked()), 'manual mapping toggle did not restore automatic mapping')
+    await csv.waitFor({ state: 'hidden' })
+    await page.locator('[data-viewport-cell] canvas').first().click({ position: { x: 20, y: 20 } })
+    await page.keyboard.press('Digit1')
+    await modeChip(page, 'Build').waitFor({ timeout: 10_000 })
+  })
+
 }
 
 async function main(): Promise<void> {

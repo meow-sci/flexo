@@ -10,12 +10,15 @@
 
 import { ASSET_FILES, fetchXmlFile, gameDataSibling } from './catalog';
 import {
+  applyGimbalOverlays,
   collidersFromElement,
   connectorsFromPartElement,
   crashToleranceFromPartElement,
   directChildren,
+  gimbalOverlaysFromElement,
   ivaSeatsFromElement,
   parseGameDataElement,
+  mergeSubPartGameDataInto,
   placementsFromPartElement,
   subPartCollidersFromRoot,
   subPartGameDataFromDoc,
@@ -176,7 +179,7 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
       rockets: [],
       combustors: [],
       nozzles: [],
-      gimbals: [],
+      gimbals: applyGimbalOverlays([], gimbalOverlaysFromElement(part)),
       tanks: [],
       solidMotors: [],
       solidNozzles: [],
@@ -194,6 +197,8 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
  * the editor tags and the connector <Flags> (e.g. ToSurface on solar panels).
  */
 export interface PartGameData {
+  /** Presence-aware overlays applied onto geometry-authored gimbal pivots and axes. */
+  gimbalOverlays: ReturnType<typeof gimbalOverlaysFromElement>;
   editorTags: string[];
   /** connector id -> its flags (only connectors carrying <Flags> are recorded). */
   connectorFlags: Map<string, ConnectorFlag[]>;
@@ -275,6 +280,7 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
     if (!id) continue;
     const parsed = parseGameDataElement(gd);
     const entry: PartGameData = out.parts.get(id) ?? {
+      gimbalOverlays: [],
       editorTags: [],
       connectorFlags: new Map(),
       connectorCapabilities: new Map(),
@@ -349,6 +355,7 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
     entry.combustors.push(...parsed.gameData.combustors);
     entry.nozzles.push(...parsed.gameData.nozzles);
     entry.gimbals.push(...parsed.gameData.gimbals);
+    entry.gimbalOverlays.push(...gimbalOverlaysFromElement(gd));
     entry.tanks.push(...parsed.gameData.tanks);
     entry.solidMotors.push(...parsed.gameData.solidMotors);
     entry.solidNozzles.push(...parsed.gameData.solidNozzles);
@@ -356,7 +363,11 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
     entry.consumerFeedWiring.push(...parsed.gameData.consumerFeedWiring);
     out.parts.set(id, entry);
   }
-  for (const spd of subPartGameDataFromDoc(doc)) out.subParts.set(spd.subPartTemplateId, spd);
+  for (const spd of subPartGameDataFromDoc(doc)) {
+    const existing = out.subParts.get(spd.subPartTemplateId);
+    if (existing) mergeSubPartGameDataInto(existing, spd);
+    else out.subParts.set(spd.subPartTemplateId, spd);
+  }
   for (const c of subPartCollidersFromRoot(doc.documentElement as Element)) {
     const list = out.subPartColliders.get(c.ownerTemplateId!);
     if (list) list.push(c);
@@ -376,14 +387,16 @@ async function loadGameData(): Promise<ParsedGameDataFile> {
     subPartColliders: new Map(),
     subPartLights: new Map(),
   };
-  await Promise.all(
+  const results = await Promise.all(
     GAMEDATA_FILES.map(async (file) => {
       const r = await fetchXmlFile(file);
       // Most asset files have no GameData sibling ('missing' — expected and silent);
       // genuine parse/network errors are logged verbosely inside fetchXmlFile.
-      if (r.kind === 'ok') parseGameDataFile(r.doc, out);
+      return r;
     }),
   );
+  // Apply overlays in the catalog's file order, independent of network completion.
+  for (const r of results) if (r.kind === 'ok') parseGameDataFile(r.doc, out);
   return out;
 }
 
@@ -427,7 +440,7 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
       part.rockets = gd.rockets;
       part.combustors = gd.combustors;
       part.nozzles = gd.nozzles;
-      part.gimbals = gd.gimbals;
+      part.gimbals = applyGimbalOverlays(part.gimbals, gd.gimbalOverlays);
       part.tanks = gd.tanks;
       part.solidMotors = gd.solidMotors;
       part.solidNozzles = gd.solidNozzles;

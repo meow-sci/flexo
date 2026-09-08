@@ -91,6 +91,11 @@ import { serializeGameDataXml, serializePartsXml, type TemplateRemap } from './p
 import { serializeAssets } from './assetsXmlSerializer';
 import type { CatalogSubPart } from './catalog';
 import { animGlbPath } from './animationNaming';
+import { readVendoredAsset } from './ksaTestAssets';
+import { indexCatalog, parseAssetsFile } from './catalog';
+import { mergeGameData, parseGameDataFile, parsePartsFile, type CatalogPart } from './partCatalog';
+import { $part } from '../state/editorStore';
+import { importBuiltInPart } from '../state/partImport';
 
 /**
  * Single-part calls through the multi-part builders (MULTI_PART_PLAN P3.03/P3.04). They pin
@@ -162,6 +167,118 @@ function bundleOnePart(
     kittenTex,
   );
 }
+
+describe('vendored stock engines export complete isolated SubPart variants', () => {
+  // Export uses .NET G6; compare every field at that precision, including unit conversion noise.
+  const atExportPrecision = (value: unknown): unknown =>
+    JSON.parse(
+      JSON.stringify(value, (_key, field) =>
+        typeof field === 'number' && Number.isFinite(field) ? Number(field.toPrecision(6)) : field,
+      ),
+    );
+  for (const pack of ['CorePropulsionA', 'CorePropulsionB', 'CorePropulsionC']) {
+    it(`${pack}: preserves hardware, feeds, effects and gimbal pivots through the complete XML bundle`, async () => {
+      const parser = new DOMParser();
+      const assets = parser.parseFromString(
+        readVendoredAsset(`${pack}Assets.xml`),
+        'application/xml',
+      );
+      const gameData = parser.parseFromString(
+        readVendoredAsset(`${pack}GameData.xml`),
+        'application/xml',
+      );
+      const parts: CatalogPart[] = [];
+      const subParts: CatalogSubPart[] = [];
+      parsePartsFile(assets, `${pack}Assets.xml`, parts);
+      parseAssetsFile(assets, `${pack}Assets.xml`, subParts, gameData);
+      const data = {
+        parts: new Map(),
+        subParts: new Map(),
+        subPartColliders: new Map(),
+        subPartLights: new Map(),
+      };
+      parseGameDataFile(gameData, data);
+      mergeGameData(parts, data);
+      const catalog = indexCatalog(subParts);
+      const engines = parts.filter(
+        (p) => p.rockets.length || p.subPartGameData.some((s) => s.rockets.length),
+      );
+      expect(engines.length).toBeGreaterThan(0);
+      for (const engine of engines) {
+        $part.set(createEmptyPart());
+        await importBuiltInPart(engine);
+        const imported = structuredClone($part.get());
+        imported.partId = `Export_${engine.id}`;
+        const content = buildModContent(imported, 'EngineAudit', catalog);
+        const bundle = await buildMultiCustomBundle(content);
+        expect(bundle.assetsXml, engine.id).not.toBeNull();
+        expect(bundle.binaries, engine.id).toEqual([]);
+        const declarations = parser.parseFromString(bundle.assetsXml!, 'application/xml');
+        const variantIds = new Set(
+          Array.from(declarations.getElementsByTagName('SubPart')).map((s) => s.getAttribute('Id')),
+        );
+        for (const variant of content.variants.values()) {
+          expect(variantIds.has(variant.variantId), engine.id).toBe(true);
+          expect(variantIds.has(variant.originalId), engine.id).toBe(false);
+        }
+        const exported: CatalogPart[] = [];
+        parsePartsFile(
+          parser.parseFromString(content.partXml, 'application/xml'),
+          content.partFile,
+          exported,
+        );
+        const exportedData = {
+          parts: new Map(),
+          subParts: new Map(),
+          subPartColliders: new Map(),
+          subPartLights: new Map(),
+        };
+        parseGameDataFile(
+          parser.parseFromString(content.gameDataXml, 'application/xml'),
+          exportedData,
+        );
+        mergeGameData(exported, exportedData);
+        const result = exported[0];
+        expect(result.gimbals, engine.id).toEqual(imported.gameData.gimbals);
+        for (const key of [
+          'rockets',
+          'combustors',
+          'nozzles',
+          'solidMotors',
+          'solidNozzles',
+          'solidGrainSegments',
+          'rocketControllers',
+          'consumerFeedWiring',
+        ] as const) {
+          expect(result[key], `${engine.id}/${key}`).toEqual(imported.gameData[key]);
+        }
+        for (const source of imported.subPartGameData) {
+          const variant = content.variants.get(source.subPartTemplateId);
+          expect(variant, `${engine.id}/${source.subPartTemplateId}`).toBeDefined();
+          expect(exportedData.subParts.has(source.subPartTemplateId), engine.id).toBe(false);
+          const roundTripped = result.subPartGameData.find(
+            (s) => s.subPartTemplateId === variant!.variantId,
+          );
+          expect(atExportPrecision(roundTripped), engine.id).toEqual(
+            atExportPrecision({ ...source, subPartTemplateId: variant!.variantId }),
+          );
+        }
+        if (engine.id.endsWith('_LESA') || engine.id.endsWith('_LESSegmentThrustAssemblyA')) {
+          const emitted = parser.parseFromString(content.gameDataXml, 'application/xml');
+          const decouplers = Array.from(emitted.getElementsByTagName('Decoupler'));
+          expect(
+            decouplers.map((d) => d.getAttribute('Id')),
+            engine.id,
+          ).toEqual(['NoseconeMount', 'SkirtMount']);
+          const connectors = new Set(imported.connectors.map((c) => c.id));
+          for (const decoupler of decouplers)
+            expect(connectors.has(decoupler.getAttribute('ConnectorId')!), engine.id).toBe(true);
+        }
+      }
+      $part.set(createEmptyPart());
+    });
+  }
+});
 
 describe('sanitizeBaseName', () => {
   it('strips spaces and punctuation', () => {

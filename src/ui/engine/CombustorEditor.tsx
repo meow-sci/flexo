@@ -180,7 +180,7 @@ export function CombustorEditor({
           onCommit={(pct) => update({ minimumThrottle: clampThrottle(pct / 100) })}
         />
       </Field>
-      <Field label="Min pulse time (s, 0 = none — for RCS)">
+      <Field label="Min pulse time (s, 0 = KSA default 0.001)">
         <PreciseNumberInput
           aria-label="Minimum pulse time in seconds"
           value={combustor.minimumPulseTimeS ?? 0}

@@ -82,6 +82,25 @@ see [colliders.md](colliders.md). `<IVASeat>` has likewise moved out of the pass
 - `GAMEDATA_FILES` = `ASSET_FILES` with `Assets.xml`→`GameData.xml`; **`PartAssets.xml`→`PartGameData.xml`**, so flexo does read the monolithic `PartGameData.xml`. A missing/renamed GameData sibling silently loses all of that file's tags/flags/modules.
 - SubPart mesh: `<PartModel><Mesh Id="X">` where **X is a glTF node name** inside the file's default `<MeshAtlas Path>` (or a named `<MeshAtlas Id>`). `<Material Id>` → `<PbrMaterial Id>`. `<Internal>true</Internal>` ⇒ IVA prop.
 
+**Import metadata completeness (verified at 5402)**
+
+- Both whole-Part import and direct **Add SubPart** import carry `<SubPartGameData Id>`
+  modules into the document. The direct catalog attaches modules after loading all
+  GameData files, including the shared `PartGameData.xml`; duplicate ids merge
+  additively in file order, as `PartGameDataReference.OnDataLoad` and
+  `PartTemplate.ApplyGameData` do. Importing a second placement preserves the user's
+  existing template data and does not duplicate controllers, combustors or lights.
+- `<Part><SubPart Id><Gimbal><Transform>` authors a pivot and local axis frame;
+  `<PartGameData><SubPart Id><Gimbal>` often supplies only `<MaxAngleY Degrees>` and
+  `<MaxAngleZ Degrees>`. `decomp/KSA/GimbalReference.cs` (`Apply`, `Create`) and
+  `TransformReference.cs` (`Apply`) merge only present fields. flexo merges the two
+  sites before importing and exports the resulting transform with the limits.
+  Current `Content/Core/CorePropulsionAAssets.xml` LR91 Vac's main chamber pivot is
+  X=1.1575; its turbine gimbal rotation is X=-1.5708. Discarding either changes the
+  in-game engine's thrust-vectoring geometry.
+- The vendored `CorePropulsionA/B/CAssets.xml` and sibling GameData fixtures exercise
+  liquid, RCS and solid hardware on every CI run, without requiring the private tree.
+
 **Editor tags**
 
 - `KNOWN_EDITOR_TAGS` (`types.ts`) is a hardcoded suggestion list; freeform tags allowed. Per-part tags serialize as `<EditorTag Value="…">`. flexo treats tags as a **flat freeform string list** (any string round-trips). As of 4750 the list is generated from a typed `EDITOR_TAG_DEFS` snapshot of the registry — including each tag's `NotaCategory` flag, which `EditorTagsField.tsx` uses to group autocomplete into **Categories** vs **Functional**.

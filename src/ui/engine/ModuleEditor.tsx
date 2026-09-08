@@ -142,7 +142,7 @@ function ModuleBody({ module, entry }: { module: EngineModuleRef; entry: EngineE
     case 'rocket':
       return <RocketEditor templateId={templateId} index={index} />;
     case 'controller':
-      return <ControllerEditor index={index} />;
+      return <ControllerEditor templateId={templateId} index={index} />;
     case 'wiring':
       return <FeedWiringEditor focusIndex={index} />;
     case 'gimbal':

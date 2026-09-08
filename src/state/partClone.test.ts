@@ -248,6 +248,7 @@ function maximalPart(): EditingPart {
   });
   part.gameData.gimbals.push({
     subPartInstanceId: 'poda_1',
+    transform: identityTransform(),
     maxAngleYDeg: 5,
     maxAngleZDeg: 5,
     constrainToCircle: true,
@@ -270,6 +271,7 @@ function maximalPart(): EditingPart {
   part.customReactions.push({
     id: 'MyKerolox_2.6',
     name: 'Custom Kerolox',
+    description: '',
     category: 'Bipropellant',
     reactants: [{ phaseId: 'Kerosene(l)', massShare: 1 }],
     lut: [{ lnPressure: 9.5, temperatureK: 3200, gamma: 1.22, molarMassGPerMol: 22.4 }],

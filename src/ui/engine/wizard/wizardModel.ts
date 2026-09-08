@@ -29,6 +29,7 @@
 
 import {
   createCombustor,
+  createGimbal,
   createNozzle,
   createRocket,
   createRocketController,
@@ -1117,7 +1118,7 @@ function pushGimbal(
   // 0°/0° is not even built in-game (`Gimbal.CanActuate()`), so never emit one.
   if (gimbal.maxYDeg <= 0 && gimbal.maxZDeg <= 0) return;
   const entry: Gimbal = {
-    subPartInstanceId: hostInstanceId,
+    ...createGimbal(hostInstanceId),
     maxAngleYDeg: gimbal.maxYDeg,
     maxAngleZDeg: gimbal.maxZDeg,
     constrainToCircle: gimbal.constrainToCircle,

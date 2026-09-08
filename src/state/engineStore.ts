@@ -195,7 +195,9 @@ function hasEngineModules(s: SubPartGameData): boolean {
     s.combustors.length > 0 ||
     s.solidMotors.length > 0 ||
     s.nozzles.length > 0 ||
-    s.solidNozzles.length > 0
+    s.solidNozzles.length > 0 ||
+    s.rockets.length > 0 ||
+    s.rocketControllers.length > 0
   );
 }
 
@@ -214,7 +216,9 @@ export const $engineEntries = computed([$part], (part): EngineEntry[] => {
     g.combustors.length > 0 ||
     g.solidMotors.length > 0 ||
     g.nozzles.length > 0 ||
-    g.solidNozzles.length > 0
+    g.solidNozzles.length > 0 ||
+    g.rockets.length > 0 ||
+    g.rocketControllers.length > 0
   ) {
     entries.push({ kind: 'part' });
   }
@@ -451,7 +455,6 @@ export type { EngineModuleGroup, EngineModuleRef };
 
 /** The groups that only ever exist on `<PartGameData>` — see {@link EngineModuleGroup}. */
 export const PART_ONLY_MODULE_GROUPS: readonly EngineModuleGroup[] = [
-  'controller',
   'wiring',
   'gimbal',
   'propellant',
@@ -481,8 +484,6 @@ export function engineModuleCount(
   if (PART_ONLY_MODULE_GROUPS.includes(group)) {
     if (scope !== 'part') return 0;
     switch (group) {
-      case 'controller':
-        return g.rocketControllers.length;
       case 'wiring':
         return g.consumerFeedWiring.length;
       case 'gimbal':
@@ -499,6 +500,8 @@ export function engineModuleCount(
         : undefined;
   if (!owner) return 0;
   switch (group) {
+    case 'controller':
+      return owner.rocketControllers.length;
     case 'combustor':
       return owner.combustors.length;
     case 'nozzle':
@@ -737,18 +740,33 @@ function entryStillValid(entry: EngineEntry | null): boolean {
   return $engineEntries.get().some((e) => engineEntryKey(e) === key);
 }
 
-/** The engine scope of the LAST-selected SubPart placement, if that template is one. */
+/** A core-bearing scope can show chamber data; a nozzle-only scope may be an auxiliary exhaust. */
+function entryHasCore(entry: EngineEntry): boolean {
+  const part = $part.get();
+  const data =
+    entry.kind === 'part'
+      ? part.gameData
+      : part.subPartGameData.find((s) => s.subPartTemplateId === entry.templateId);
+  return !!data && (data.combustors.length > 0 || data.solidMotors.length > 0);
+}
+
+/** Prefer a selected thrust chamber, then the last selected nozzle-only scope. */
 function selectedEngineEntry(): EngineEntry | null {
   const part = $part.get();
   const ids = new Set(
     $engineEntries.get().flatMap((e) => (e.kind === 'subpart' ? [e.templateId] : [])),
   );
+  let nozzleEntry: EngineEntry | null = null;
   for (const ref of [...$selection.get()].reverse()) {
     if (ref.kind !== 'subpart') continue;
     const templateId = part.placements.find((p) => p.instanceId === ref.id)?.subPartTemplateId;
-    if (templateId && ids.has(templateId)) return { kind: 'subpart', templateId };
+    if (templateId && ids.has(templateId)) {
+      const entry: EngineEntry = { kind: 'subpart', templateId };
+      if (entryHasCore(entry)) return entry;
+      nozzleEntry ??= entry;
+    }
   }
-  return null;
+  return nozzleEntry;
 }
 
 let hooksRegistered = false;
@@ -759,9 +777,9 @@ let hooksRegistered = false;
  *
  * 1. a cross-mode `{engineScope}` jump always wins (and may scroll the tree to a group);
  * 2. else the surviving `$activeEngineEntry`, if it still carries hardware;
- * 3. else the selection's last SubPart, when its template is an engine scope;
- * 4. else the ONE engine scope, when the part has exactly one;
- * 5. else the navigator's empty state.
+ * 3. else the selection's last core-bearing SubPart, then its last nozzle-only scope;
+ * 4. else the first core-bearing scope, then the first engine scope;
+ * 5. else the navigator's empty state when the part has no engine hardware.
  *
  * Then `{defineNew}` (which is orthogonal — it opens the creation menu on top of whatever
  * scope the ladder settled on) and the reaction-catalog preload, moved here from the three
@@ -797,7 +815,7 @@ export function initEngineMode(): void {
         if (payload?.group) jumpToEngineGroup(payload.group);
       } else if (!entryStillValid($activeEngineEntry.get())) {
         const entries = $engineEntries.get();
-        activateEngine(selectedEngineEntry() ?? (entries.length === 1 ? entries[0] : null));
+        activateEngine(selectedEngineEntry() ?? entries.find(entryHasCore) ?? entries[0] ?? null);
       }
       if (payload?.defineNew) requestDefineNewEngine(payload.templateId ?? null);
       else closeDefineEngineFlow();

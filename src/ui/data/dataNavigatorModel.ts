@@ -124,6 +124,7 @@ function templateEngineCount(spd: SubPartGameData | undefined): number {
     spd.combustors.length +
     spd.nozzles.length +
     spd.rockets.length +
+    spd.rocketControllers.length +
     spd.solidMotors.length +
     spd.solidNozzles.length +
     spd.solidGrainSegments.length

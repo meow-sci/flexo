@@ -55,6 +55,22 @@ Resolution rules per file:
 
 `indexCatalog(entries)` builds an `id → entry` map.
 
+The loader also attaches editable metadata from **all** fetched GameData documents,
+matched by `<SubPartGameData Id>`. This global pass includes `PartGameData.xml` and
+merges repeated template ids additively in file order. `CatalogSubPart.data` carries
+its parsed modules, GameData colliders and lights. **Add ▸ SubPart…** passes that
+payload to `addSubPart`, so adding a built-in engine chamber imports its combustor,
+reaction/mixture ratio, nozzle, rocket, and preserved controller XML with the mesh.
+The first placement seeds template data in the same undo step; later placements
+share existing authored data and preserve user edits. GameData colliders and lights
+join the placement's layer. Geometry colliders remain inherited from the catalog
+entry and are carried forward when export creates a template variant.
+
+Whole-Part import additionally merges `<SubPart><Gimbal>` from geometry with the
+GameData overlay, retaining authored pivots and axes whenever the overlay only
+supplies angle limits. A present Position/Rotation/Scale replaces that complete
+vector, matching KSA's `TransformReference.Apply`.
+
 ## Catalog in state — `src/state/catalogStore.ts`
 
 - `$catalog` (atom), `$catalogLoading` (atom), `$catalogIndex` (computed map).
@@ -95,7 +111,7 @@ name (`imported.meshName`) through the same `MeshAtlasCache`. See
 ## Where the asset files come from
 
 `/ksa/...` is served by the `ksaAssets()` Vite plugin in **dev only**, mapping
-`thirdparty/ksa/Content/Core`. Production bundling requires extra work — see
+`KSA_ASSETS_DIR` (the private assets tree). Production bundling requires extra work — see
 [asset-pipeline.md](./asset-pipeline.md).
 
 ## Tests

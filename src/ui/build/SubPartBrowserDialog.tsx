@@ -94,7 +94,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
 
   /** Origin, identity, unit scale, active layer, `<lastSegmentLower>_<n>` id, selected. */
   const add = (id: string) => {
-    addSubPart(id);
+    addSubPart(id, catalog.find((entry) => entry.id === id)?.data);
     toast({ title: 'SubPart added', description: id });
   };
 

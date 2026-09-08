@@ -1,36 +1,30 @@
 import { useStore } from '@nanostores/react';
-import { Button, Field, ListBoxItem, Select, TextField } from '../kit';
+import { Button, Checkbox, Field, ListBoxItem, Select, TextField } from '../kit';
 import { IdSelect } from './RocketEditor';
+import { referenceModuleIds } from './rocketReferenceOptions';
 import { $part, pushUndo, updateRocketController } from '../../state/editorStore';
-import type { EditingPart, RocketControllerKind } from '../../ksa/types';
+import { ownerOf } from './editorKit';
+import { CONTROL_MAP_FLAGS, controlMapMask, toggleControlMapFlag } from './controlMapModel';
+import type { RocketController, RocketControllerKind } from '../../ksa/types';
 
-/**
- * **The controller editor** (design: design-data-engine-modes.md §B4.9) — one
- * `<RocketEngineController>` / `<RocketThrusterController>`. Always part-level: KSA authors
- * controllers on `<PartGameData>` only, whatever scope the designer has open, which is why the
- * tree group carries the `[Part]` chip.
- *
- * The controller is what makes a part FIRE: an Engine controller gives throttle + staging, a
- * Thruster controller gives RCS pulses (and may never drive a solid motor — validation says
- * so). Its rocket refs may name a rocket on ANY SubPart instance, hence the instance select
- * with the `'\0root'` "(root part)" sentinel.
- *
- * `ControlMap` stays verbatim passthrough with no UI — it is a CSV string KSA does not
- * validate, and inventing an editor for it would be inventing a schema (census invariant).
- *
- * **Undo enrollment**: the id field and the ref lists stream through `updateRocketController`,
- * pushed once at interaction start.
- */
-export function ControllerEditor({ index }: { index: number }) {
+/** Edits controllers on either KSA container; unqualified rocket refs resolve on that owner. */
+export function ControllerEditor({
+  index,
+  templateId = null,
+}: {
+  index: number;
+  templateId?: string | null;
+}) {
   const part = useStore($part);
-  const controller = part.gameData.rocketControllers[index];
+  const controller = ownerOf(part, templateId)?.rocketControllers[index];
   if (!controller) return null;
 
   const begin = () => pushUndo('edit controller', controller.id);
-  const rocketIds = allRocketIds(part);
+  const update = (patch: Partial<RocketController>) =>
+    updateRocketController(index, patch, templateId ?? undefined);
   const setRefs = (refs: typeof controller.rocketRefs) => {
     begin();
-    updateRocketController(index, { rocketRefs: refs });
+    update({ rocketRefs: refs });
   };
 
   return (
@@ -42,7 +36,7 @@ export function ControllerEditor({ index }: { index: number }) {
           inputClassName="font-mono"
           value={controller.id}
           onFocus={begin}
-          onChange={(id) => updateRocketController(index, { id })}
+          onChange={(id) => update({ id })}
         />
       </Field>
       <Field label="Type">
@@ -52,13 +46,70 @@ export function ControllerEditor({ index }: { index: number }) {
           value={controller.kind}
           onChange={(k) => {
             begin();
-            updateRocketController(index, { kind: k as RocketControllerKind });
+            update({ kind: k as RocketControllerKind });
           }}
         >
           <ListBoxItem id="engine">Engine (throttle + staging)</ListBoxItem>
           <ListBoxItem id="thruster">Thruster (RCS, pulsed)</ListBoxItem>
         </Select>
       </Field>
+
+      {controller.kind === 'thruster' && (
+        <div className="flex flex-col gap-2">
+          <Checkbox
+            isSelected={controller.controlMapFlags !== null}
+            onChange={(manual) => {
+              begin();
+              update({ controlMapFlags: manual ? [] : null });
+            }}
+          >
+            Manual control map
+          </Checkbox>
+          <p className="text-[11px] text-fg-subtle">
+            Automatic mapping uses thruster geometry. A manual map fires for the selected control
+            directions; selecting none disables all directions.
+          </p>
+          {controller.controlMapFlags !== null && (
+            <>
+              <div className="grid grid-cols-2 gap-1">
+                {CONTROL_MAP_FLAGS.map(({ token, label, bit }) => (
+                  <Checkbox
+                    key={token}
+                    isSelected={(controlMapMask(controller.controlMapFlags!.join(',')) & bit) !== 0}
+                    onChange={(selected) => {
+                      begin();
+                      update({
+                        controlMapFlags: toggleControlMapFlag(
+                          controller.controlMapFlags!.join(','),
+                          bit,
+                          selected,
+                        )
+                          .split(',')
+                          .filter(Boolean),
+                      });
+                    }}
+                  >
+                    {label}
+                  </Checkbox>
+                ))}
+              </div>
+              <Field label="Control map CSV">
+                <TextField
+                  size="sm"
+                  aria-label="Control map CSV"
+                  value={controller.controlMapFlags.join(',')}
+                  onFocus={begin}
+                  onChange={(controlMap) =>
+                    update({
+                      controlMapFlags: controlMap.split(','),
+                    })
+                  }
+                />
+              </Field>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
         <span className="text-xs text-fg-subtle">Rockets driven</span>
@@ -67,7 +118,7 @@ export function ControllerEditor({ index }: { index: number }) {
             <div className="min-w-0 flex-1">
               <IdSelect
                 label={`Rocket ${j + 1}`}
-                ids={rocketIds}
+                ids={referenceModuleIds(part, templateId, ref.subPartInstanceId, 'rocket')}
                 value={ref.id || null}
                 onChange={(id) =>
                   setRefs(
@@ -76,21 +127,23 @@ export function ControllerEditor({ index }: { index: number }) {
                 }
               />
             </div>
-            <div className="min-w-0 flex-1">
-              <IdSelect
-                label="on instance"
-                ids={part.placements.map((p) => p.instanceId)}
-                value={ref.subPartInstanceId}
-                allowRoot
-                onChange={(s) =>
-                  setRefs(
-                    controller.rocketRefs.map((r, k) =>
-                      k === j ? { ...r, subPartInstanceId: s } : r,
-                    ),
-                  )
-                }
-              />
-            </div>
+            {templateId === null && (
+              <div className="min-w-0 flex-1">
+                <IdSelect
+                  label="on instance"
+                  ids={part.placements.map((p) => p.instanceId)}
+                  value={ref.subPartInstanceId}
+                  allowRoot
+                  onChange={(s) =>
+                    setRefs(
+                      controller.rocketRefs.map((r, k) =>
+                        k === j ? { ...r, subPartInstanceId: s } : r,
+                      ),
+                    )
+                  }
+                />
+              </div>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -113,12 +166,4 @@ export function ControllerEditor({ index }: { index: number }) {
       </div>
     </div>
   );
-}
-
-/** Every rocket id in the part (per-SubPart + part-level) — what a controller may reference. */
-function allRocketIds(part: EditingPart): string[] {
-  const ids: string[] = [];
-  for (const s of part.subPartGameData) for (const r of s.rockets) ids.push(r.id);
-  for (const r of part.gameData.rockets) ids.push(r.id);
-  return ids;
 }

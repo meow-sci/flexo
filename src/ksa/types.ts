@@ -624,8 +624,10 @@ export interface PowerConsumer {
  */
 export type LightType = 'Spot' | 'Point';
 
-/** Decoupler bound to a connector. Serialized as <Decoupler ConnectorId Force/>. */
+/** Decoupler bound to a connector. Serialized as <Decoupler Id ConnectorId Force/>. */
 export interface Decoupler {
+  /** Authored KSA module id, needed by sequencing; omitted when the source names none. */
+  ksaId?: string;
   connectorId: string;
   /** Separation force in newtons. */
   force: number;
@@ -758,8 +760,9 @@ export interface ConsumerFeedWiring {
  *                              receives throttle/staging, drives the cores
  *  - {@link Gimbal}       `<SubPart Id><Gimbal>` thrust-vectors a placed SubPart's nozzles
  * Reusable thrust chambers (combustor+nozzle+rocket) live on a {@link SubPartGameData}
- * so every prefab reusing that mesh inherits them; the controller, gimbals, and any
- * gas-generator hardware live on the {@link PartGameData} and reference SubPart
+ * so every prefab reusing that mesh inherits them, including template-local controllers.
+ * Assembly controllers, gimbals, and gas-generator hardware can live on the
+ * {@link PartGameData} and reference SubPart
  * *instance ids*. Thrust/Isp are real De Laval physics — see src/ksa/enginePhysics.ts.
  */
 
@@ -1034,7 +1037,8 @@ export type RocketControllerKind = 'engine' | 'thruster';
 /**
  * Groups one-or-more {@link Rocket}s under a single command source. Serialized as
  * `<RocketEngineController>` (main) or `<RocketThrusterController>` (RCS). Lives on the
- * PartGameData and is what makes a Part a functioning engine. Mirrors RocketControllerTemplate.cs.
+ * PartGameData or SubPartGameData and makes that owner a functioning engine.
+ * Mirrors RocketControllerTemplate.cs.
  */
 export interface RocketController {
   /** `<… Id>` controller / engine display id, e.g. "LR91-AJ-3". */
@@ -1042,7 +1046,7 @@ export interface RocketController {
   kind: RocketControllerKind;
   /** `<RocketReference Id [SubPartId]>` — the rockets this controller drives. */
   rocketRefs: SubPartIdRef[];
-  /** Thruster only: `<ControlMap CSV>` 6-DOF axis flags; null ⇒ auto-computed from geometry. */
+  /** Thruster only: `<ControlMap CSV>` axis flags; null ⇒ automatic, [] ⇒ manually disabled. */
   controlMapFlags: string[] | null;
 }
 
@@ -1055,6 +1059,8 @@ export interface RocketController {
 export interface Gimbal {
   /** Placement instanceId this gimbal sits on (the `<SubPart Id>` wrapper). */
   subPartInstanceId: string;
+  /** `<Gimbal><Transform>` pivot and axes in the owning SubPart's assembly frame. */
+  transform: Transform;
   /** `<MaxAngleY Degrees>` max deflection about local Y. 0 ⇒ no Y actuation. */
   maxAngleYDeg: number;
   /** `<MaxAngleZ Degrees>` max deflection about local Z. 0 ⇒ no Z actuation. */
@@ -1153,6 +1159,12 @@ export interface SolidGrainSegment {
   id: string;
   /** `<Grain><Material Id>` propellant/casing material, e.g. "Steel.300(s)". Blank omits it. */
   wallMaterialId: string;
+  /** `<Grain><Mass>` casing mass in kg; used when material and density are absent. */
+  massKg: number | null;
+  /** `<Grain><Density>` casing density in kg/m³; used when material is absent. */
+  densityKgM3: number | null;
+  /** `<Grain><Paf2Asmb X Y Z>` principal-axis rotation in radians. */
+  paf2Asmb: Vec3;
   /** `<Grain><OuterRadius M>` casing outer radius in meters. */
   outerRadiusM: number;
   /** `<Grain><WallThickness Mm>` casing wall thickness in millimeters. */
@@ -1219,6 +1231,9 @@ export function createSolidGrainSegment(id: string): SolidGrainSegment {
   return {
     id,
     wallMaterialId: 'Steel.300(s)',
+    massKg: null,
+    densityKgM3: null,
+    paf2Asmb: { x: 0, y: 0, z: 0 },
     outerRadiusM: 0.5,
     wallThicknessMm: 6,
     lengthM: 1,
@@ -1360,6 +1375,8 @@ export interface SubPartGameData {
   nozzles: DeLavalNozzle[];
   /** Reusable `<Rocket>` bindings (core + nozzles) that travel with this mesh. */
   rockets: Rocket[];
+  /** Reusable engine/RCS controllers; local rocket references resolve on each placement. */
+  rocketControllers: RocketController[];
   /** Reusable solid motor cases that travel with this mesh. */
   solidMotors: SolidMotor[];
   /** Reusable solid-motor nozzles that travel with this mesh. */
@@ -1380,6 +1397,7 @@ export function isSubPartGameDataEmpty(spd: SubPartGameData): boolean {
     spd.combustors.length === 0 &&
     spd.nozzles.length === 0 &&
     spd.rockets.length === 0 &&
+    spd.rocketControllers.length === 0 &&
     spd.solidMotors.length === 0 &&
     spd.solidNozzles.length === 0 &&
     spd.solidGrainSegments.length === 0 &&
@@ -1481,6 +1499,7 @@ export function createSubPartGameData(subPartTemplateId: string): SubPartGameDat
     combustors: [],
     nozzles: [],
     rockets: [],
+    rocketControllers: [],
     solidMotors: [],
     solidNozzles: [],
     solidGrainSegments: [],
@@ -1558,7 +1577,13 @@ export function createRocketController(
 
 /** A fixed (0/0) gimbal on a placement; raise the max angles to make it actuate. */
 export function createGimbal(subPartInstanceId: string): Gimbal {
-  return { subPartInstanceId, maxAngleYDeg: 0, maxAngleZDeg: 0, constrainToCircle: true };
+  return {
+    subPartInstanceId,
+    transform: identityTransform(),
+    maxAngleYDeg: 0,
+    maxAngleZDeg: 0,
+    constrainToCircle: true,
+  };
 }
 
 /** One reactant in a custom reaction: a substance-phase id + its mixture mass share. */
@@ -1613,6 +1638,8 @@ export interface CustomReaction {
   id: string;
   /** Display name (`<Name Value>`), falling back to {@link id}. */
   name: string;
+  /** `<Description Value>` shown by KSA's reaction library. */
+  description: string;
   /** `Category` attribute (grouping; KSA's FixedReaction fallback is Monopropellant). */
   category: ReactionCategory;
   /** Reactant mixture (≥1). */
@@ -1634,6 +1661,7 @@ export function createCustomReaction(id: string, name: string): CustomReaction {
   return {
     id,
     name: name.trim() || id,
+    description: '',
     category: 'Monopropellant',
     reactants: [{ phaseId: 'H2(l)', massShare: 1 }],
     lut: [

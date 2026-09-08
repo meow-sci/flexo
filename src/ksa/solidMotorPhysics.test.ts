@@ -148,6 +148,28 @@ describe('sampleThrustCurve — SolidMotor.TrySampleThrustCurve', () => {
     expect(c.unburnableGrainKg).toBeGreaterThanOrEqual(0);
   });
 
+  it('samples pressure and Isp on the same time base as thrust', () => {
+    const motor = motorWith(NEUTRAL);
+    const curve = sampleThrustCurve(motor, 64)!;
+    expect(curve.ispS).toHaveLength(curve.times.length);
+    expect(curve.chamberPressurePa).toHaveLength(curve.times.length);
+    for (let i = 0; i < curve.times.length; i++) {
+      // A neutral grain keeps its burning area and design pressure constant. Its mass
+      // generation is density × perimeter × radius × length × burn rate at that pressure.
+      expect(curve.chamberPressurePa[i]).toBeCloseTo(motor.authoredChamberPressurePa, -1);
+      const burningArea = NEUTRAL.perimeter[0] * (0.6 - 0.006) * 4;
+      const generatedMassFlow =
+        motor.storageDensityKgPerM3 *
+        burningArea *
+        evaluateBurnRate(motor.burnRate, curve.chamberPressurePa[i]);
+      expect(curve.ispS[i]).toBeCloseTo(curve.thrustN[i] / (generatedMassFlow * 9.80665), 3);
+    }
+    expect(curve.ispS[0]).toBeCloseTo(curve.vacuumIspS, 3);
+    const progressive = sampleThrustCurve(motorWith(PROGRESSIVE), 64)!;
+    expect(progressive.chamberPressurePa[0]).toBeLessThan(progressive.chamberPressurePa[63]);
+    expect(progressive.ispS[0]).toBeLessThan(progressive.ispS[63]);
+  });
+
   it('holds thrust roughly flat on a neutral grain', () => {
     const c = sampleThrustCurve(motorWith(NEUTRAL), 64)!;
     expect(c.ignitionThrustN).toBeGreaterThan(0.9 * c.peakThrustN);

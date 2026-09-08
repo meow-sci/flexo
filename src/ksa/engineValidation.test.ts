@@ -1,3 +1,6 @@
+import { DOMParser } from '@xmldom/xmldom';
+import { readVendoredAsset } from './ksaTestAssets';
+import { subPartGameDataFromDoc } from './partXmlParser';
 import { describe, it, expect } from 'vitest';
 import { validateEngines } from './engineValidation';
 import type { EngineIssue } from './engineValidation';
@@ -172,6 +175,7 @@ describe('validateEngines — KSA throws at load (blocking)', () => {
     p.customReactions.push({
       id: 'MyAPCP',
       name: 'My APCP',
+      description: '',
       category: 'Solid',
       reactants: [{ phaseId: 'APCP(s)', massShare: 1 }],
       lut: [],
@@ -390,6 +394,7 @@ describe('validateEngines — gimbals (Gimbal.cs / GimbalController.RecomputeSta
     p.gameData.rocketControllers.push(createRocketController('Engine', 'engine', ['Engine']));
     p.gameData.gimbals.push({
       subPartInstanceId: 'bell_1',
+      transform: identityTransform(),
       maxAngleYDeg: 8,
       maxAngleZDeg: 8,
       constrainToCircle: true,
@@ -441,6 +446,7 @@ describe('validateEngines — reaction lookup fallbacks', () => {
     p.customReactions.push({
       id: 'MyMono',
       name: 'My Mono',
+      description: '',
       category: 'Monopropellant',
       reactants: [],
       lut: [],
@@ -605,5 +611,241 @@ describe('validateEngines — 5091 wiring warnings (D16)', () => {
     p.placements.push(placement('bell_1', 'Core.Bell'));
     const issue = validateEngines(p, REACTIONS).find((i) => i.code === 'nozzle-not-referenced');
     expect(issue?.source).toEqual({ templateId: 'Core.Bell', module: 'nozzle', index: 0 });
+  });
+});
+
+describe('validateEngines — module reference scopes', () => {
+  function repeatedEngines() {
+    const p = createEmptyPart();
+    p.partId = 'Repeated';
+    p.placements.push(placement('a', 'Chamber'), placement('b', 'Chamber'));
+    const data = createSubPartGameData('Chamber');
+    data.combustors.push(createCombustor('Core'));
+    data.nozzles.push(createNozzle('Nozzle'));
+    data.rockets.push(createRocket('Engine', 'Core', ['Nozzle']));
+    p.subPartGameData.push(data);
+    p.connectors.push(connector('Fuel', ['BulkFluid']));
+    p.gameData.consumerFeedWiring.push({
+      consumerId: 'Core',
+      subPartInstanceId: null,
+      feeds: [{ kind: 'connector', connectorId: 'Fuel' }],
+    });
+    const controller = createRocketController('Main', 'engine', []);
+    controller.rocketRefs = [
+      { id: 'Engine', subPartInstanceId: 'a' },
+      { id: 'Engine', subPartInstanceId: 'b' },
+    ];
+    p.gameData.rocketControllers.push(controller);
+    return p;
+  }
+
+  it('resolves local template modules separately for every placement', () => {
+    expect(validateEngines(repeatedEngines(), REACTIONS)).toEqual([]);
+  });
+
+  it('does not let a controller reference one instance by naming another with the same ID', () => {
+    const p = repeatedEngines();
+    p.gameData.rocketControllers[0].rocketRefs.pop();
+    const issues = validateEngines(p, REACTIONS);
+    expect(issues.filter((i) => i.code === 'core-not-referenced')).toHaveLength(1);
+    p.gameData.rocketControllers[0].rocketRefs[0].subPartInstanceId = null;
+    expect(has(p, 'controller-rocket-unresolvable')).toBe(true);
+  });
+
+  it('blocks a local template ref that incorrectly names a peer placement', () => {
+    const p = repeatedEngines();
+    p.subPartGameData[0].rockets[0].core.subPartInstanceId = 'a';
+    expect(has(p, 'rocket-core-unresolvable')).toBe(true);
+  });
+
+  it('distinguishes liquid and solid nozzles with identical IDs in different scopes', () => {
+    const p = goodLiquidPart();
+    p.placements.push(placement('solid', 'Solid'));
+    p.subPartGameData.push({
+      ...createSubPartGameData('Solid'),
+      solidNozzles: [createSolidMotorNozzle('Nozzle')],
+    });
+    expect(has(p, 'rocket-mixes-solid-and-liquid')).toBe(false);
+    p.gameData.rockets[0].nozzles[0].subPartInstanceId = 'solid';
+    expect(has(p, 'rocket-mixes-solid-and-liquid')).toBe(true);
+    expect(has(p, 'nozzle-not-referenced')).toBe(true);
+  });
+
+  it('blocks unknown nozzle refs even when another scope has the same nozzle ID', () => {
+    const p = repeatedEngines();
+    p.gameData.combustors.push(createCombustor('RootCore'));
+    p.gameData.rockets.push(createRocket('RootEngine', 'RootCore', ['Nozzle']));
+    expect(has(p, 'rocket-nozzle-unresolvable')).toBe(true);
+  });
+
+  it('checks solid cores and thruster controllers on template-owned rockets', () => {
+    const p = repeatedEngines();
+    p.subPartGameData[0].combustors = [];
+    p.subPartGameData[0].solidMotors = [createSolidMotor('Core')];
+    p.subPartGameData[0].nozzles = [];
+    p.subPartGameData[0].solidNozzles = [createSolidMotorNozzle('Nozzle')];
+    p.gameData.rocketControllers[0].kind = 'thruster';
+    expect(has(p, 'solid-motor-on-thruster-controller')).toBe(true);
+    p.subPartGameData[0].rockets[0].nozzles = [];
+    expect(has(p, 'solid-rocket-needs-nozzle')).toBe(true);
+  });
+
+  it('blocks sharing a core or nozzle between Rockets', () => {
+    const p = goodLiquidPart();
+    p.gameData.rockets.push(createRocket('Duplicate', 'ThrustChamber', ['Nozzle']));
+    expect(has(p, 'core-used-by-multiple-rockets')).toBe(true);
+    expect(has(p, 'nozzle-used-by-multiple-rockets')).toBe(true);
+  });
+});
+
+it('warns about the runtime ratio-1 fallback without claiming a KSA load failure', () => {
+  const p = goodLiquidPart();
+  p.gameData.nozzles[0].areaRatio = Number.NaN;
+  const issues = validateEngines(p, REACTIONS);
+  expect(issues).toHaveLength(1);
+  expect(issues[0].code).toBe('nozzle-area-ratio-default');
+  expect(issues[0].severity).toBe('warn');
+  expect(issues[0].message).toContain('KSA uses 1');
+});
+
+it('blocks a missing mixture ratio even when the reaction catalog is unavailable', () => {
+  const p = goodLiquidPart();
+  p.gameData.combustors[0].mixtureRatio = null;
+  expect(
+    validateEngines(p).find((i) => i.code === 'combustor-mixture-ratio-required')?.severity,
+  ).toBe('block');
+  p.gameData.combustors[0].reactionId = 'HydrazineDecomposition';
+  expect(has(p, 'combustor-mixture-ratio-required')).toBe(false);
+});
+
+describe('validateEngines — SubPart controllers', () => {
+  function builtInRcs() {
+    const doc = new DOMParser().parseFromString(
+      readVendoredAsset('CorePropulsionBGameData.xml'),
+      'application/xml',
+    ) as unknown as Document;
+    const p = createEmptyPart();
+    p.subPartGameData = subPartGameDataFromDoc(doc);
+    for (const data of p.subPartGameData) {
+      p.placements.push(placement(data.subPartTemplateId + '_a', data.subPartTemplateId));
+      p.placements.push(placement(data.subPartTemplateId + '_b', data.subPartTemplateId));
+    }
+    return p;
+  }
+
+  it('recognizes stock RD-4 controllers on every placed RCS template without mutating the document', () => {
+    const p = builtInRcs();
+    const before = structuredClone(p.subPartGameData);
+    expect(p.subPartGameData).toHaveLength(3);
+    expect(
+      p.subPartGameData.every((data) =>
+        data.rocketControllers.some((controller) => controller.kind === 'thruster'),
+      ),
+    ).toBe(true);
+    const issues = validateEngines(p, REACTIONS);
+    expect(
+      issues.filter((i) => i.severity === 'block' || i.code === 'core-not-referenced'),
+    ).toEqual([]);
+    expect(p.subPartGameData).toEqual(before);
+  });
+
+  it('blocks a reference to a peer placement instead of treating it as a local Rocket', () => {
+    const p = builtInRcs();
+    const controller = p.subPartGameData[0].rocketControllers[0];
+    controller.rocketRefs[0].subPartInstanceId = p.placements[1].instanceId;
+    const issues = validateEngines(p, REACTIONS).filter(
+      (i) => i.code === 'controller-rocket-unresolvable',
+    );
+    expect(issues).toHaveLength(2);
+    expect(issues.every((i) => i.severity === 'block')).toBe(true);
+    expect(issues[0].source).toEqual({
+      templateId: p.subPartGameData[0].subPartTemplateId,
+      module: 'controller',
+      index: 0,
+    });
+  });
+
+  it('checks solid motor restrictions and empty references on template controllers', () => {
+    const p = builtInRcs();
+    const data = p.subPartGameData[0];
+    const coreId = data.combustors[0].id;
+    data.combustors = [];
+    data.solidMotors = [createSolidMotor(coreId)];
+    expect(has(p, 'solid-motor-on-thruster-controller')).toBe(true);
+    data.rocketControllers[0].rocketRefs = [];
+    expect(has(p, 'controller-no-rockets')).toBe(true);
+  });
+});
+
+it('validates saved passthrough controllers and blocks duplicates of newly authored ones', () => {
+  const p = goodLiquidPart();
+  const data = createSubPartGameData('LegacyThruster');
+  data.rocketControllers = [createRocketController('Local', 'thruster')];
+  data.unknownChildren = [
+    { tag: 'RocketThrusterController', attrs: { Id: 'Local' }, children: [], text: '' },
+  ];
+  p.subPartGameData.push(data);
+  p.placements.push(placement('legacy', 'LegacyThruster'));
+  expect(has(p, 'duplicate-controller-id')).toBe(true);
+  data.rocketControllers = [];
+  expect(has(p, 'duplicate-controller-id')).toBe(false);
+  expect(has(p, 'controller-no-rockets')).toBe(true);
+});
+
+describe('current solid motor load constraints', () => {
+  it('requires Fixed Solid reactions with a burn law and exactly one solid phase', () => {
+    const part = goodSolidPart();
+    const reaction = structuredClone(REACTIONS.get('APCP')!);
+    if (reaction.kind !== 'Fixed') throw new Error('expected Fixed APCP fixture');
+    const catalog = new Map([[reaction.id, reaction]]);
+    const issues = () => codes(validateEngines(part, catalog));
+    expect(issues()).not.toContain('solid-motor-needs-one-solid-reactant');
+    reaction.reactants = [];
+    expect(issues()).toContain('solid-motor-needs-one-solid-reactant');
+    reaction.reactants = [{ phaseId: 'H2(l)', massShare: 1, massFraction: 1 }];
+    expect(issues()).toContain('solid-motor-needs-one-solid-reactant');
+    reaction.reactants = [{ phaseId: 'APCP(s)', massShare: 1, massFraction: 1 }];
+    reaction.burnRate = null;
+    expect(issues()).toContain('solid-motor-needs-burn-rate');
+    const mixture = { ...REACTIONS.get('Hydrolox')!, id: 'APCP', category: 'Solid' as const };
+    expect(codes(validateEngines(part, new Map([['APCP', mixture]])))).toContain(
+      'solid-motor-needs-solid-reaction',
+    );
+  });
+
+  it('matches the open minimum and closed maximum pressure boundaries', () => {
+    const p = goodSolidPart();
+    const motor = p.gameData.solidMotors[0];
+    motor.defaultPressurePa = 1_500_000;
+    expect(has(p, 'solid-motor-pressure-out-of-range')).toBe(true);
+    motor.defaultPressurePa = 1_500_001;
+    expect(has(p, 'solid-motor-pressure-out-of-range')).toBe(false);
+    motor.defaultPressurePa = 15_000_000;
+    expect(has(p, 'solid-motor-pressure-out-of-range')).toBe(false);
+    motor.defaultPressurePa = 15_000_001;
+    expect(has(p, 'solid-motor-pressure-out-of-range')).toBe(true);
+  });
+
+  it('validates inherited grain casing mass with material precedence in both scopes', () => {
+    const p = createEmptyPart();
+    const grain = createSolidGrainSegment('Case');
+    grain.wallMaterialId = '';
+    p.gameData.solidGrainSegments = [grain];
+    expect(has(p, 'grain-mass-unspecified')).toBe(true);
+    grain.massKg = 5;
+    expect(has(p, 'grain-mass-unspecified')).toBe(false);
+    grain.massKg = null;
+    grain.densityKgM3 = 2700;
+    expect(has(p, 'grain-mass-unspecified')).toBe(false);
+    grain.wallMaterialId = 'N2(g)';
+    expect(has(p, 'grain-material-not-incompressible')).toBe(true);
+    grain.wallMaterialId = 'H2O(l)';
+    expect(has(p, 'grain-material-not-incompressible')).toBe(false);
+    const data = createSubPartGameData('Segment');
+    data.solidGrainSegments = [{ ...grain, wallMaterialId: '', densityKgM3: 0 }];
+    p.subPartGameData = [data];
+    expect(
+      validateEngines(p, REACTIONS).find((i) => i.code === 'grain-mass-unspecified')?.source,
+    ).toEqual({ templateId: 'Segment', module: 'grain', index: 0 });
   });
 });

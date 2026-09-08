@@ -53,6 +53,8 @@ interface ReactionDataBase {
   id: string;
   /** `<Name Value>`, falling back to {@link id}. */
   name: string;
+  /** Human-readable description from the reaction library. */
+  description?: string;
   /** `Category` attribute (Bipropellant/Hypergolic/Monopropellant/Solid/Thermal). */
   category: ReactionCategory;
   reactants: ReactionReactant[];
@@ -208,6 +210,7 @@ export function parseReactionsFile(doc: Document, out: ReactionData[]): void {
       kind: 'Fixed',
       id,
       name: directChildren(el, 'Name')[0]?.getAttribute('Value')?.trim() || id,
+      description: directChildren(el, 'Description')[0]?.getAttribute('Value') ?? '',
       category: readCategory(el, 'Monopropellant'),
       reactants: readReactants(el),
       lut: { rows },
@@ -237,6 +240,7 @@ export function parseReactionsFile(doc: Document, out: ReactionData[]): void {
       kind: 'Mixture',
       id,
       name: directChildren(el, 'Name')[0]?.getAttribute('Value')?.trim() || id,
+      description: directChildren(el, 'Description')[0]?.getAttribute('Value') ?? '',
       category: readCategory(el, 'Bipropellant'),
       reactants: readReactants(el),
       mixtureLut: {
@@ -323,6 +327,7 @@ export function customToReactionData(custom: CustomReaction): FixedReactionData 
     kind: 'Fixed',
     id: custom.id,
     name: custom.name || custom.id,
+    description: custom.description,
     category: custom.category,
     reactants,
     lut: { rows },
@@ -349,9 +354,16 @@ export function reactionDataToCustom(
     data.kind === 'Fixed'
       ? data.lut
       : sliceLutAtMixtureRatio(data.mixtureLut, data.defaultMixtureRatio);
-  const reactants: ReactionReactantSpec[] = data.reactants.map((r) => ({
+  // MixtureReaction.AtMixtureRatio ignores the template's placeholder MassShare values.
+  // Bake the propellant shares at the same clamped ratio as the gas table.
+  const ratios = data.kind === 'Mixture' ? data.mixtureLut.ratios : null;
+  const ratio =
+    data.kind === 'Mixture' && ratios
+      ? Math.min(Math.max(data.defaultMixtureRatio, ratios[0]), ratios[ratios.length - 1])
+      : null;
+  const reactants: ReactionReactantSpec[] = data.reactants.map((r, index) => ({
     phaseId: r.phaseId,
-    massShare: r.massShare,
+    massShare: ratio === null ? r.massShare : index === 0 ? 1 : ratio,
   }));
   const lut: ReactionLutRowSpec[] = lutSource.rows.map((row) => ({
     lnPressure: row.lnPressure,
@@ -362,6 +374,7 @@ export function reactionDataToCustom(
   return {
     id: newId,
     name: newName || newId,
+    description: data.description ?? '',
     category: data.category,
     reactants,
     lut,

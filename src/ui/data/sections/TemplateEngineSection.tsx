@@ -37,7 +37,15 @@ export function TemplateEngineSection({
       />
       <ModuleCardList
         templateId={templateId}
-        groups={['combustor', 'nozzle', 'solidMotor', 'grain', 'solidNozzle', 'rocket']}
+        groups={[
+          'combustor',
+          'nozzle',
+          'solidMotor',
+          'grain',
+          'solidNozzle',
+          'rocket',
+          'controller',
+        ]}
       />
       {spd === undefined && (
         <p className="text-[11px] leading-snug text-fg-subtle">

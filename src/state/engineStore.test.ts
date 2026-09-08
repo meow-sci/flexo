@@ -7,7 +7,7 @@ vi.mock('../ksa/catalog', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../ksa/catalog')>()),
   fetchXmlFile: async () => ({ kind: 'missing' as const }),
 }));
-import { $part, importHistory, pushUndo, undo } from './editorStore';
+import { $part, $selection, importHistory, pushUndo, select, undo } from './editorStore';
 import { $activeTool, $mode, disarmTool, setMode } from './modeStore';
 import {
   createCombustor,
@@ -38,6 +38,7 @@ import {
   engineEntryLabel,
   engineEntryShortLabel,
   focusModule,
+  moduleRefForIssue,
   initEngineMode,
   nozzleRefKey,
   setActiveEngine,
@@ -72,6 +73,7 @@ const keys = () => $resolvedNozzleTargets.get().map((t) => t.key);
 
 beforeEach(() => {
   $part.set(createEmptyPart());
+  $selection.set([]);
   importHistory({ undo: [], redo: [] });
   setActiveEngine(null);
   setToolMode('translate');
@@ -684,6 +686,43 @@ describe('engineStore — mode entry ladder (P7.05)', () => {
     expect($activeEngineEntry.get()).toEqual({ kind: 'subpart', templateId: TMPL });
   });
 
+  it('opens the selected thrust chamber before a trailing nozzle-only scope', () => {
+    const part = subPartEnginePart(['MainNozzle']);
+    part.subPartGameData[0].combustors.push(createCombustor('ThrustChamber'));
+    const turbine = createSubPartGameData('TurbineExhaust');
+    turbine.nozzles.push(createNozzle('TurbineNozzle'));
+    part.subPartGameData.push(turbine);
+    part.placements.push(placement('turbine_1', 'TurbineExhaust'));
+    part.gameData.combustors.push(createCombustor('GasGenerator'));
+    $part.set(part);
+    // A built-in Part import selects every placement in XML order. The turbine nozzle
+    // follows the main chamber in CorePropulsionA_Prefab_EngineA3.
+    select(part.placements.map((p) => ({ kind: 'subpart', id: p.instanceId })));
+    setMode('engine');
+    expect($activeEngineEntry.get()).toEqual({ kind: 'subpart', templateId: TMPL });
+  });
+
+  it('still opens a nozzle-only scope when that is the only selected engine', () => {
+    const part = subPartEnginePart(['MainNozzle']);
+    part.subPartGameData[0].combustors.push(createCombustor('ThrustChamber'));
+    const turbine = createSubPartGameData('TurbineExhaust');
+    turbine.nozzles.push(createNozzle('TurbineNozzle'));
+    part.subPartGameData.push(turbine);
+    part.placements.push(placement('turbine_1', 'TurbineExhaust'));
+    $part.set(part);
+    select([{ kind: 'subpart', id: 'turbine_1' }]);
+    setMode('engine');
+    expect($activeEngineEntry.get()).toEqual({ kind: 'subpart', templateId: 'TurbineExhaust' });
+  });
+
+  it('opens a core-bearing scope when several engines exist without a selection', () => {
+    const part = subPartEnginePart(['TurbineNozzle']);
+    part.gameData.combustors.push(createCombustor('GasGenerator'));
+    $part.set(part);
+    setMode('engine');
+    expect($activeEngineEntry.get()).toEqual({ kind: 'part' });
+  });
+
   it('restores the surviving entry rather than re-deriving it', () => {
     const part = subPartEnginePart(['A']);
     part.gameData.nozzles.push(createNozzle('P'));
@@ -719,5 +758,32 @@ describe('engineStore — mode entry ladder (P7.05)', () => {
     $engineDefineFlow.set({ kind: 'solid', templateId: null });
     setMode('engine');
     expect($engineDefineFlow.get()).toBeNull();
+  });
+});
+
+describe('template controller discovery and issue routing', () => {
+  it('opens controller-only templates and focuses the local controller for findings', () => {
+    const part = createEmptyPart();
+    const spd = createSubPartGameData(TMPL);
+    spd.rocketControllers.push(createRocketController('Rcs', 'thruster', []));
+    part.subPartGameData.push(spd);
+    $part.set(part);
+    expect($engineEntries.get()).toEqual([{ kind: 'subpart', templateId: TMPL }]);
+    const target = moduleRefForIssue(
+      {
+        code: 'controller-has-no-rockets',
+        severity: 'warn',
+        message: 'No rockets',
+        source: { module: 'controller', templateId: TMPL, index: 0 },
+      },
+      part,
+    );
+    expect(target).toEqual({
+      entry: { kind: 'subpart', templateId: TMPL },
+      module: { group: 'controller', scope: 'sub', index: 0 },
+    });
+    setActiveEngine({ kind: 'subpart', templateId: TMPL });
+    focusModule(target!.module);
+    expect($activeModuleClamped.get()).toEqual(target!.module);
   });
 });

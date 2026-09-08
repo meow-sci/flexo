@@ -4,6 +4,7 @@ import { CombustorEditor } from './CombustorEditor';
 import { NozzleEditor, SolidNozzleEditor } from './NozzleEditor';
 import { SolidMotorEditor } from './SolidMotorEditor';
 import { GrainSegmentEditor } from './GrainSegmentEditor';
+import { ControllerEditor } from './ControllerEditor';
 import { RocketEditor } from './RocketEditor';
 import { addModule, removeModule } from './moduleActions';
 import { MODULE_GROUP_LABEL } from './moduleTreeModel';
@@ -29,7 +30,7 @@ import { status } from '../../state/statusStore';
  */
 
 const EDITORS: Record<
-  Exclude<EngineModuleGroup, 'controller' | 'wiring' | 'gimbal' | 'propellant'>,
+  Exclude<EngineModuleGroup, 'wiring' | 'gimbal' | 'propellant'>,
   (props: { templateId: string | null; index: number }) => React.ReactNode
 > = {
   combustor: CombustorEditor,
@@ -38,6 +39,7 @@ const EDITORS: Record<
   grain: GrainSegmentEditor,
   solidNozzle: SolidNozzleEditor,
   rocket: RocketEditor,
+  controller: ControllerEditor,
 };
 
 type CardGroup = keyof typeof EDITORS;
@@ -51,6 +53,8 @@ function listOf(
   const owner = ownerOf(part, templateId);
   if (!owner) return [];
   switch (group) {
+    case 'controller':
+      return owner.rocketControllers;
     case 'combustor':
       return owner.combustors;
     case 'nozzle':

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computePerformance, rocketsInScope } from './performanceAggregation';
+import { computePerformance, performanceSelection, rocketsInScope } from './performanceAggregation';
 import type { ReactionData } from '../../ksa/reactionCatalog';
 import {
   createCombustor,
@@ -105,6 +105,63 @@ describe('computePerformance — the first-pair fallback (v1 parity)', () => {
 });
 
 describe('computePerformance — per-rocket aggregation (D6)', () => {
+  it('selects an actual rocket before falling back to unbound hardware', () => {
+    const rockets = rocketsInScope(enginePart(), SUB);
+    expect(performanceSelection(rockets, FIRST_PAIR_ROCKET)).toBe('Engine');
+    expect(performanceSelection(rockets, 'RemovedRocket')).toBe('Engine');
+    expect(performanceSelection([], 'Engine')).toBe(FIRST_PAIR_ROCKET);
+    rockets.push(createRocket('Second', 'ThrustChamber', ['Nozzle']));
+    expect(performanceSelection(rockets, 'Second')).toBe('Second');
+  });
+
+  it('resolves a part-level gas generator to the named nozzle instance exactly once', () => {
+    const part = enginePart(3);
+    part.gameData.combustors.push({ ...createCombustor('GasChamber'), mixtureRatio: 5.5 });
+    const rocket = createRocket('GasGenerator', 'GasChamber', ['Nozzle']);
+    rocket.nozzles[0].subPartInstanceId = 'chamber_2';
+    part.gameData.rockets.push(rocket);
+    const reference = ok(enginePart(), 'Engine');
+    const result = ok(part, 'GasGenerator', { kind: 'part' });
+    expect(result.pairs[0].instanceCount).toBe(1);
+    expect(result.thrustVacN).toBeCloseTo(reference.thrustVacN, 6);
+  });
+
+  it('uses explicit core and nozzle scopes when templates reuse the same module ids', () => {
+    const part = enginePart();
+    const other = createSubPartGameData('OtherEngine');
+    other.combustors.push({
+      ...createCombustor('ThrustChamber'),
+      mixtureRatio: 5.5,
+      maxPressurePa: 1e6,
+    });
+    other.nozzles.push({ ...createNozzle('Nozzle'), exitDiameterM: 0.2 });
+    part.subPartGameData.push(other);
+    part.placements.push({ ...placement('other'), subPartTemplateId: 'OtherEngine' });
+    // Same ids at root must not mask the explicitly referenced child either.
+    part.gameData.combustors = part.subPartGameData[0].combustors;
+    part.gameData.nozzles = part.subPartGameData[0].nozzles;
+    const rocket = createRocket('Selected', 'ThrustChamber', ['Nozzle']);
+    rocket.core.subPartInstanceId = 'other';
+    rocket.nozzles[0].subPartInstanceId = 'other';
+    part.gameData.rockets.push(rocket);
+    const result = ok(part, 'Selected', { kind: 'part' });
+    const expected = ok(part, FIRST_PAIR_ROCKET, { kind: 'subpart', templateId: 'OtherEngine' });
+    expect(result.thrustVacN).toBeCloseTo(expected.thrustVacN, 6);
+    expect(result.ispVac).toBeCloseTo(expected.ispVac, 6);
+  });
+
+  it('counts each explicitly referenced vernier once even when they share a template', () => {
+    const part = enginePart(4);
+    part.gameData.combustors = part.subPartGameData[0].combustors;
+    const rocket = createRocket('Verniers', 'ThrustChamber', ['Nozzle', 'Nozzle']);
+    rocket.nozzles[0].subPartInstanceId = 'chamber_1';
+    rocket.nozzles[1].subPartInstanceId = 'chamber_2';
+    part.gameData.rockets.push(rocket);
+    const one = ok(enginePart(), 'Engine');
+    const two = ok(part, 'Verniers', { kind: 'part' });
+    expect(two.thrustVacN).toBeCloseTo(one.thrustVacN * 2, 6);
+    expect(two.massFlowRate).toBeCloseTo(one.massFlowRate * 2, 6);
+  });
   it('sums thrust over two identical chambers and keeps Isp unchanged', () => {
     const one = ok(enginePart(1, ['Nozzle']), 'Engine');
     const two = ok(enginePart(1, ['NozzleA', 'NozzleB']), 'Engine');
@@ -150,6 +207,30 @@ describe('computePerformance — per-rocket aggregation (D6)', () => {
 });
 
 describe('computePerformance — degradation states', () => {
+  it('does not search other scopes or show a partial total for broken nozzle references', () => {
+    const part = enginePart();
+    const rocket = createRocket('Root', 'ThrustChamber', ['Nozzle']);
+    part.gameData.rockets.push(rocket);
+    expect(computePerformance(part, { kind: 'part' }, 'Root', REACTIONS)).toEqual({
+      kind: 'no-modules',
+    });
+    rocket.core.subPartInstanceId = 'chamber_1';
+    rocket.nozzles[0].subPartInstanceId = 'missing';
+    expect(computePerformance(part, { kind: 'part' }, 'Root', REACTIONS)).toEqual({
+      kind: 'no-modules',
+    });
+    rocket.nozzles[0].subPartInstanceId = 'chamber_1';
+    rocket.nozzles.push({ id: 'MissingNozzle', subPartInstanceId: null, areaRatioMultiplier: 1 });
+    expect(computePerformance(part, { kind: 'part' }, 'Root', REACTIONS)).toEqual({
+      kind: 'no-modules',
+    });
+  });
+
+  it('does not resolve a SubPart rocket reference against a sibling placement', () => {
+    const part = enginePart(2);
+    part.subPartGameData[0].rockets[0].nozzles[0].subPartInstanceId = 'chamber_2';
+    expect(computePerformance(part, SUB, 'Engine', REACTIONS)).toEqual({ kind: 'no-modules' });
+  });
   it('reports a missing catalog rather than zeros', () => {
     const result = computePerformance(enginePart(), SUB, 'Engine', new Map());
     expect(result).toEqual({ kind: 'no-catalog', reactionId: 'Hydrolox' });

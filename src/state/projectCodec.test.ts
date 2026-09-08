@@ -5,6 +5,7 @@ import {
   KITTEN_LAYER_ID,
   createEmptyPart,
   createPartLight,
+  createRocketController,
   createSolidGrainSegment,
   createSolidMotor,
   createSolidMotorNozzle,
@@ -152,7 +153,7 @@ function richPart(): EditingPart {
     { outputWatts: 50, transform: xf([0, 1, 0], [0, 0.5, 0], [1, 1, 1]) },
   );
   p.gameData.powerConsumer = { consumedWatts: 12.5, lightSwitch: true, lightIsActive: true };
-  p.gameData.decoupler = { connectorId: '_connector1', force: 1000 };
+  p.gameData.decoupler = { ksaId: 'NoseconeMount', connectorId: '_connector1', force: 1000 };
   p.gameData.dockingPort = {
     connectorId: '_connector1',
     latchingKineticEnergyJ: 50,
@@ -193,8 +194,24 @@ function richPart(): EditingPart {
     plumbing: 'Bulk' as const,
   });
   p.gameData.gimbals.push(
-    { subPartInstanceId: 'wing_1', maxAngleYDeg: 5, maxAngleZDeg: 5, constrainToCircle: false },
-    { subPartInstanceId: 'truss_1', maxAngleYDeg: 70, maxAngleZDeg: 0, constrainToCircle: true },
+    {
+      subPartInstanceId: 'wing_1',
+      transform: {
+        ...identityTransform(),
+        position: { x: 0.1156, y: -0.0001, z: 0.0968 },
+        rotation: { x: -1.5708, y: 0, z: 0 },
+      },
+      maxAngleYDeg: 5,
+      maxAngleZDeg: 5,
+      constrainToCircle: false,
+    },
+    {
+      subPartInstanceId: 'truss_1',
+      transform: identityTransform(),
+      maxAngleYDeg: 70,
+      maxAngleZDeg: 0,
+      constrainToCircle: true,
+    },
   );
 
   // KSA 2026.7.9 plumbing topology: a part-level feed container, the solid-motor trio,
@@ -222,6 +239,9 @@ function richPart(): EditingPart {
   });
   p.gameData.solidGrainSegments.push({
     ...createSolidGrainSegment('Grain'),
+    massKg: 47,
+    densityKgM3: 2800,
+    paf2Asmb: { x: 0.2, y: 0.3, z: 0.4 },
     outerRadiusM: 1,
     wallThicknessMm: 8,
     lengthM: 0.65227,
@@ -437,6 +457,7 @@ function richPart(): EditingPart {
   p.customReactions.push({
     id: 'MyKerolox_2.6',
     name: 'Custom Kerolox',
+    description: 'Authored engine propellant',
     category: 'Bipropellant',
     reactants: [
       { phaseId: 'Kerosene(l)', massShare: 1 },
@@ -1034,4 +1055,14 @@ describe('light codec', () => {
       oa: 0.785398,
     });
   });
+});
+
+it('round-trips template controllers including explicitly disabled RCS control maps', () => {
+  const part = createEmptyPart();
+  const data = createSubPartGameData('Thruster');
+  const controller = createRocketController('RCS', 'thruster', ['Rocket']);
+  controller.controlMapFlags = [];
+  data.rocketControllers.push(controller);
+  part.subPartGameData.push(data);
+  expect(roundTripOne(part).subPartGameData).toEqual(part.subPartGameData);
 });

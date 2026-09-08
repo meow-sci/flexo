@@ -687,6 +687,7 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   const dec = directChildren(gd, 'Decoupler')[0];
   if (dec)
     game.decoupler = {
+      ...(dec.getAttribute('Id') ? { ksaId: dec.getAttribute('Id')! } : {}),
       connectorId: dec.getAttribute('ConnectorId') ?? '',
       force: readNum(dec, 'Force') ?? 0,
     };
@@ -715,11 +716,7 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   // Engine modules: part-level rockets/combustors/nozzles (gas generators), solid-motor
   // hardware, controllers, and per-instance gimbal overlays.
   parseEngineModules(gd, game);
-  for (const c of directChildren(gd, 'RocketEngineController'))
-    game.rocketControllers.push(controllerFromElement(c, 'engine'));
-  for (const c of directChildren(gd, 'RocketThrusterController'))
-    game.rocketControllers.push(controllerFromElement(c, 'thruster'));
-  game.gimbals = gimbalsFromGameData(gd);
+  game.gimbals = applyGimbalOverlays([], gimbalOverlaysFromElement(gd));
 
   // <ConsumerFeedWiring> — how this Part satisfies a placed SubPart's <FeedsFrom Parent>.
   for (const w of directChildren(gd, 'ConsumerFeedWiring')) {
@@ -735,6 +732,7 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   // Preserve anything flexo doesn't model so import → export doesn't silently drop it.
   game.unknownAttrs = captureUnknownAttrs(gd, KNOWN_PART_GAMEDATA_ATTRS);
   game.unknownChildren = captureUnknownChildren(gd, KNOWN_PART_GAMEDATA_CHILDREN);
+  game.unknownChildren.push(...directChildren(gd, 'Decoupler').slice(1).map(elementToRawNode));
   game.unknownChildren.push(...passthroughCustomMassEls.map(elementToRawNode));
 
   return {
@@ -799,6 +797,7 @@ export function customReactionsFromRoot(root: Element): CustomReaction[] {
     out.push({
       id,
       name,
+      description: directChildren(proc, 'Description')[0]?.getAttribute('Value') ?? '',
       category,
       reactants,
       lut,
@@ -865,12 +864,13 @@ function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
  * unmodeled children are preserved; the base entry's unmodeled attrs win (its
  * `DisplayName` identifies the template).
  */
-function mergeSubPartGameDataInto(base: SubPartGameData, add: SubPartGameData): void {
+export function mergeSubPartGameDataInto(base: SubPartGameData, add: SubPartGameData): void {
   base.tanks.push(...add.tanks);
   base.solarPanels.push(...add.solarPanels);
   base.combustors.push(...add.combustors);
   base.nozzles.push(...add.nozzles);
   base.rockets.push(...add.rockets);
+  base.rocketControllers.push(...add.rocketControllers);
   base.solidMotors.push(...add.solidMotors);
   base.solidNozzles.push(...add.solidNozzles);
   base.solidGrainSegments.push(...add.solidGrainSegments);
@@ -898,6 +898,12 @@ export function gameDataFromAssets(
   if (!gd) return null;
   const root = doc.documentElement as Element;
   const parsed = parseGameDataElement(gd);
+  const geometry = directChildren(root, 'Part').find((p) => p.getAttribute('Id') === partId);
+  if (geometry)
+    parsed.gameData.gimbals = applyGimbalOverlays(
+      applyGimbalOverlays([], gimbalOverlaysFromElement(geometry)),
+      gimbalOverlaysFromElement(gd),
+    );
   parsed.subPartGameData = subPartGameDataFromRoot(root);
   // SubPart-owned colliders are siblings of <PartGameData>, so they join the flat list here.
   parsed.colliders = [...parsed.colliders, ...subPartCollidersFromRoot(root)];
@@ -978,6 +984,8 @@ const KNOWN_SUBPART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
   'Light',
   'Collider',
   'Rocket',
+  'RocketEngineController',
+  'RocketThrusterController',
   'Combustor',
   'DeLavalNozzle',
   'SolidMotor',
@@ -1023,22 +1031,28 @@ const CONNECTOR_REF_TAGS: ReadonlySet<string> = new Set(['ConnectorRef', 'Siblin
  * `connectorIdMap` — imports regenerate `_connectorN` ids, so refs kept verbatim
  * would point at the wrong (or a colliding pre-existing) connector. Ids without a
  * mapping are left untouched: the raw structure can't be safely pruned, and a
- * whole-Part import maps every connector the refs can legitimately name.
+ * whole-Part import maps every connector the refs can legitimately name. The optional
+ * placement map also rewrites preserved controller `<RocketReference SubPartId>` values.
  */
 export function remapRawConnectorRefs(
   nodes: readonly RawXmlNode[],
   connectorIdMap: ReadonlyMap<string, string>,
+  instanceIdMap: ReadonlyMap<string, string> = new Map(),
 ): RawXmlNode[] {
   return nodes.map((node) => {
     const attrs = { ...node.attrs };
+    if (node.tag === 'Decoupler' && attrs.ConnectorId)
+      attrs.ConnectorId = connectorIdMap.get(attrs.ConnectorId) ?? attrs.ConnectorId;
     if (CONNECTOR_REF_TAGS.has(node.tag) && attrs.Id) {
       const mapped = connectorIdMap.get(attrs.Id);
       if (mapped) attrs.Id = mapped;
     }
+    if (node.tag === 'RocketReference' && attrs.SubPartId)
+      attrs.SubPartId = instanceIdMap.get(attrs.SubPartId) ?? attrs.SubPartId;
     const out: RawXmlNode = {
       tag: node.tag,
       attrs,
-      children: remapRawConnectorRefs(node.children ?? [], connectorIdMap),
+      children: remapRawConnectorRefs(node.children ?? [], connectorIdMap, instanceIdMap),
     };
     if (node.text != null) out.text = node.text;
     return out;
@@ -1316,6 +1330,37 @@ function solidGrainSegmentFromElement(el: Element): SolidGrainSegment {
   return {
     id: el.getAttribute('Id') ?? '',
     wallMaterialId: g ? (directChildren(g, 'Material')[0]?.getAttribute('Id') ?? '') : '',
+    massKg:
+      g && directChildren(g, 'Mass').length
+        ? sumUnitChild(g, 'Mass', [
+            ['Kg', 1],
+            ['G', 0.001],
+            ['Mg', 1e3],
+            ['Gg', 1e6],
+            ['Tg', 1e9],
+            ['Pg', 1e12],
+            ['Eg', 1e15],
+            ['Zg', 1e18],
+            ['Yg', 1e21],
+            ['Tonnes', 1e3],
+            ['Lunars', 7.349e22],
+            ['Earths', 5.97219e24],
+            ['Jupiters', 1.89819e27],
+            ['Suns', 1.98841e30],
+          ])
+        : null,
+    densityKgM3:
+      g && directChildren(g, 'Density').length
+        ? sumUnitChild(g, 'Density', [
+            ['TonnePerM3', 1e3],
+            ['KgPerM3', 1],
+            ['GPerM3', 0.001],
+            ['MgPerM3', 1e-6],
+            ['UgPerM3', 1e-9],
+            ['GPerCm3', 1e3],
+          ])
+        : null,
+    paf2Asmb: readVec3Attrs(g ? directChildren(g, 'Paf2Asmb')[0] : undefined, { x: 0, y: 0, z: 0 }),
     outerRadiusM: (g && readDistanceM(directChildren(g, 'OuterRadius')[0])) || 0,
     // WallThickness is a DistanceReference (authored as Mm); the model holds millimeters.
     wallThicknessMm: g ? (readDistanceM(directChildren(g, 'WallThickness')[0]) ?? 0) * 1000 : 0,
@@ -1343,8 +1388,8 @@ function controllerFromElement(el: Element, kind: RocketControllerKind): RocketC
     id: el.getAttribute('Id') ?? '',
     kind,
     rocketRefs: directChildren(el, 'RocketReference').map(refFromElement),
-    controlMapFlags: csv
-      ? csv
+    controlMapFlags: controlMapEl
+      ? (csv ?? '')
           .split(',')
           .map((s) => s.trim())
           .filter(Boolean)
@@ -1352,22 +1397,68 @@ function controllerFromElement(el: Element, kind: RocketControllerKind): RocketC
   };
 }
 
-/** Parses the `<Gimbal>` overlays from a GameData element's `<SubPart Id>` children. */
-function gimbalsFromGameData(gd: Element): Gimbal[] {
-  const out: Gimbal[] = [];
+/** Preserve field presence until geometry and GameData are merged (GimbalReference.Apply). */
+export function gimbalOverlaysFromElement(gd: Element) {
+  const out: Array<{
+    subPartInstanceId: string;
+    maxAngleYDeg?: number;
+    maxAngleZDeg?: number;
+    constrainToCircle?: boolean;
+    transform: Partial<Transform>;
+  }> = [];
   for (const sub of directChildren(gd, 'SubPart')) {
     const instanceId = sub.getAttribute('Id');
     if (!instanceId) continue;
     const gel = directChildren(sub, 'Gimbal')[0];
     if (!gel) continue;
+    const transformEl = directChildren(gel, 'Transform')[0];
+    const fullTransform = readTransform(gel);
+    const transform: Partial<Transform> = {};
+    if (transformEl) {
+      if (directChildren(transformEl, 'Position').length)
+        transform.position = fullTransform.position;
+      if (directChildren(transformEl, 'Rotation').length)
+        transform.rotation = fullTransform.rotation;
+      if (directChildren(transformEl, 'Scale').length) transform.scale = fullTransform.scale;
+    }
+    const y = directChildren(gel, 'MaxAngleY')[0];
+    const z = directChildren(gel, 'MaxAngleZ')[0];
     out.push({
       subPartInstanceId: instanceId,
-      maxAngleYDeg: readDegrees(directChildren(gel, 'MaxAngleY')[0]),
-      maxAngleZDeg: readDegrees(directChildren(gel, 'MaxAngleZ')[0]),
-      constrainToCircle: readBoolValue(directChildren(gel, 'ConstrainToCircle')[0]) ?? true,
+      ...(y ? { maxAngleYDeg: readDegrees(y) } : {}),
+      ...(z ? { maxAngleZDeg: readDegrees(z) } : {}),
+      ...(directChildren(gel, 'ConstrainToCircle').length
+        ? { constrainToCircle: readBoolValue(directChildren(gel, 'ConstrainToCircle')[0]) ?? true }
+        : {}),
+      transform,
     });
   }
   return out;
+}
+
+export function applyGimbalOverlays(
+  base: Gimbal[],
+  overlays: ReturnType<typeof gimbalOverlaysFromElement>,
+): Gimbal[] {
+  const byId = new Map(base.map((g) => [g.subPartInstanceId, g]));
+  for (const overlay of overlays) {
+    const previous = byId.get(overlay.subPartInstanceId);
+    byId.set(overlay.subPartInstanceId, {
+      maxAngleYDeg: 0,
+      maxAngleZDeg: 0,
+      constrainToCircle: true,
+      ...previous,
+      ...overlay,
+      transform: {
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        ...previous?.transform,
+        ...overlay.transform,
+      },
+    });
+  }
+  return [...byId.values()];
 }
 
 /**
@@ -1381,11 +1472,18 @@ function parseEngineModules(
     combustors: Combustor[];
     nozzles: DeLavalNozzle[];
     rockets: Rocket[];
+    rocketControllers: RocketController[];
     solidMotors: SolidMotor[];
     solidNozzles: SolidMotorNozzle[];
     solidGrainSegments: SolidGrainSegment[];
   },
 ): void {
+  for (const c of childElements(el)) {
+    if (c.tagName === 'RocketEngineController')
+      target.rocketControllers.push(controllerFromElement(c, 'engine'));
+    else if (c.tagName === 'RocketThrusterController')
+      target.rocketControllers.push(controllerFromElement(c, 'thruster'));
+  }
   for (const r of directChildren(el, 'Rocket')) target.rockets.push(rocketFromElement(r));
   for (const c of directChildren(el, 'Combustor')) target.combustors.push(combustorFromElement(c));
   for (const n of directChildren(el, 'DeLavalNozzle')) target.nozzles.push(nozzleFromElement(n));

@@ -776,6 +776,37 @@ describe('normalization (default-fill, never conversion)', () => {
     stalePart.subPartGameData = [
       createSubPartGameData('Core.A') as unknown as Record<string, unknown>,
     ];
+    stalePart.gameData.gimbals = [
+      {
+        subPartInstanceId: 'a_1',
+        maxAngleYDeg: 5,
+        maxAngleZDeg: 2,
+        constrainToCircle: false,
+      },
+    ];
+    stalePart.gameData.solidGrainSegments = [
+      {
+        id: 'Grain',
+        wallMaterialId: '',
+        outerRadiusM: 0.7,
+        wallThicknessMm: 9,
+        lengthM: 2,
+        locationAsmb: { x: 0, y: 0, z: 0 },
+      },
+    ];
+    stalePart.customReactions = [
+      {
+        id: 'Fuel',
+        name: 'Fuel',
+        category: 'Monopropellant',
+        reactants: [],
+        lut: [],
+        burnRate: null,
+        minimumBurnPressurePa: null,
+        maxStablePressurePa: null,
+        exhaustCondensedFraction: null,
+      },
+    ];
     stalePart.customMeshes = [
       {
         id: 'mesh_1',
@@ -802,6 +833,20 @@ describe('normalization (default-fill, never conversion)', () => {
     expect(part.kittens).toEqual([]);
     expect(part.gameData.rocketControllers).toEqual([]);
     expect(part.subPartGameData[0].solidMotors).toEqual([]);
+    expect(part.gameData.solidGrainSegments[0]).toMatchObject({
+      outerRadiusM: 0.7,
+      massKg: null,
+      densityKgM3: null,
+      paf2Asmb: { x: 0, y: 0, z: 0 },
+    });
+    expect(part.customReactions[0].description).toBe('');
+    expect(part.gameData.gimbals[0]).toEqual({
+      subPartInstanceId: 'a_1',
+      transform: identityTransform(),
+      maxAngleYDeg: 5,
+      maxAngleZDeg: 2,
+      constrainToCircle: false,
+    });
     expect(part.customMeshes[0].emissive?.coverage).toBe(createGlow().coverage);
     // The data that WAS there came through untouched.
     expect(part.placements.length).toBe(1);

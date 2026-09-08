@@ -250,6 +250,22 @@ function AddButton({ group, entry }: { group: ModuleTreeGroup; entry: EngineEntr
         <MenuItem density="dense" onAction={() => addModule('controller', entry, 'thruster')}>
           RCS controller — pulsed
         </MenuItem>
+        {entry?.kind === 'subpart' && (
+          <MenuItem
+            density="dense"
+            onAction={() => addModule('controller', { kind: 'part' }, 'engine')}
+          >
+            Part engine controller — throttle + staging
+          </MenuItem>
+        )}
+        {entry?.kind === 'subpart' && (
+          <MenuItem
+            density="dense"
+            onAction={() => addModule('controller', { kind: 'part' }, 'thruster')}
+          >
+            Part RCS controller — pulsed
+          </MenuItem>
+        )}
       </AddMenu>
     );
   }
@@ -449,6 +465,11 @@ function ModuleRow({
     >
       <IssueDot level={row.issue} />
       <span className="min-w-0 flex-1 truncate text-xs text-fg">{row.label}</span>
+      {row.ref.group === 'controller' && (
+        <span className="text-[11px] text-fg-subtle">
+          {row.ref.scope === 'part' ? '[Part]' : '[Template]'}
+        </span>
+      )}
       <span className="shrink-0 truncate text-[11px] text-fg-subtle">{row.caption}</span>
       <RowMenu row={row} entry={entry} />
     </div>

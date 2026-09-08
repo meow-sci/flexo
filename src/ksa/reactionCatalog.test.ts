@@ -3,6 +3,8 @@ import { DOMParser } from '@xmldom/xmldom';
 import { describe, expect, it } from 'vitest';
 import {
   indexReactionCatalog,
+  reactionDataToCustom,
+  customToReactionData,
   mixtureRatioBounds,
   parseReactionsFile,
   resolveReactionLut,
@@ -159,4 +161,28 @@ describe('reactionCatalog: real Reactions.xml', () => {
     expect(resolveReactionLut(index.get('Hydrolox')!, 5.5)!.rows.length).toBeGreaterThan(0);
     expect(resolveReactionLut(index.get('MMH_NTO')!, 1.6)!.rows.length).toBeGreaterThan(0);
   });
+});
+
+describe('reactionCatalog: clone mixture chemistry', () => {
+  it.each([3, 100])(
+    'bakes fuel shares and gas properties at the same clamped O/F ratio (%s)',
+    (defaultRatio) => {
+      const [reaction] = parse(`<Assets><MixtureReaction Id="Mix">
+      <Reactant Id="Fuel(l)" MassShare="1" />
+      <Reactant Id="Ox(l)" MassShare="1" />
+      <DefaultMixtureRatio>${defaultRatio}</DefaultMixtureRatio>
+      <MixtureRatioCondition Value="2">${PRESSURE_CONDITION(10, 2000)}</MixtureRatioCondition>
+      <MixtureRatioCondition Value="4">${PRESSURE_CONDITION(10, 3000)}</MixtureRatioCondition>
+    </MixtureReaction></Assets>`);
+      const custom = reactionDataToCustom(reaction, 'Clone', 'Clone');
+      const baked = customToReactionData(custom);
+      const ratio = Math.min(defaultRatio, 4);
+      expect(custom.reactants.map((r) => r.massShare)).toEqual([1, ratio]);
+      expect(baked.reactants[0].massFraction).toBeCloseTo(1 / (1 + ratio));
+      expect(baked.reactants[1].massFraction).toBeCloseTo(ratio / (1 + ratio));
+      expect(baked.lut.rows[0].temperature).toBe(
+        resolveReactionLut(reaction, ratio)!.rows[0].temperature,
+      );
+    },
+  );
 });

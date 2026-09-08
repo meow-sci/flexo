@@ -1,0 +1,485 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Assets>
+    <SubPartGameData Id="CorePropulsionB_Subpart_RCSSetAThrusterLargeA">
+        <RocketThrusterController Id="RD-4">
+            <RocketReference Id="Thruster" />
+        </RocketThrusterController>
+        <Rocket Id="Thruster">
+            <Core Id="Chamber" />
+            <Nozzle Id="Nozzle" />
+        </Rocket>
+        <Combustor Id="Chamber">
+            <FeedsFrom Parent="true" />
+            <Plumbing>Service</Plumbing>
+            <Reaction Id="MMH_NTO">
+                <MixtureRatio>1.6</MixtureRatio>
+            </Reaction>
+            <MaxPressure Bar="7" />
+            <ThermalEfficiency Value="0.95" />
+            <MinimumPulseTime Seconds="0.0054489795" />
+        </Combustor>
+        <DeLavalNozzle Id="Nozzle">
+            <ExitDiameter M="0.8" />
+            <FxExitDiameter M="0.136758" />
+            <AreaRatio Value="40" />
+            <FlowEfficiency Value="1" />
+            <ExpansionEfficiency Value="0.70" />
+            <ExhaustLocation X="-0.1712" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="-1.0" Y="0.0" Z="0.0" />
+            <ReactionPlume Default="true">
+              <VolumetricExhaust Id="RCS" />
+            </ReactionPlume>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster" />
+        </DeLavalNozzle>
+    </SubPartGameData>
+
+    <SubPartGameData Id="CorePropulsionB_Subpart_RCSSetAThrusterInsetA">
+        <RocketThrusterController Id="RD-4">
+            <RocketReference Id="Thruster" />
+        </RocketThrusterController>
+        <Rocket Id="Thruster">
+            <Core Id="Chamber" />
+            <Nozzle Id="Nozzle" />
+        </Rocket>
+        <Combustor Id="Chamber">
+            <FeedsFrom Parent="true" />
+            <Plumbing>Service</Plumbing>
+            <Reaction Id="MMH_NTO">
+                <MixtureRatio>1.6</MixtureRatio>
+            </Reaction>
+            <MaxPressure Bar="7" />
+            <ThermalEfficiency Value="0.95" />
+            <MinimumPulseTime Seconds="0.0054489795" />
+        </Combustor>
+        <DeLavalNozzle Id="Nozzle">
+            <ExitDiameter M="0.38" />
+            <FxExitDiameter M="0.067598" />
+            <AreaRatio Value="40" />
+            <FlowEfficiency Value="1" />
+            <ExpansionEfficiency Value="0.70" />
+            <ExhaustLocation X="-0.10023" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="-1.0" Y="0.0" Z="0.0" />
+            <ReactionPlume Default="true">
+              <VolumetricExhaust Id="RCS" />
+            </ReactionPlume>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster" />
+        </DeLavalNozzle>
+    </SubPartGameData>
+
+    <SubPartGameData Id="CorePropulsionB_Subpart_RCSSetAThrusterSmallA">
+        <RocketThrusterController Id="RD-4">
+            <RocketReference Id="Thruster" />
+        </RocketThrusterController>
+        <Rocket Id="Thruster">
+            <Core Id="Chamber" />
+            <Nozzle Id="Nozzle" />
+        </Rocket>
+        <Combustor Id="Chamber">
+            <FeedsFrom Parent="true" />
+            <Plumbing>Service</Plumbing>
+            <Reaction Id="MMH_NTO">
+                <MixtureRatio>1.6</MixtureRatio>
+            </Reaction>
+            <MaxPressure Bar="7" />
+            <ThermalEfficiency Value="0.95" />
+            <MinimumPulseTime Seconds="0.0054489795" />
+        </Combustor>
+        <DeLavalNozzle Id="Nozzle">
+            <ExitDiameter M="0.4" />
+            <FxExitDiameter M="0.071386" />
+            <AreaRatio Value="40" />
+            <FlowEfficiency Value="1" />
+            <ExpansionEfficiency Value="0.70" />
+            <ExhaustLocation X="-0.10031" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="-1.0" Y="0.0" Z="0.0" />
+            <ReactionPlume Default="true">
+              <VolumetricExhaust Id="RCS" />
+            </ReactionPlume>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster" />
+        </DeLavalNozzle>
+    </SubPartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSALargeA">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector1" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="10" />
+            <Radius M=".2" />
+        </SolidSphereMass>
+        <Connector Id="_connector1">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="0.0002" Y="-0.0005" Z="0.1006" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.6" />
+            <LengthY M="0.4" />
+            <LengthZ M="0.4" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSALargeB">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector2" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="10" />
+            <Radius M=".2" />
+        </SolidSphereMass>
+        <Connector Id="_connector2">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="0.0002" Y="-0.0005" Z="0.1006" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.6" />
+            <LengthY M="0.4" />
+            <LengthZ M="0.4" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSALargeC">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector3" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="10" />
+            <Radius M=".2" />
+        </SolidSphereMass>
+        <Connector Id="_connector3">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="0.0002" Y="-0.0005" Z="0.1006" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.6" />
+            <LengthY M="0.4" />
+            <LengthZ M="0.4" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSAMediumA">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector4" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="5" />
+            <Radius M=".1" />
+        </SolidSphereMass>
+        <Connector Id="_connector4">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="0" Y="0" Z="0.0352" />
+            <Collider2Asmb X="0" Y="0.0004" Z="0" />
+            <LengthX M="0.3" />
+            <LengthY M="0.2" />
+            <LengthZ M="0.2245" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSAMediumB">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector5" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="5" />
+            <Radius M=".1" />
+        </SolidSphereMass>
+        <Connector Id="_connector5">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="0" Y="0" Z="0.0352" />
+            <Collider2Asmb X="0" Y="0.0004" Z="0" />
+            <LengthX M="0.3" />
+            <LengthY M="0.2" />
+            <LengthZ M="0.2245" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSAMediumC">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector6" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="5" />
+            <Radius M=".1" />
+        </SolidSphereMass>
+        <Connector Id="_connector6">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="0" Y="0" Z="0.0352" />
+            <Collider2Asmb X="0" Y="0.0004" Z="0" />
+            <LengthX M="0.3" />
+            <LengthY M="0.2" />
+            <LengthZ M="0.2245" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSAMediumD">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector7" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="5" />
+            <Radius M=".1" />
+        </SolidSphereMass>
+        <Connector Id="_connector7">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="0" Y="0" Z="0.0352" />
+            <Collider2Asmb X="0" Y="0.0004" Z="0" />
+            <LengthX M="0.3" />
+            <LengthY M="0.2" />
+            <LengthZ M="0.2245" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSAMediumLowA">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector8" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="5" />
+            <Radius M=".1" />
+        </SolidSphereMass>
+        <Connector Id="_connector8">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="-0.0003" Y="0.0002" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.5504" />
+            <LengthY M="0.25" />
+            <LengthZ M="0.1" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSAMediumLowB">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector9" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="5" />
+            <Radius M=".1" />
+        </SolidSphereMass>
+        <Connector Id="_connector9">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="-0.0003" Y="0.0002" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.5504" />
+            <LengthY M="0.25" />
+            <LengthZ M="0.1" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSAMediumLowC">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector10" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="5" />
+            <Radius M=".1" />
+        </SolidSphereMass>
+        <Connector Id="_connector10">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="-0.0003" Y="0.0002" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.5504" />
+            <LengthY M="0.25" />
+            <LengthZ M="0.1" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSAMediumLowD">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector11" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="5" />
+            <Radius M=".1" />
+        </SolidSphereMass>
+        <Connector Id="_connector11">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="-0.0003" Y="0.0002" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.5504" />
+            <LengthY M="0.25" />
+            <LengthZ M="0.1" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSASmallA">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector12" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="5" />
+            <Radius M=".1" />
+        </SolidSphereMass>
+        <Connector Id="_connector12">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="0" Y="0" Z="0.05" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.1" />
+            <LengthY M="0.15" />
+            <LengthZ M="0.2" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSASmallB">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector13" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="5" />
+            <Radius M=".1" />
+        </SolidSphereMass>
+        <Connector Id="_connector13">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="0" Y="0" Z="0.05" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.1" />
+            <LengthY M="0.15" />
+            <LengthZ M="0.2" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSASmallC">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector14" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="5" />
+            <Radius M=".1" />
+        </SolidSphereMass>
+        <Connector Id="_connector14">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="0" Y="0" Z="0.05" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.1" />
+            <LengthY M="0.15" />
+            <LengthZ M="0.2" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSASmallD">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector15" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="5" />
+            <Radius M=".1" />
+        </SolidSphereMass>
+        <Connector Id="_connector15">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="0" Y="0" Z="0.05" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.1" />
+            <LengthY M="0.15" />
+            <LengthZ M="0.2" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CorePropulsionB_Prefab_RCSASmallE">
+        <EditorTag Value="RCS" />
+        <ConsumerFeedWiring Id="Chamber">
+            <FeedsFrom Connector="_connector16" />
+        </ConsumerFeedWiring>
+        <SolidSphereMass>
+            <Mass Kg="5" />
+            <Radius M=".1" />
+        </SolidSphereMass>
+        <Connector Id="_connector16">
+            <Flags>ToSurface</Flags>
+        </Connector>
+
+        <Collider Id="Collider1">
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="0" Y="0" Z="0.05" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.1" />
+            <LengthY M="0.15" />
+            <LengthZ M="0.2" />
+          </Box>
+        </Collider>
+    </PartGameData>
+</Assets>

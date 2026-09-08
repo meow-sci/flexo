@@ -350,6 +350,7 @@ describe('collectProjectExportIssues — one <FixedReaction Id>, two chemistries
       reactants: first.reactants.map((r) => ({ massShare: r.massShare, phaseId: r.phaseId })),
       category: first.category,
       name: first.name,
+      description: first.description,
       id: first.id,
     };
     const a = partBurning(first, 'rover_a', 'MotorA');

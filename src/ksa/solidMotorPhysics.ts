@@ -342,6 +342,10 @@ export interface ThrustCurveSample {
   times: Float32Array;
   /** Vacuum thrust (N) at each time. */
   thrustN: Float32Array;
+  /** Vacuum specific impulse (seconds), sampled on the same time base. */
+  ispS: Float32Array;
+  /** Chamber pressure (Pa), sampled on the same time base. */
+  chamberPressurePa: Float32Array;
   peakThrustN: number;
   burnSeconds: number;
   ignitionThrustN: number;
@@ -644,6 +648,8 @@ export function sampleThrustCurve(
   const step = maxDepthM / (DEPTH_STEPS - 1);
   const times: number[] = [];
   const thrusts: number[] = [];
+  const impulses: number[] = [];
+  const pressures: number[] = [];
   let elapsed = 0;
   let peakThrustN = 0;
   let massFlowAtPeak = 0;
@@ -678,6 +684,8 @@ export function sampleThrustCurve(
     if (j > 0) elapsed += step / Math.max(evaluateBurnRate(motor.input.burnRate, pressure), 1e-6);
     times.push(elapsed);
     thrusts.push(thrust);
+    impulses.push(massFlow > 0 ? thrust / (massFlow * G0) : 0);
+    pressures.push(pressure);
   }
 
   const count = times.length;
@@ -691,6 +699,8 @@ export function sampleThrustCurve(
 
   const outTimes = new Float32Array(sampleCount);
   const outThrust = new Float32Array(sampleCount);
+  const outIsp = new Float32Array(sampleCount);
+  const outPressure = new Float32Array(sampleCount);
   let n = 0;
   for (let i = 0; i < sampleCount; i++) {
     const t = (elapsed * i) / (sampleCount - 1);
@@ -699,11 +709,15 @@ export function sampleThrustCurve(
     const amount = span > 0 ? Math.min(Math.max((t - times[n]) / span, 0), 1) : 0;
     outTimes[i] = t;
     outThrust[i] = lerp(thrusts[n], thrusts[n + 1], amount);
+    outIsp[i] = lerp(impulses[n], impulses[n + 1], amount);
+    outPressure[i] = lerp(pressures[n], pressures[n + 1], amount);
   }
 
   return {
     times: outTimes,
     thrustN: outThrust,
+    ispS: outIsp,
+    chamberPressurePa: outPressure,
     peakThrustN,
     burnSeconds: elapsed,
     ignitionThrustN: thrusts[0],

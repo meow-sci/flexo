@@ -1,5 +1,6 @@
 import { addPart } from './editorStore';
 import { selectAnimationClip } from './animationStore';
+import { activateEngine } from './engineStore';
 import { randomId } from './ids';
 import { notify } from './notificationStore';
 import { toUrl } from '../ksa/catalog';
@@ -122,6 +123,16 @@ export async function importBuiltInPart(
       lights: part.lights,
     }),
   );
+
+  // A complete engine also places auxiliary nozzle-only templates. Open its chamber
+  // scope explicitly so returning to Engine mode cannot retain an unrelated old scope
+  // or select the turbine exhaust merely because it was the last imported placement.
+  const chamber = part.subPartGameData.find(
+    (s) => s.combustors.length > 0 || s.solidMotors.length > 0,
+  );
+  if (chamber) activateEngine({ kind: 'subpart', templateId: chamber.subPartTemplateId });
+  else if (part.combustors.length > 0 || part.solidMotors.length > 0)
+    activateEngine({ kind: 'part' });
 
   // Open the first imported clip. Without this an import that brought animations left
   // `$activeAnimationId` null, so every surface that renders the ACTIVE clip reported the

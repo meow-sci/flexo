@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { computeGameDataFindings } from './gameDataFindings';
 import {
   createCombustor,
+  createRocketController,
   createEmptyPart,
   createSubPartGameData,
   createTank,
@@ -118,5 +119,21 @@ describe('computeGameDataFindings', () => {
     part.gameData.combustors.push({ ...createCombustor('GasGen'), feeds: [] });
     const severities = computeGameDataFindings(part, NO_REACTIONS).map((f) => f.severity);
     expect(severities.indexOf('block')).toBeLessThan(severities.indexOf('warn'));
+  });
+});
+
+it('routes a template controller finding to its Engine section', () => {
+  const part = namedPart();
+  place(part, 'thruster_1', 'ThrusterA');
+  const spd = createSubPartGameData('ThrusterA');
+  spd.rocketControllers.push(createRocketController('Rcs', 'thruster', ['MissingRocket']));
+  part.subPartGameData.push(spd);
+  const finding = computeGameDataFindings(part, NO_REACTIONS).find(
+    (f) => f.code === 'controller-rocket-unresolvable',
+  );
+  expect(finding?.target).toEqual({
+    scope: { kind: 'template', templateId: 'ThrusterA' },
+    sectionId: 'engine',
+    cardKey: 'controller:0',
   });
 });

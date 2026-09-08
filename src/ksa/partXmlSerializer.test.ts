@@ -902,12 +902,14 @@ describe('serializeGameData', () => {
         gimbals: [
           {
             subPartInstanceId: 'asm_2',
+            transform: identityTransform(),
             maxAngleYDeg: 5,
             maxAngleZDeg: 5,
             constrainToCircle: false,
           },
           {
             subPartInstanceId: 'turbo_2',
+            transform: identityTransform(),
             maxAngleYDeg: 70,
             maxAngleZDeg: 0,
             constrainToCircle: true,
@@ -952,6 +954,7 @@ describe('serializeGameData', () => {
         gimbals: [
           {
             subPartInstanceId: 'bell_1',
+            transform: identityTransform(),
             maxAngleYDeg: 8,
             maxAngleZDeg: 8,
             constrainToCircle: true,
@@ -982,6 +985,7 @@ describe('serializeGameData', () => {
         gimbals: [
           {
             subPartInstanceId: 'bell_1',
+            transform: identityTransform(),
             maxAngleYDeg: 0,
             maxAngleZDeg: 0,
             constrainToCircle: true,
@@ -993,12 +997,49 @@ describe('serializeGameData', () => {
     expect(tags(parse(serializeGameData(fixed)), 'Gimbal').length).toBe(0);
   });
 
+  it('preserves the authored gimbal pivot and axes on the geometry declaration', () => {
+    const part = editingPart({
+      placements: [placement({ instanceId: 'turbo_2' })],
+      gameData: {
+        ...createEmptyGameData(),
+        gimbals: [
+          {
+            subPartInstanceId: 'turbo_2',
+            transform: {
+              ...identityTransform(),
+              position: { x: 0.1156, y: -0.0001, z: 0.0968 },
+              rotation: { x: -1.5708, y: 0, z: 0 },
+            },
+            maxAngleYDeg: 70,
+            maxAngleZDeg: 0,
+            constrainToCircle: true,
+          },
+        ],
+      },
+    });
+    const declaration = tags(parse(serializePart(part)), 'Gimbal')[0];
+    const pivot = child(declaration, 'Transform')!;
+    expect(child(pivot, 'Position')!.getAttribute('X')).toBe('0.1156');
+    expect(child(pivot, 'Position')!.getAttribute('Y')).toBe('-0.0001');
+    expect(child(pivot, 'Position')!.getAttribute('Z')).toBe('0.0968');
+    expect(child(pivot, 'Rotation')!.getAttribute('X')).toBe('-1.5708');
+    const overlay = tags(parse(serializeGameData(part)), 'Gimbal')[0];
+    expect(child(overlay, 'Transform')).toBeNull();
+    expect(child(overlay, 'MaxAngleY')!.getAttribute('Degrees')).toBe('70');
+  });
+
   it('does not emit a fixed (0/0) gimbal overlay', () => {
     const part2 = editingPart({
       gameData: {
         ...createEmptyGameData(),
         gimbals: [
-          { subPartInstanceId: 'x', maxAngleYDeg: 0, maxAngleZDeg: 0, constrainToCircle: true },
+          {
+            subPartInstanceId: 'x',
+            transform: identityTransform(),
+            maxAngleYDeg: 0,
+            maxAngleZDeg: 0,
+            constrainToCircle: true,
+          },
         ],
       },
     });

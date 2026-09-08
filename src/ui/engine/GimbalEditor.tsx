@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react';
 import { Field, ListBoxItem, Select, Switch } from '../kit';
 import { PreciseNumberInput } from '../PreciseNumberInput';
+import { Vec3Field } from '../Vec3Field';
 import { InstanceScopeChip } from '../data/ScopeChip';
 import { $part, pushUndo, removeGimbal, setGimbal } from '../../state/editorStore';
 import { addGimbals } from './moduleActions';
@@ -46,6 +47,7 @@ export function GimbalEditor({ index, showAdd = true }: { index: number; showAdd
             // streaming upsert that follows rides in the same step.
             removeGimbal(id);
             setGimbal(next, {
+              transform: gimbal.transform,
               maxAngleYDeg: gimbal.maxAngleYDeg,
               maxAngleZDeg: gimbal.maxAngleZDeg,
               constrainToCircle: gimbal.constrainToCircle,
@@ -54,6 +56,38 @@ export function GimbalEditor({ index, showAdd = true }: { index: number; showAdd
         />
       </div>
 
+      <Field label="Pivot position (m)">
+        <Vec3Field
+          value={gimbal.transform.position}
+          onInteractionStart={begin}
+          onCommit={(axis, value) =>
+            setGimbal(id, {
+              transform: {
+                ...gimbal.transform,
+                position: { ...gimbal.transform.position, [axis]: value },
+              },
+            })
+          }
+        />
+      </Field>
+      <Field label="Axis rotation (°)">
+        <Vec3Field
+          value={{
+            x: (gimbal.transform.rotation.x * 180) / Math.PI,
+            y: (gimbal.transform.rotation.y * 180) / Math.PI,
+            z: (gimbal.transform.rotation.z * 180) / Math.PI,
+          }}
+          onInteractionStart={begin}
+          onCommit={(axis, value) =>
+            setGimbal(id, {
+              transform: {
+                ...gimbal.transform,
+                rotation: { ...gimbal.transform.rotation, [axis]: (value * Math.PI) / 180 },
+              },
+            })
+          }
+        />
+      </Field>
       <Field label="Max angle Y (°)">
         <PreciseNumberInput
           aria-label="Gimbal max angle Y in degrees"

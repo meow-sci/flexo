@@ -61,6 +61,28 @@ export function GrainSegmentEditor({
           onChange={(wallMaterialId) => update({ wallMaterialId })}
         />
       </Field>
+      <p className="text-[11px] leading-snug text-fg-subtle">
+        KSA uses the casing material first, then density, then mass. Clear the material to use
+        density or mass.
+      </p>
+      <Field label="Casing density (kg/m³, 0 = unset)">
+        <PreciseNumberInput
+          aria-label="Grain casing density in kilograms per cubic meter"
+          value={segment.densityKgM3 ?? 0}
+          min={0}
+          onInteractionStart={begin}
+          onCommit={(value) => update({ densityKgM3: value > 0 ? value : null })}
+        />
+      </Field>
+      <Field label="Casing mass (kg, 0 = unset)">
+        <PreciseNumberInput
+          aria-label="Grain casing mass in kilograms"
+          value={segment.massKg ?? 0}
+          min={0}
+          onInteractionStart={begin}
+          onCommit={(value) => update({ massKg: value > 0 ? value : null })}
+        />
+      </Field>
       <Field label="Outer radius (m)">
         <PreciseNumberInput
           aria-label="Grain outer radius in meters"
@@ -88,6 +110,19 @@ export function GrainSegmentEditor({
           step={0.1}
           onInteractionStart={begin}
           onCommit={(n) => update({ lengthM: n })}
+        />
+      </Field>
+      <Field label="Principal-axis rotation (°)">
+        <Vec3Field
+          value={{
+            x: (segment.paf2Asmb.x * 180) / Math.PI,
+            y: (segment.paf2Asmb.y * 180) / Math.PI,
+            z: (segment.paf2Asmb.z * 180) / Math.PI,
+          }}
+          onInteractionStart={begin}
+          onCommit={(axis, value) =>
+            update({ paf2Asmb: { ...segment.paf2Asmb, [axis]: (value * Math.PI) / 180 } })
+          }
         />
       </Field>
       <div className="flex flex-col gap-1">

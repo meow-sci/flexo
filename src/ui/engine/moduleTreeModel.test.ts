@@ -59,10 +59,9 @@ describe('buildModuleTree — group order + presence', () => {
     expect(buildModuleTree(subPartEngine(), SUB).map((g) => g.id)).toEqual(MODULE_TREE_GROUP_ORDER);
   });
 
-  it('flags the four always-part-level groups', () => {
+  it('flags the three always-part-level groups', () => {
     const tree = buildModuleTree(subPartEngine(), SUB);
     expect(tree.filter((g) => g.partLevel).map((g) => g.id)).toEqual([
-      'controllers',
       'wiring',
       'gimbals',
       'propellants',
@@ -73,7 +72,7 @@ describe('buildModuleTree — group order + presence', () => {
     const controllers = groupOf(subPartEngine(), 'controllers');
     expect(controllers.rows).toHaveLength(1);
     expect(controllers.rows[0].ref).toEqual({ group: 'controller', scope: 'part', index: 0 });
-    expect(controllers.partLevel).toBe(true);
+    expect(controllers.partLevel).toBe(false);
   });
 
   it('indexes a SubPart scope against the template and the part scope against gameData', () => {
@@ -118,6 +117,7 @@ describe('buildModuleTree — captions', () => {
     part.customReactions.push({
       id: 'Mine',
       name: 'My Fuel',
+      description: '',
       category: 'Monopropellant',
       reactants: [],
       lut: [],
@@ -211,7 +211,7 @@ describe('buildModuleTree — issue dots and unwired rows', () => {
 
 describe('moduleTreeModel helpers', () => {
   it('scopes part-only groups to the part whatever the open scope', () => {
-    expect(scopeOfGroup('controller', SUB)).toBe('part');
+    expect(scopeOfGroup('controller', SUB)).toBe('sub');
     expect(scopeOfGroup('combustor', SUB)).toBe('sub');
     expect(scopeOfGroup('combustor', { kind: 'part' })).toBe('part');
     expect(scopeOfGroup('combustor', null)).toBe('sub');
@@ -263,5 +263,21 @@ describe('gimbalCandidates', () => {
     ).toBe('no-placements');
     part.gameData.gimbals.push(createGimbal('chamber_1'));
     expect(gimbalCandidates(part, SUB)).toEqual({ instanceIds: [], blocker: 'all-taken' });
+  });
+});
+
+describe('template controllers', () => {
+  it('shows local and parent controllers with distinct scope keys and counts', () => {
+    const part = subPartEngine();
+    part.subPartGameData[0].rocketControllers.push(
+      createRocketController('LocalRcs', 'thruster', ['Engine']),
+    );
+    const rows = groupOf(part, 'controllers').rows;
+    expect(rows.map((r) => [r.label, r.ref.scope, r.ref.index])).toEqual([
+      ['LocalRcs', 'sub', 0],
+      ['Main', 'part', 0],
+    ]);
+    expect(new Set(rows.map((r) => r.key)).size).toBe(2);
+    expect(totalModuleCount(part, SUB)).toBe(5);
   });
 });

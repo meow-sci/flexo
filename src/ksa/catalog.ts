@@ -10,8 +10,14 @@
  */
 
 import { assetBase } from '../assetBase';
-import { collidersFromElement } from './partXmlParser';
-import type { PartCollider } from './types';
+import {
+  collidersFromElement,
+  mergeSubPartGameDataInto,
+  subPartCollidersFromRoot,
+  subPartGameDataFromDoc,
+  subPartLightsFromRoot,
+} from './partXmlParser';
+import type { PartCollider, PartLight, SubPartGameData } from './types';
 
 export interface CatalogSubPart {
   /** SubPart template id, e.g. "CoreStructuralA_Subpart_TrussBarA". */
@@ -62,6 +68,12 @@ export interface CatalogSubPart {
    * losing it.
    */
   colliders?: PartCollider[];
+  /** Editable template metadata copied into the document when this SubPart is added. */
+  data?: {
+    gameData?: SubPartGameData;
+    colliders: PartCollider[];
+    lights: PartLight[];
+  };
   /** Originating XML file (for debugging). */
   sourceFile: string;
 }
@@ -279,7 +291,7 @@ export function gameDataSibling(assetFile: string): string {
  */
 export async function loadCoreCatalog(): Promise<CatalogSubPart[]> {
   const out: CatalogSubPart[] = [];
-  await Promise.all(
+  const gameDataDocs = await Promise.all(
     ASSET_FILES.map(async (file) => {
       const [r, sibling] = await Promise.all([
         fetchXmlFile(file),
@@ -293,11 +305,39 @@ export async function loadCoreCatalog(): Promise<CatalogSubPart[]> {
       if (r.kind === 'ok') {
         parseAssetsFile(r.doc, file, out, sibling.kind === 'ok' ? sibling.doc : null);
       }
+      return sibling.kind === 'ok' ? sibling.doc : undefined;
     }),
+  );
+  attachSubPartGameData(
+    out,
+    gameDataDocs.filter((doc): doc is Document => doc != null),
   );
   out.sort((a, b) => a.id.localeCompare(b.id));
   console.info(`flexo catalog: ${out.length} SubParts loaded`);
   return out;
+}
+
+/** Metadata can live in another pack's GameData file (notably PartGameData.xml). */
+export function attachSubPartGameData(entries: CatalogSubPart[], docs: Document[]): void {
+  const byId = new Map<string, SubPartGameData>();
+  const colliders: PartCollider[] = [];
+  const lights: PartLight[] = [];
+  for (const doc of docs) {
+    for (const spd of subPartGameDataFromDoc(doc)) {
+      const existing = byId.get(spd.subPartTemplateId);
+      if (existing) mergeSubPartGameDataInto(existing, spd);
+      else byId.set(spd.subPartTemplateId, spd);
+    }
+    colliders.push(...subPartCollidersFromRoot(doc.documentElement));
+    lights.push(...subPartLightsFromRoot(doc.documentElement));
+  }
+  for (const entry of entries) {
+    const gameData = byId.get(entry.id);
+    const ownedColliders = colliders.filter((c) => c.ownerTemplateId === entry.id);
+    const ownedLights = lights.filter((l) => l.ownerTemplateId === entry.id);
+    if (gameData || ownedColliders.length || ownedLights.length)
+      entry.data = { gameData, colliders: ownedColliders, lights: ownedLights };
+  }
 }
 
 /** Builds an id->entry index for O(1) lookups by template id. */

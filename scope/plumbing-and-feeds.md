@@ -276,3 +276,17 @@ Everything in this document is new (revs 4992 / 5002 / 5007). Nothing here exist
 `2026.7.8.4980`. The flexo-side work is recorded in
 [plans/UPGRADE_PLAN_2026-07-24.md](../plans/UPGRADE_PLAN_2026-07-24.md); the gap register it
 closes is F1–F5, F7, F8 and F11.
+
+## Solid preview feed resolution at 5402
+
+`src/ui/engine/solidCurveResolution.ts` follows `PartTemplate.ResolveConsumerFeeds` for
+`<FeedsFrom Container SubPart>` and `<FeedsFrom Parent="true">`. Parent resolution prefers
+matching `<ConsumerFeedWiring Id SubPartId>` entries, then falls back to unscoped entries.
+The selected template placement controls that lookup. Repeated container references count
+once. `<Rocket><Core Id SubPartId>` and `<Nozzle Id SubPartId>` resolve relative to the
+rocket's owner, including Part rockets binding modules on different child instances.
+
+Any `<FeedsFrom Connector>` means the full grain stack depends on vehicle assembly
+(`PartTree.ResolveSolidMotorStacks`), so the single-Part curve reports that it is unavailable
+rather than integrating only the local fraction. This affects preview only; authored feed
+references still round-trip and export.

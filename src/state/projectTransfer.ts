@@ -866,11 +866,20 @@ export function mergeProjectImport(
     );
     const nozzles = (sg.nozzles ?? []).map((n) => structuredClone(n));
     const rockets = (sg.rockets ?? []).map((r) => remapRocket(r, instanceIdMap));
+    const rocketControllers = sg.rocketControllers.map((c) => ({
+      ...structuredClone(c),
+      rocketRefs: c.rocketRefs.map((r) => remapRef(r, instanceIdMap)),
+    }));
     const solidMotors = (sg.solidMotors ?? []).map((m) =>
       remapConsumerFeeds(structuredClone(m), connectorIdMap, instanceIdMap),
     );
     const solidNozzles = (sg.solidNozzles ?? []).map((n) => structuredClone(n));
     const solidGrainSegments = (sg.solidGrainSegments ?? []).map((s) => structuredClone(s));
+    const unknownChildren = remapRawConnectorRefs(
+      sg.unknownChildren,
+      connectorIdMap,
+      instanceIdMap,
+    );
     const existing = part.subPartGameData.find((x) => x.subPartTemplateId === templateId);
     if (existing) {
       existing.tanks.push(...tanks);
@@ -878,6 +887,9 @@ export function mergeProjectImport(
       existing.combustors.push(...combustors);
       existing.nozzles.push(...nozzles);
       existing.rockets.push(...rockets);
+      existing.rocketControllers.push(...rocketControllers);
+      Object.assign(existing.unknownAttrs, sg.unknownAttrs);
+      existing.unknownChildren.push(...unknownChildren);
       existing.solidMotors.push(...solidMotors);
       existing.solidNozzles.push(...solidNozzles);
       existing.solidGrainSegments.push(...solidGrainSegments);
@@ -888,6 +900,9 @@ export function mergeProjectImport(
       entry.combustors = combustors;
       entry.nozzles = nozzles;
       entry.rockets = rockets;
+      entry.rocketControllers = rocketControllers;
+      entry.unknownAttrs = { ...sg.unknownAttrs };
+      entry.unknownChildren = unknownChildren;
       entry.solidMotors = solidMotors;
       entry.solidNozzles = solidNozzles;
       entry.solidGrainSegments = solidGrainSegments;
@@ -998,7 +1013,7 @@ function mergeGameData(
   if (!target.powerConsumer && src.powerConsumer) target.powerConsumer = { ...src.powerConsumer };
   if (target.decoupler == null && src.decoupler) {
     const id = connectorIdMap.get(src.decoupler.connectorId);
-    if (id) target.decoupler = { connectorId: id, force: src.decoupler.force };
+    if (id) target.decoupler = { ...src.decoupler, connectorId: id };
   }
   if (target.dockingPort == null && src.dockingPort) {
     const id = connectorIdMap.get(src.dockingPort.connectorId);

@@ -553,12 +553,14 @@ describe('engine modules (round-trip with serializeGameData)', () => {
       gimbals: [
         {
           subPartInstanceId: `${TMPL}2`,
+          transform: identityTransform(),
           maxAngleYDeg: 2,
           maxAngleZDeg: 2,
           constrainToCircle: false,
         },
         {
           subPartInstanceId: 'turbo_2',
+          transform: identityTransform(),
           maxAngleYDeg: 70,
           maxAngleZDeg: 0,
           constrainToCircle: true,
@@ -570,6 +572,7 @@ describe('engine modules (round-trip with serializeGameData)', () => {
       {
         id: 'MyKerolox_2.6',
         name: 'Custom Kerolox',
+        description: '',
         category: 'Bipropellant' as const,
         reactants: [
           { phaseId: 'Kerosene(l)', massShare: 1 },
@@ -1977,5 +1980,65 @@ describe('<Part CrashTolerance> (KSA 2026.9.7.5402 part-failure model)', () => {
 
   it('omits the attribute when unset, so the game derives it from mass ÷ volume', () => {
     expect(serializePart(part)).not.toContain('CrashTolerance');
+  });
+});
+
+describe('template rocket controllers', () => {
+  it('models additive controller blocks and exports each controller once at its template scope', () => {
+    const xml = `<Assets><PartGameData Id="TestPart"/>
+      <SubPartGameData Id="Thruster"><RocketThrusterController Id="RCS"><RocketReference Id="Local"/><ControlMap CSV=""/></RocketThrusterController></SubPartGameData>
+      <SubPartGameData Id="Thruster"><RocketEngineController Id="Engine"><RocketReference Id="Remote" SubPartId="Peer"/></RocketEngineController></SubPartGameData></Assets>`;
+    const parsed = gameDataFromAssets(xml, 'TestPart')!;
+    const data = parsed.subPartGameData[0];
+    expect(data.rocketControllers).toEqual([
+      {
+        id: 'RCS',
+        kind: 'thruster',
+        rocketRefs: [{ id: 'Local', subPartInstanceId: null }],
+        controlMapFlags: [],
+      },
+      {
+        id: 'Engine',
+        kind: 'engine',
+        rocketRefs: [{ id: 'Remote', subPartInstanceId: 'Peer' }],
+        controlMapFlags: null,
+      },
+    ]);
+    expect(data.unknownChildren).toEqual([]);
+    const out = serializeGameData(editingPart({ subPartGameData: parsed.subPartGameData }));
+    expect(out.match(/<RocketThrusterController/g)).toHaveLength(1);
+    expect(out).toContain('<ControlMap CSV=""');
+    expect(gameDataFromAssets(out, 'TestPart')!.subPartGameData).toEqual(parsed.subPartGameData);
+  });
+});
+
+describe('engine inherited fields', () => {
+  it('retains casing mass, density and principal axes through grain import and export', () => {
+    const xml = `<Assets><PartGameData Id="Motor"><SolidGrainSegment Id="Grain"><Grain>
+      <Mass Tonnes="0.02" Kg="3" G="500"/><Density GPerCm3="2.7" KgPerM3="1"/>
+      <Paf2Asmb X="0.2" Y="0.3" Z="0.4"/>
+      <OuterRadius M="0.5"/><WallThickness Mm="6"/><Length M="1"/>
+      </Grain></SolidGrainSegment></PartGameData></Assets>`;
+    const parsed = gameDataFromAssets(xml, 'Motor', new DOMParser())!;
+    const grain = parsed.gameData.solidGrainSegments[0];
+    expect(grain).toMatchObject({
+      massKg: 23.5,
+      densityKgM3: 2701,
+      paf2Asmb: { x: 0.2, y: 0.3, z: 0.4 },
+    });
+    const part = editingPart({ partId: 'Motor', gameData: parsed.gameData });
+    const exported = serializeGameData(part);
+    const roundtrip = gameDataFromAssets(exported, 'Motor', new DOMParser())!;
+    expect(roundtrip.gameData.solidGrainSegments).toEqual([grain]);
+  });
+
+  it('retains authored propellant descriptions', () => {
+    const reaction = {
+      ...createCustomReaction('Fuel', 'Fuel'),
+      description: 'A tuned engine propellant',
+    };
+    const part = editingPart({ partId: 'Motor', customReactions: [reaction] });
+    const parsed = gameDataFromAssets(serializeGameData(part), 'Motor', new DOMParser())!;
+    expect(parsed.customReactions[0].description).toBe(reaction.description);
   });
 });

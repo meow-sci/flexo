@@ -407,7 +407,7 @@ interface CGameData {
   gn?: number[]; // generators → outputWatts[]
   sp?: CSolarPanel[]; // solarPanels
   pc?: CPowerConsumer; // powerConsumer (one per part)
-  dc?: { c: string; f: number }; // decoupler
+  dc?: { c: string; f: number; k?: string }; // decoupler
   dp?: { c: string; ke: number; pi: number }; // dockingPort
   ed?: { s?: string }; // evaDoor — presence = the hatch; s = SeatId when authored
   ct?: CController[]; // rocketControllers
@@ -437,7 +437,10 @@ function encGameData(g: PartGameData): CGameData {
   if (g.generators.length) o.gn = g.generators.map((x) => round(x.outputWatts));
   if (g.solarPanels.length) o.sp = g.solarPanels.map(encSolarPanel);
   if (g.powerConsumer) o.pc = encPowerConsumer(g.powerConsumer);
-  if (g.decoupler) o.dc = { c: g.decoupler.connectorId, f: round(g.decoupler.force) };
+  if (g.decoupler) {
+    o.dc = { c: g.decoupler.connectorId, f: round(g.decoupler.force) };
+    if (g.decoupler.ksaId) o.dc.k = g.decoupler.ksaId;
+  }
   if (g.dockingPort) {
     o.dp = {
       c: g.dockingPort.connectorId,
@@ -479,6 +482,7 @@ function decGameData(c: CGameData | undefined): PartGameData {
   g.solarPanels = arr<CSolarPanel>(c.sp).map(decSolarPanel);
   g.powerConsumer = c.pc ? decPowerConsumer(c.pc) : null;
   g.decoupler = c.dc ? { connectorId: str(c.dc.c), force: num(c.dc.f) } : null;
+  if (g.decoupler && c.dc?.k) g.decoupler.ksaId = str(c.dc.k);
   g.dockingPort = c.dp
     ? {
         connectorId: str(c.dp.c),
@@ -878,6 +882,9 @@ interface CSolidGrain {
   w: number; // wallThicknessMm
   l: number; // lengthM
   m?: string; // wallMaterialId (omit when blank)
+  kg?: number; // casing mass
+  den?: number; // casing density
+  pa?: Triple; // principal-axis rotation (radians)
   lo?: Triple; // locationAsmb (omit at 0,0,0)
 }
 
@@ -889,6 +896,9 @@ function encSolidGrain(s: SolidGrainSegment): CSolidGrain {
     l: round(s.lengthM),
   };
   if (s.wallMaterialId.trim()) o.m = s.wallMaterialId;
+  if (s.massKg != null) o.kg = s.massKg;
+  if (s.densityKgM3 != null) o.den = s.densityKgM3;
+  if (!isZeroVec(s.paf2Asmb)) o.pa = encVec(s.paf2Asmb);
   if (!isZeroVec(s.locationAsmb)) o.lo = encVec(s.locationAsmb);
   return o;
 }
@@ -897,6 +907,9 @@ function decSolidGrain(c: CSolidGrain): SolidGrainSegment {
   return {
     id: str(c.id),
     wallMaterialId: str(c.m),
+    massKg: typeof c.kg === 'number' ? c.kg : null,
+    densityKgM3: typeof c.den === 'number' ? c.den : null,
+    paf2Asmb: decVec(c.pa, 0),
     outerRadiusM: num(c.r),
     wallThicknessMm: num(c.w),
     lengthM: num(c.l),
@@ -953,7 +966,7 @@ function encController(c: RocketController): CController {
   const o: CController = { id: c.id };
   if (c.kind === 'thruster') o.tk = 1;
   if (c.rocketRefs.length) o.r = c.rocketRefs.map(encRef);
-  if (c.controlMapFlags && c.controlMapFlags.length) o.cm = c.controlMapFlags;
+  if (c.controlMapFlags !== null) o.cm = c.controlMapFlags;
   return o;
 }
 
@@ -968,6 +981,7 @@ function decController(c: CController): RocketController {
 
 interface CGimbal {
   i: string; // subPartInstanceId
+  tf?: CTransform; // pivot and axes (omit identity)
   y?: number; // maxAngleYDeg (omit 0)
   z?: number; // maxAngleZDeg (omit 0)
   nc?: 1; // NOT constrain-to-circle (default is constrained)
@@ -975,6 +989,7 @@ interface CGimbal {
 
 function encGimbal(g: Gimbal): CGimbal {
   const o: CGimbal = { i: g.subPartInstanceId };
+  if (!isIdentityTransform(g.transform)) o.tf = encTransform(g.transform);
   if (g.maxAngleYDeg) o.y = round(g.maxAngleYDeg);
   if (g.maxAngleZDeg) o.z = round(g.maxAngleZDeg);
   if (!g.constrainToCircle) o.nc = 1;
@@ -984,6 +999,7 @@ function encGimbal(g: Gimbal): CGimbal {
 function decGimbal(c: CGimbal): Gimbal {
   return {
     subPartInstanceId: str(c.i),
+    transform: decTransform(c.tf),
     maxAngleYDeg: num(c.y),
     maxAngleZDeg: num(c.z),
     constrainToCircle: !c.nc,
@@ -997,6 +1013,7 @@ interface CSubPartGameData {
   cb?: CCombustor[]; // combustors
   nz?: CNozzle[]; // nozzles
   ro?: CRocket[]; // rockets
+  ct?: CController[]; // rocket controllers
   sm?: CSolidMotor[]; // solid motors
   sn?: CSolidNozzle[]; // solid-motor nozzles
   sg?: CSolidGrain[]; // solid grain segments
@@ -1011,6 +1028,7 @@ function encSubPartGameData(s: SubPartGameData): CSubPartGameData {
   if (s.combustors.length) o.cb = s.combustors.map(encCombustor);
   if (s.nozzles.length) o.nz = s.nozzles.map(encNozzle);
   if (s.rockets.length) o.ro = s.rockets.map(encRocket);
+  if (s.rocketControllers.length) o.ct = s.rocketControllers.map(encController);
   if (s.solidMotors.length) o.sm = s.solidMotors.map(encSolidMotor);
   if (s.solidNozzles.length) o.sn = s.solidNozzles.map(encSolidNozzle);
   if (s.solidGrainSegments.length) o.sg = s.solidGrainSegments.map(encSolidGrain);
@@ -1026,6 +1044,7 @@ function decSubPartGameData(c: CSubPartGameData): SubPartGameData {
   s.combustors = arr<CCombustor>(c.cb).map(decCombustor);
   s.nozzles = arr<CNozzle>(c.nz).map(decNozzle);
   s.rockets = arr<CRocket>(c.ro).map(decRocket);
+  s.rocketControllers = arr<CController>(c.ct).map(decController);
   s.solidMotors = arr<CSolidMotor>(c.sm).map(decSolidMotor);
   s.solidNozzles = arr<CSolidNozzle>(c.sn).map(decSolidNozzle);
   s.solidGrainSegments = arr<CSolidGrain>(c.sg).map(decSolidGrain);
@@ -1444,6 +1463,7 @@ const REACTION_CATEGORIES: ReadonlySet<string> = new Set([
 interface CReaction {
   id: string;
   n?: string; // name (omitted when === id)
+  d?: string; // description
   c?: string; // category (omitted at the Monopropellant default)
   r: [string, number][]; // reactants [phaseId, massShare]
   lut: [number, number, number, number][]; // rows [lnPressure, temperatureK, gamma, molarMassGPerMol]
@@ -1467,6 +1487,7 @@ function encCustomReaction(c: CustomReaction): CReaction {
     ]),
   };
   if (c.name && c.name !== c.id) o.n = c.name;
+  if (c.description) o.d = c.description;
   if (c.category !== 'Monopropellant') o.c = c.category;
   if (c.burnRate) o.br = [round(c.burnRate.coefficientMPerS), round(c.burnRate.exponent)];
   if (c.minimumBurnPressurePa != null) o.bp = round(c.minimumBurnPressurePa);
@@ -1479,6 +1500,7 @@ function decCustomReaction(c: CReaction): CustomReaction {
   return {
     id: str(c.id),
     name: str(c.n) || str(c.id),
+    description: str(c.d),
     category:
       c.c != null && REACTION_CATEGORIES.has(str(c.c))
         ? (str(c.c) as ReactionCategory)

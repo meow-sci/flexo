@@ -59,6 +59,15 @@ export function PropellantEditor({ index }: { index: number }) {
           onChange={(name) => updateCustomReaction(id, { name })}
         />
       </Field>
+      <Field label="Description">
+        <TextField
+          size="sm"
+          aria-label="Propellant description"
+          value={process.description}
+          onFocus={begin}
+          onChange={(description) => updateCustomReaction(id, { description })}
+        />
+      </Field>
       <Field label="Id (referenced by combustors and the export)">
         <TextField
           size="sm"
@@ -173,7 +182,7 @@ function SolidPropellantFields({ process }: { process: CustomReaction }) {
       <span className="text-xs text-fg-subtle">
         Solid propellant (required — burn-rate law r = a·pⁿ)
       </span>
-      <Field label="Burn-rate coefficient a (m/s at 1 Pa — must be > 0)">
+      <Field label="Burn-rate coefficient a (m/s at 1 MPa — must be > 0)">
         <PreciseNumberInput
           aria-label="Burn rate coefficient in meters per second"
           value={br?.coefficientMPerS ?? 0}

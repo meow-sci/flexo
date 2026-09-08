@@ -1,4 +1,5 @@
 import { atom, computed } from 'nanostores';
+import type { CatalogSubPart } from '../ksa/catalog';
 import { persistentJSON } from '@nanostores/persistent';
 import type {
   Battery,
@@ -744,7 +745,7 @@ function lastSegmentLower(templateId: string): string {
 }
 
 /** Adds a SubPart from the catalog at the origin and selects it. */
-export function addSubPart(templateId: string): void {
+export function addSubPart(templateId: string, data?: CatalogSubPart['data']): void {
   const current = $part.get();
   const base = lastSegmentLower(templateId);
   const count = current.placements.filter((p) => p.subPartTemplateId === templateId).length;
@@ -759,6 +760,24 @@ export function addSubPart(templateId: string): void {
     scale: { x: 1, y: 1, z: 1 },
     layerId: currentLayerId(part),
   });
+  // A template is shared by all its placements. Seed its authored metadata once;
+  // later placements preserve the user's edits and do not duplicate hardware.
+  if (data?.gameData && !part.subPartGameData.some((s) => s.subPartTemplateId === templateId))
+    part.subPartGameData.push(structuredClone(data.gameData));
+  if (data && !current.placements.some((p) => p.subPartTemplateId === templateId)) {
+    for (const collider of data.colliders)
+      part.colliders.push({
+        ...structuredClone(collider),
+        id: nextColliderId(part),
+        layerId: currentLayerId(part),
+      });
+    for (const light of data.lights)
+      part.lights.push({
+        ...structuredClone(light),
+        id: nextLightId(part),
+        layerId: currentLayerId(part),
+      });
+  }
   $part.set(part);
   select([{ kind: 'subpart', id: instanceId }]);
 }
@@ -852,7 +871,12 @@ function remapSubPartGameData(
 ): SubPartGameData {
   return {
     ...spd,
+    unknownChildren: remapRawConnectorRefs(spd.unknownChildren, connectorIdMap, idMap),
     rockets: spd.rockets.map((r) => remapRocket(r, idMap)),
+    rocketControllers: spd.rocketControllers.map((c) => ({
+      ...c,
+      rocketRefs: c.rocketRefs.map((r) => remapSubPartRef(r, idMap)),
+    })),
     combustors: spd.combustors.map((c) => remapConsumerFeeds(c, connectorIdMap, idMap)),
     solidMotors: spd.solidMotors.map((m) => remapConsumerFeeds(m, connectorIdMap, idMap)),
   };
@@ -3131,7 +3155,12 @@ export function allEngineModuleIds(part: EditingPart): {
     combustors,
     nozzles,
     rockets,
-    controllers: part.gameData.rocketControllers.map((c) => c.id),
+    controllers: [part.gameData, ...part.subPartGameData].flatMap((g) => [
+      ...g.rocketControllers.map((c) => c.id),
+      ...g.unknownChildren
+        .filter((n) => n.tag === 'RocketEngineController' || n.tag === 'RocketThrusterController')
+        .map((n) => n.attrs.Id ?? ''),
+    ]),
     containers: containers.filter((id) => id.trim()),
   };
 }
@@ -3493,31 +3522,50 @@ export function setEvaDoorSeat(seatIndex: number | null): void {
 // specific SubPart instances. Gimbals overlay a placed instance and thrust-vector its
 // nozzles. Part-level rockets/combustors/nozzles model gas-generator cycles.
 
-function hasController(index: number): boolean {
-  const c = $part.get().gameData.rocketControllers;
-  return index >= 0 && index < c.length;
+function hasController(index: number, templateId?: string): boolean {
+  const part = $part.get();
+  const c = templateId
+    ? part.subPartGameData.find((s) => s.subPartTemplateId === templateId)?.rocketControllers
+    : part.gameData.rocketControllers;
+  return !!c && index >= 0 && index < c.length;
 }
 
-/** Discrete: append an engine (or thruster) controller. */
-export function addRocketController(kind: RocketControllerKind = 'engine'): void {
-  const id = uniqueModuleId(kind === 'thruster' ? 'Thruster' : 'Engine', [
-    ...allEngineModuleIds($part.get()).controllers,
-  ]);
-  commitGameData('add controller', kind, (g) =>
-    g.rocketControllers.push(createRocketController(id, kind)),
+/** Discrete: append an engine (or thruster) controller at the chosen scope. */
+export function addRocketController(
+  kind: RocketControllerKind = 'engine',
+  templateId?: string,
+): void {
+  const id = uniqueModuleId(
+    kind === 'thruster' ? 'Thruster' : 'Engine',
+    allEngineModuleIds($part.get()).controllers,
   );
+  const add = (g: PartGameData | SubPartGameData) => {
+    g.rocketControllers.push(createRocketController(id, kind));
+  };
+  if (templateId) commitSubPartData('add controller', kind, templateId, add);
+  else commitGameData('add controller', kind, add);
 }
 /** Discrete: remove the controller at `index`. */
-export function removeRocketController(index: number): void {
-  if (!hasController(index)) return;
-  commitGameData('remove controller', '', (g) => g.rocketControllers.splice(index, 1));
+export function removeRocketController(index: number, templateId?: string): void {
+  if (!hasController(index, templateId)) return;
+  const remove = (g: PartGameData | SubPartGameData) => {
+    g.rocketControllers.splice(index, 1);
+  };
+  if (templateId) commitSubPartData('remove controller', '', templateId, remove);
+  else commitGameData('remove controller', '', remove);
 }
 /** Discrete: patch a controller (id, kind, rocketRefs, control map). */
-export function updateRocketController(index: number, patch: Partial<RocketController>): void {
-  if (!hasController(index)) return;
-  commitGameData('controller', '', (g) => {
+export function updateRocketController(
+  index: number,
+  patch: Partial<RocketController>,
+  templateId?: string,
+): void {
+  if (!hasController(index, templateId)) return;
+  const update = (g: PartGameData | SubPartGameData) => {
     g.rocketControllers[index] = { ...g.rocketControllers[index], ...patch };
-  });
+  };
+  if (templateId) commitSubPartData('controller', '', templateId, update);
+  else commitGameData('controller', '', update);
 }
 
 /** Discrete: append a part-level gas-generator rocket. */
@@ -4110,16 +4158,6 @@ export function duplicateEngineModule(
     return;
   }
 
-  if (ref.group === 'controller') {
-    const source = current.gameData.rocketControllers[ref.index];
-    if (!source) return;
-    const id = uniqueModuleId(source.id, ids.controllers);
-    commitGameData('duplicate module', id, (g) =>
-      g.rocketControllers.push({ ...structuredClone(source), id }),
-    );
-    return;
-  }
-
   const listKey = {
     combustor: 'combustors',
     nozzle: 'nozzles',
@@ -4127,6 +4165,7 @@ export function duplicateEngineModule(
     grain: 'solidGrainSegments',
     solidNozzle: 'solidNozzles',
     rocket: 'rockets',
+    controller: 'rocketControllers',
   } as const satisfies Record<string, keyof SubPartGameData & keyof PartGameData>;
   const pool = {
     combustor: ids.combustors,
@@ -4137,6 +4176,7 @@ export function duplicateEngineModule(
     grain: ids.containers,
     solidNozzle: ids.nozzles,
     rocket: ids.rockets,
+    controller: ids.controllers,
   } as const;
 
   const key = listKey[ref.group];
@@ -4165,9 +4205,8 @@ export function duplicateEngineModule(
  * plume-entries editor (design D15, closing scope gap **P1**).
  *
  * Discrete rather than streaming because every edit it makes is structural: adding an entry,
- * removing one, flipping `Default`, or re-keying a row to a reaction. The default-entry FAST
- * PATH (the two plume/trail Selects) keeps going through the streaming `updateNozzle` patch
- * + `withDefaultReactionPlume` and is unchanged.
+ * removing or reordering one, flipping `Default`, or re-keying a row to a reaction.
+ * The default-entry plume/trail selects use this same discrete action.
  */
 export function updateReactionPlumes(
   ref: NozzleLocator,

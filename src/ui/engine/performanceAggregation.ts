@@ -1,4 +1,11 @@
-import type { Combustor, DeLavalNozzle, EditingPart, Rocket } from '../../ksa/types';
+import type {
+  Combustor,
+  DeLavalNozzle,
+  EditingPart,
+  Rocket,
+  SubPartGameData,
+  SubPartIdRef,
+} from '../../ksa/types';
 import type { ReactionData } from '../../ksa/reactionCatalog';
 import { resolveReactionLut } from '../../ksa/reactionCatalog';
 import { predictPerformance, G0, type EnginePerformance } from '../../ksa/enginePhysics';
@@ -14,10 +21,9 @@ import { FIRST_PAIR_ROCKET, type EngineEntry } from '../../state/engineStore';
  *
  * Two modes, and the difference is deliberate:
  *
- * - **A `<Rocket>`** — every pair it binds, each nozzle multiplied by the number of
- *   PLACEMENTS of its owning template. One SubPart-owned `<DeLavalNozzle>` on a template
- *   placed four times is four real in-game thrusters (census invariant), so a rocket that
- *   binds it produces four times the thrust.
+ * - **A `<Rocket>`** — every pair it binds, multiplied by placements of the ROCKET's
+ *   owning template. A part-level rocket's explicit `SubPartId` names exactly one nozzle
+ *   instance, even when that nozzle template is placed several times.
  * - **"First pair"** — v1's legacy readout, kept as the fallback for a scope with no
  *   `<Rocket>` at all: the FIRST combustor with the FIRST nozzle, un-multiplied, so the
  *   numbers a returning user knows do not silently change.
@@ -73,42 +79,37 @@ export function rocketsInScope(part: EditingPart, entry: EngineEntry | null): Ro
   return part.subPartGameData.find((s) => s.subPartTemplateId === entry.templateId)?.rockets ?? [];
 }
 
-/** A located module plus the template that owns it (null ⇒ part-level). */
-interface Located<T> {
-  module: T;
-  templateId: string | null;
+/** Select the first actual rocket on entry/scope change; first-pair is only for bare hardware. */
+export function performanceSelection(rockets: Rocket[], selection: string): string {
+  return rockets.some((r) => r.id === selection)
+    ? selection
+    : (rockets[0]?.id ?? FIRST_PAIR_ROCKET);
 }
 
 /**
- * Resolves a module id to the module and its owner, looking in the OPEN SCOPE first and then
- * part-wide. The scope-first order matters: a part-level `<Rocket>` in a gas-generator cycle
- * legitimately names hardware on a placed SubPart, and a SubPart rocket names its own.
+ * KSA SubPartIdReference.TryGetSubPart: an empty SubPartId means the rocket's owner;
+ * an explicit id means one child instance. Never search unrelated owners by module id.
+ * flexo's SubPart templates have no nested child placements.
  */
 function locate<T extends { id: string }>(
   part: EditingPart,
-  entry: EngineEntry | null,
-  id: string,
-  pick: (owner: { combustors: Combustor[]; nozzles: DeLavalNozzle[] }) => T[],
-): Located<T> | null {
-  const scoped =
-    entry?.kind === 'subpart'
+  entry: EngineEntry,
+  ref: SubPartIdRef,
+  pick: (owner: SubPartGameData | EditingPart['gameData']) => T[],
+): T | null {
+  if (ref.subPartInstanceId) {
+    if (entry.kind === 'subpart') return null;
+    const placement = part.placements.find((p) => p.instanceId === ref.subPartInstanceId);
+    const owner = part.subPartGameData.find(
+      (s) => s.subPartTemplateId === placement?.subPartTemplateId,
+    );
+    return owner ? (pick(owner).find((m) => m.id === ref.id) ?? null) : null;
+  }
+  const owner =
+    entry.kind === 'subpart'
       ? part.subPartGameData.find((s) => s.subPartTemplateId === entry.templateId)
-      : entry?.kind === 'part'
-        ? part.gameData
-        : undefined;
-  if (scoped) {
-    const hit = pick(scoped as never).find((m) => m.id === id);
-    if (hit) {
-      return { module: hit, templateId: entry?.kind === 'subpart' ? entry.templateId : null };
-    }
-  }
-  const partHit = pick(part.gameData as never).find((m) => m.id === id);
-  if (partHit) return { module: partHit, templateId: null };
-  for (const spd of part.subPartGameData) {
-    const hit = pick(spd as never).find((m) => m.id === id);
-    if (hit) return { module: hit, templateId: spd.subPartTemplateId };
-  }
-  return null;
+      : part.gameData;
+  return owner ? (pick(owner).find((m) => m.id === ref.id) ?? null) : null;
 }
 
 /** How many in-game instances a module owned by `templateId` becomes (part-level ⇒ 1). */
@@ -214,37 +215,26 @@ export function computePerformance(
 
   // A solid core has no `<AreaRatio>` and its thrust is a CURVE, not a number — that is the
   // SolidThrustCurveCard's job (D7), so say so rather than reporting zeros.
-  const solidCore =
-    locate(
-      part,
-      entry,
-      rocket.core.id,
-      (o) => (o as never as { solidMotors: { id: string }[] }).solidMotors,
-    ) !== null;
+  const solidCore = locate(part, entry, rocket.core, (o) => o.solidMotors) !== null;
   if (solidCore) return { kind: 'solid' };
 
-  const core = locate(part, entry, rocket.core.id, (o) => o.combustors);
+  const core = locate(part, entry, rocket.core, (o) => o.combustors);
   if (!core) return { kind: 'no-modules' };
 
   const pairs: PerformancePair[] = [];
   let reactionName = '';
-  let failure: PerformanceUnavailable | null = null;
   for (const ref of rocket.nozzles) {
-    const nozzle = locate(part, entry, ref.id, (o) => o.nozzles);
-    if (!nozzle) continue;
-    const predicted = predictPair(core.module, nozzle.module, reactions);
-    if ('kind' in predicted) {
-      failure ??= predicted;
-      continue;
-    }
+    const nozzle = locate(part, entry, ref, (o) => o.nozzles);
+    if (!nozzle) return { kind: 'no-modules' };
+    const predicted = predictPair(core, nozzle, reactions);
+    if ('kind' in predicted) return predicted;
     reactionName = predicted.reactionName;
     pairs.push({
-      coreId: core.module.id,
-      nozzleId: nozzle.module.id,
-      instanceCount: instanceCountOf(part, nozzle.templateId),
+      coreId: core.id,
+      nozzleId: nozzle.id,
+      instanceCount: instanceCountOf(part, entry.kind === 'subpart' ? entry.templateId : null),
       performance: predicted.performance,
     });
   }
-  if (pairs.length === 0) return failure ?? { kind: 'no-modules' };
   return aggregate(reactionName, pairs);
 }

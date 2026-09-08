@@ -5,6 +5,7 @@ import { ListBoxItem, SectionTitle, Select, cn, noteBox } from '../kit';
 import { SolidThrustCurveCard } from './SolidThrustCurveCard';
 import {
   computePerformance,
+  performanceSelection,
   rocketsInScope,
   type PerformanceResult,
 } from './performanceAggregation';
@@ -13,7 +14,6 @@ import { $allReactionIndex } from '../../state/reactionStore';
 import {
   $activeEngineEntry,
   $rocketReadoutSel,
-  FIRST_PAIR_ROCKET,
   setRocketReadoutSel,
 } from '../../state/engineStore';
 
@@ -43,7 +43,7 @@ export function PerformanceCard() {
   const rockets = rocketsInScope(part, entry);
   // "First pair" is the LEGACY fallback, not a peer option: it only exists for a scope with
   // no `<Rocket>` at all, and the select hides itself there (v1 behavior preserved).
-  const effective = rockets.some((r) => r.id === selection) ? selection : FIRST_PAIR_ROCKET;
+  const effective = performanceSelection(rockets, selection);
   const result = computePerformance(part, entry, effective, reactions);
 
   return (
@@ -198,7 +198,7 @@ export function PerformanceHeadline({ className }: { className?: string }) {
   const selection = useStore($rocketReadoutSel);
 
   const rockets = rocketsInScope(part, entry);
-  const effective = rockets.some((r) => r.id === selection) ? selection : FIRST_PAIR_ROCKET;
+  const effective = performanceSelection(rockets, selection);
   const result = computePerformance(part, entry, effective, reactions);
   if (result.kind !== 'ok') return null;
 

@@ -119,15 +119,18 @@ describe('enginePhysics: combustion LUT lookup', () => {
     expect(lutLookup(lut, 0).conditions.temperature).toBeCloseTo(2000, 6);
   });
 
-  it('reproduces the KSA quirk: the TOP interval clamps to the ceiling row (no interpolation)', () => {
-    // CombustionTable.Lookup's `idx <= -NumPoints` branch fires for the highest
-    // interval, so a pressure between the last two rows returns the ceiling row's
-    // gas properties (it keeps the queried pressure). Faithful to the game; only
-    // affects pressures near the very top of the table, far above any real engine.
+  it('interpolates the highest interval using current FixedReactionTable.FindSegment', () => {
     const inTopInterval = Math.sqrt(1e6 * 1e7);
     const { props, conditions } = lutLookup(lut, inTopInterval);
-    expect(props.gamma).toBeCloseTo(1.1, 6); // ceiling row, NOT the 1.125 midpoint
-    expect(conditions.temperature).toBeCloseTo(4000, 6);
+    expect(props.gamma).toBeCloseTo(1.125, 6);
+    expect(props.specificGasConstant).toBeCloseTo(475, 6);
+    expect(conditions.temperature).toBeCloseTo(3500, 6);
+    expect(conditions.pressure).toBe(inTopInterval);
+  });
+
+  it('preserves the requested pressure even on an exact pressure-axis hit', () => {
+    const cachedPressureDiffers = { rows: [{ ...lut.rows[0], pressure: 99999 }] };
+    expect(lutLookup(cachedPressureDiffers, 1e5).conditions.pressure).toBe(1e5);
   });
 });
 
@@ -179,17 +182,24 @@ describe('enginePhysics: predictPerformance (synthetic gas)', () => {
     });
     expect(zero.thrustVacN).toBe(0);
     expect(zero.ispVac).toBe(0);
-    const nan = predictPerformance({
-      lut,
+  });
+});
+
+describe('enginePhysics: current DeLavalNozzle.ComputeThroatArea defaults', () => {
+  it.each([Number.NaN, 0, -3])('uses ratio 1 for authored ratio %s', (areaRatio) => {
+    const input = {
+      lut: flatLut(1.2, 400, 3000),
       maxPressurePa: 5e6,
       exitDiameterM: 1,
-      areaRatio: Number.NaN, // KSA's AreaRatio default — must not crash
+      areaRatio,
       thermalEfficiency: 1,
       flowEfficiency: 1,
       expansionEfficiency: 1,
-    });
-    expect(Number.isFinite(nan.thrustVacN)).toBe(true);
-    expect(nan.thrustVacN).toBe(0);
+    };
+    const actual = predictPerformance(input);
+    expect(actual).toEqual(predictPerformance({ ...input, areaRatio: 1 }));
+    expect(actual.thrustVacN).toBeGreaterThan(0);
+    expect(actual.throatDiameterM).toBe(1);
   });
 });
 

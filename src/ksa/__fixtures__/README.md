@@ -7,18 +7,21 @@ git-ignored and not present in open-source CI).
 
 ## Files
 
-| File                          | Why it's vendored                                                                                        |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `CoreFuelTankAAssets.xml`     | Fuel-tank `<Part>` / `<SubPart>` geometry (the `LF1WHalfHA` prefab and its skins).                       |
-| `CoreFuelTankAGameData.xml`   | Fuel-tank `<PartGameData>` (editor tags, `<Diameter>`, `<Collider>`).                                    |
-| `CoreElectricalAAssets.xml`   | Electrical `<Part>` / `<SubPart>` geometry (the `SolarPanelB` prefab).                                   |
-| `CoreElectricalAGameData.xml` | Electrical `<PartGameData>` + `<SubPartGameData>` (the solar-cell `<SolarPanel>` data).                  |
-| `CoreIVASpaceAGameData.xml`   | The ONLY shipped `<IVASeat>` data — the two-seat `MediumCapsuleA` interior.                              |
-| `PartGameData.xml`            | Shared file holding the fuel-tank `<SubPartGameData>` `<Tank>` metadata (the duplicate-`Id` merge case). |
-| `CoreLaunchPadAAssets.xml`    | The static-object catalog: 8 `<StaticSubObject>`s + the `<StaticObject>` launch-pad prefab (ICRP).       |
-| `CoreLaunchPadAGameData.xml`  | The only shipped `<StaticObjectGameData>` (GroundOffset / SurfaceHeight / FootprintRadius).              |
-| `CoreLaunchPadBAssets.xml`    | `<PbrMaterial>` with the `<Alpha>` slot + the alpha-blended GravelTrim `<StaticSubObject>`.              |
-| `CoreLaunchPadCAssets.xml`    | The `<Terrain>true</Terrain>` BaseGrass `<StaticSubObject>` (planet-sampling render bucket).             |
+| File                                                        | Why it's vendored                                                                                        |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `CorePropulsionAAssets.xml` / `CorePropulsionAGameData.xml` | Liquid engines, gas generators, verniers, gimbal pivots, SRBs and launch escape systems.                 |
+| `CorePropulsionBAssets.xml` / `CorePropulsionBGameData.xml` | RCS chambers, inherited thruster controllers and service-fluid feeds.                                    |
+| `CorePropulsionCAssets.xml` / `CorePropulsionCGameData.xml` | Large solid motor stacks, nozzle multipliers and grain data.                                             |
+| `CoreFuelTankAAssets.xml`                                   | Fuel-tank `<Part>` / `<SubPart>` geometry (the `LF1WHalfHA` prefab and its skins).                       |
+| `CoreFuelTankAGameData.xml`                                 | Fuel-tank `<PartGameData>` (editor tags, `<Diameter>`, `<Collider>`).                                    |
+| `CoreElectricalAAssets.xml`                                 | Electrical `<Part>` / `<SubPart>` geometry (the `SolarPanelB` prefab).                                   |
+| `CoreElectricalAGameData.xml`                               | Electrical `<PartGameData>` + `<SubPartGameData>` (the solar-cell `<SolarPanel>` data).                  |
+| `CoreIVASpaceAGameData.xml`                                 | The ONLY shipped `<IVASeat>` data — the two-seat `MediumCapsuleA` interior.                              |
+| `PartGameData.xml`                                          | Shared file holding the fuel-tank `<SubPartGameData>` `<Tank>` metadata (the duplicate-`Id` merge case). |
+| `CoreLaunchPadAAssets.xml`                                  | The static-object catalog: 8 `<StaticSubObject>`s + the `<StaticObject>` launch-pad prefab (ICRP).       |
+| `CoreLaunchPadAGameData.xml`                                | The only shipped `<StaticObjectGameData>` (GroundOffset / SurfaceHeight / FootprintRadius).              |
+| `CoreLaunchPadBAssets.xml`                                  | `<PbrMaterial>` with the `<Alpha>` slot + the alpha-blended GravelTrim `<StaticSubObject>`.              |
+| `CoreLaunchPadCAssets.xml`                                  | The `<Terrain>true</Terrain>` BaseGrass `<StaticSubObject>` (planet-sampling render bucket).             |
 
 Consumed by [`src/ksa/partCatalog.test.ts`](../partCatalog.test.ts) via the
 `vendoredAsset` / `readVendoredAsset` helpers in [`src/ksa/ksaTestAssets.ts`](../ksaTestAssets.ts).

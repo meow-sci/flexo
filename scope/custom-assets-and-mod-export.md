@@ -20,6 +20,16 @@ transforms, which flexo already satisfies — see [What changed in 5117](#what-c
 export depends on is byte-identical or behavior-preserving. No code change required. Two
 durable watch-items noted below.
 
+**Engine bundle audit @5402:** the vendored `CorePropulsionA/B/CAssets.xml` and sibling
+GameData documents now exercise import → `buildMultiModContent` → `buildMultiCustomBundle`
+in `src/ksa/modExport.test.ts`. Every engine-bearing built-in `<SubPartGameData Id>` targets a
+fresh `<SubPart Id>` declared in the exported Assets file; its `<PartModel><Mesh Id>` and
+`<Material Id>` reuse Core art and require no new binaries. This avoids
+`PartTemplate.ApplyGameData` (`decomp/KSA/PartTemplate.cs`) appending authored combustors,
+nozzles and rockets onto shared Core templates. The tests also preserve controller/rocket
+`SubPartId` refs, `<FeedsFrom>` plumbing, all nozzle FX and gimbal pivots across the two XML
+documents; see [engines.md](engines.md) for the game-side module schema.
+
 ---
 
 ## Flexo modules

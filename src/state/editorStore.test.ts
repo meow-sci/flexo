@@ -106,10 +106,16 @@ import {
   addPartNozzle,
   addRcsEngine,
   addRocketController,
+  removeRocketController,
+  updateRocketController,
   addSolidEngine,
   addSubPartSolidMotor,
   duplicateEngineModule,
   updateReactionPlumes,
+  updatePartNozzle,
+  updatePartSolidGrainSegment,
+  updateSubPartSolidGrainSegment,
+  updateCustomReaction,
   addConsumerFeedWiring,
   addKitten,
   addLight,
@@ -174,6 +180,8 @@ import {
   setDockingPortEnabled,
   setDockingPortLatchingKineticEnergy,
   setDockingPortPushoffImpulse,
+  setGimbal,
+  updateCombustor,
   undo,
   updatePlacementTransform,
   scaleEverything,
@@ -185,6 +193,8 @@ import {
   KITTEN_LAYER_ID,
   createCombustor,
   createEmptyPart,
+  identityTransform,
+  createPartLight,
   createSolidGrainSegment,
   createSolidMotor,
   createSubPartGameData,
@@ -370,6 +380,47 @@ beforeEach(() => {
 });
 
 describe('editorStore', () => {
+  it('imports a SubPart chamber and its template lights in the placement undo step', () => {
+    const gameData = createSubPartGameData('Chamber');
+    gameData.combustors.push(createCombustor('Combustor'));
+    const data = { gameData, colliders: [], lights: [createPartLight('Chamber', '_light1')] };
+    addSubPart('Chamber', data);
+    const imported = structuredClone($part.get());
+    expect(imported.subPartGameData[0].combustors[0].id).toBe('Combustor');
+    expect(imported.lights).toHaveLength(1);
+    undo();
+    expect($part.get().placements).toHaveLength(0);
+    expect($part.get().subPartGameData).toHaveLength(0);
+    expect($part.get().lights).toHaveLength(0);
+    redo();
+    expect($part.get()).toEqual(imported);
+    updateCombustor('Chamber', 0, { maxPressurePa: 8e6 });
+    addSubPart('Chamber', data);
+    expect($part.get().subPartGameData).toHaveLength(1);
+    expect($part.get().subPartGameData[0].combustors[0].maxPressurePa).toBe(8e6);
+    expect(gameData.combustors[0].maxPressurePa).toBe(5e6);
+    expect($part.get().lights).toHaveLength(1);
+  });
+
+  it('restores gimbal pivot and axes when undoing a streaming gimbal edit', () => {
+    addSubPart('Bell');
+    const instanceId = $part.get().placements[0].instanceId;
+    setGimbal(instanceId, { maxAngleYDeg: 2 });
+    const before = structuredClone($part.get().gameData.gimbals);
+    pushUndo('edit gimbal');
+    setGimbal(instanceId, {
+      transform: {
+        ...identityTransform(),
+        position: { x: 1.1575, y: 0, z: 0 },
+        rotation: { x: -1.5708, y: 0, z: 0 },
+      },
+    });
+    expect($part.get().gameData.gimbals[0].transform.position.x).toBe(1.1575);
+    undo();
+    expect($part.get().gameData.gimbals).toEqual(before);
+    redo();
+    expect($part.get().gameData.gimbals[0].transform.rotation.x).toBe(-1.5708);
+  });
   it('adds SubParts with sequential lowercased instance ids and selects the last', () => {
     addSubPart('CoreStructuralA_Subpart_TrussBarA');
     addSubPart('CoreStructuralA_Subpart_TrussBarA');
@@ -853,6 +904,20 @@ describe('editorStore', () => {
         subPartGameData: [
           {
             ...createSubPartGameData(CHAMBER_TMPL),
+            rocketControllers: [
+              {
+                id: 'TemplateController',
+                kind: 'thruster',
+                controlMapFlags: [],
+                rocketRefs: [
+                  {
+                    id: 'PeerRocket',
+                    subPartInstanceId: 'CorePropulsionA_Subpart_EngineAMedBoostAssembly1',
+                  },
+                  { id: 'LocalRocket', subPartInstanceId: null },
+                ],
+              },
+            ],
             combustors: [{ ...createCombustor('ThrustChamber'), feeds: [{ kind: 'parent' }] }],
             // ...but a connector feed on a SubPart-level motor does.
             solidMotors: [
@@ -895,6 +960,10 @@ describe('editorStore', () => {
     const spd = part.subPartGameData.find((s) => s.subPartTemplateId === CHAMBER_TMPL)!;
     expect(spd.combustors[0].feeds).toEqual([{ kind: 'parent' }]); // nothing to remap
     expect(spd.solidMotors[0].feeds).toEqual([{ kind: 'connector', connectorId: '_connector3' }]);
+    expect(spd.rocketControllers[0].rocketRefs).toEqual([
+      { id: 'PeerRocket', subPartInstanceId: newInstanceId },
+      { id: 'LocalRocket', subPartInstanceId: null },
+    ]);
   });
 
   it('records undo for the plumbing mutations (capabilities, feeds, plumbing, wiring)', () => {
@@ -3899,8 +3968,9 @@ describe('editorStore — engine define-new composites', () => {
           kind: 'Fixed' as const,
           id: 'APCP',
           name: 'APCP',
+          description: '',
           category: 'Solid' as const,
-          reactants: [],
+          reactants: [{ phaseId: 'APCP(s)', massShare: 1, massFraction: 1 }],
           lut: { rows: [] },
           burnRate: { coefficientMPerS: 0.0045, exponent: 0.35 },
           minimumBurnPressurePa: 1.5e6,
@@ -3968,6 +4038,7 @@ describe('editorStore — duplicateEngineModule', () => {
     addCustomReaction({
       id: 'MyFuel',
       name: 'My Fuel',
+      description: '',
       category: 'Monopropellant',
       reactants: [],
       lut: [],
@@ -4321,4 +4392,102 @@ describe('applyEngineWizard', () => {
     redo();
     expect($part.get()).toEqual(built);
   });
+});
+
+describe('SubPart controller document edits', () => {
+  it('adds, edits, duplicates and removes template controllers with undo/redo', () => {
+    addSubPart('Thruster');
+    addRocketController('thruster', 'Thruster');
+    const added = structuredClone($part.get());
+    expect(added.subPartGameData[0].rocketControllers[0].kind).toBe('thruster');
+    expect(added.gameData.rocketControllers).toEqual([]);
+    undo();
+    expect($part.get().subPartGameData).toEqual([]);
+    redo();
+    expect($part.get()).toEqual(added);
+    updateRocketController(
+      0,
+      { controlMapFlags: [], rocketRefs: [{ id: 'Local', subPartInstanceId: null }] },
+      'Thruster',
+    );
+    const edited = structuredClone($part.get());
+    undo();
+    expect($part.get()).toEqual(added);
+    redo();
+    duplicateEngineModule({ group: 'controller', scope: 'sub', index: 0 }, 'Thruster');
+    const duplicated = structuredClone($part.get());
+    const controllers = duplicated.subPartGameData[0].rocketControllers;
+    expect(controllers).toHaveLength(2);
+    expect(controllers[1].id).not.toBe(controllers[0].id);
+    expect(controllers[1].rocketRefs).toEqual(controllers[0].rocketRefs);
+    undo();
+    expect($part.get()).toEqual(edited);
+    redo();
+    removeRocketController(0, 'Thruster');
+    expect($part.get().subPartGameData[0].rocketControllers).toHaveLength(1);
+    undo();
+    expect($part.get()).toEqual(duplicated);
+  });
+});
+
+describe('engine inherited field edits retain undo', () => {
+  it('restores grain casing data and custom propellant descriptions after streaming edits', () => {
+    const part = createEmptyPart();
+    part.gameData.solidGrainSegments = [createSolidGrainSegment('RootGrain')];
+    part.subPartGameData = [
+      {
+        ...createSubPartGameData('Case'),
+        solidGrainSegments: [createSolidGrainSegment('ChildGrain')],
+      },
+    ];
+    part.customReactions = [
+      {
+        id: 'Fuel',
+        name: 'Fuel',
+        description: '',
+        category: 'Monopropellant',
+        reactants: [],
+        lut: [],
+        burnRate: null,
+        minimumBurnPressurePa: null,
+        maxStablePressurePa: null,
+        exhaustCondensedFraction: null,
+      },
+    ];
+    $part.set(part);
+    importHistory({ undo: [], redo: [] });
+    pushUndo('edit engine casing');
+    updatePartSolidGrainSegment(0, {
+      massKg: 42,
+      densityKgM3: 2000,
+      paf2Asmb: { x: 0.1, y: 0, z: 0 },
+    });
+    updateSubPartSolidGrainSegment('Case', 0, { densityKgM3: 3000 });
+    updateCustomReaction('Fuel', { description: 'Tuned fuel' });
+    expect($part.get().gameData.solidGrainSegments[0].massKg).toBe(42);
+    expect($part.get().subPartGameData[0].solidGrainSegments[0].densityKgM3).toBe(3000);
+    expect($part.get().customReactions[0].description).toBe('Tuned fuel');
+    undo();
+    expect($part.get()).toEqual(part);
+  });
+});
+
+it('edits nozzle sound and independent FX overrides without losing undo', () => {
+  $part.set(createEmptyPart());
+  addPartNozzle();
+  const before = $part.get();
+  importHistory({ undo: [], redo: [] });
+  pushUndo('edit nozzle');
+  updatePartNozzle(0, {
+    fxExhaustLocation: { x: 2, y: 0, z: 0 },
+    fxExhaustDirection: null,
+    sound: { action: 'Off', soundId: 'CustomEngineSound' },
+  });
+  expect($part.get().gameData.nozzles[0]).toMatchObject({
+    fxExhaustLocation: { x: 2, y: 0, z: 0 },
+    fxExhaustDirection: null,
+    sound: { action: 'Off', soundId: 'CustomEngineSound' },
+  });
+  undo();
+  expect($part.get()).toEqual(before);
 });

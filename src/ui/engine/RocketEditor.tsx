@@ -1,9 +1,11 @@
 import { useStore } from '@nanostores/react';
 import { Button, Field, ListBoxItem, Select, TextField, warningBox } from '../kit';
 import { ownerOf } from './editorKit';
+import { referenceModuleIds } from './rocketReferenceOptions';
 import { $part, pushUndo, updatePartRocket, updateRocket } from '../../state/editorStore';
 import { $engineFindings } from '../../state/engineStore';
-import type { EditingPart, Rocket, SubPartIdRef } from '../../ksa/types';
+import { PreciseNumberInput } from '../PreciseNumberInput';
+import type { Rocket, SubPartIdRef } from '../../ksa/types';
 
 /**
  * **The rocket editor** (design: design-data-engine-modes.md §B4.7) — one `<Rocket>`, the
@@ -40,7 +42,7 @@ export function RocketEditor({ templateId, index }: { templateId: string | null;
     update(patch);
   };
 
-  const { coreIds, nozzleIds } = idPools(part, templateId);
+  const coreIds = referenceModuleIds(part, templateId, rocket.core.subPartInstanceId, 'core');
   // Spread over the existing entry: the picker only edits the id/scope, and an authored
   // `AreaRatioMultiplier` must survive being re-pointed at another nozzle.
   const setNozzleRef = (i: number, ref: SubPartIdRef) =>
@@ -96,7 +98,7 @@ export function RocketEditor({ templateId, index }: { templateId: string | null;
             <div className="min-w-0 flex-1">
               <IdSelect
                 label={`Nozzle ${j + 1}`}
-                ids={nozzleIds}
+                ids={referenceModuleIds(part, templateId, nz.subPartInstanceId, 'nozzle')}
                 value={nz.id || null}
                 onChange={(id) => setNozzleRef(j, { ...nz, id: id ?? '' })}
               />
@@ -112,6 +114,22 @@ export function RocketEditor({ templateId, index }: { templateId: string | null;
                 />
               </div>
             )}
+            <Field label="Area ratio multiplier">
+              <PreciseNumberInput
+                aria-label={`Nozzle ${j + 1} area ratio multiplier`}
+                value={nz.areaRatioMultiplier}
+                min={0.001}
+                step={0.1}
+                onInteractionStart={begin}
+                onCommit={(areaRatioMultiplier) =>
+                  update({
+                    nozzles: rocket.nozzles.map((n, k) =>
+                      k === j ? { ...n, areaRatioMultiplier } : n,
+                    ),
+                  })
+                }
+              />
+            </Field>
             <Button
               size="sm"
               variant="ghost"
@@ -143,39 +161,6 @@ export function RocketEditor({ templateId, index }: { templateId: string | null;
   );
 }
 
-/** The id pools a rocket at this scope may bind: both families, both owners at part scope. */
-function idPools(
-  part: EditingPart,
-  templateId: string | null,
-): { coreIds: string[]; nozzleIds: string[] } {
-  if (templateId !== null) {
-    const spd = part.subPartGameData.find((s) => s.subPartTemplateId === templateId);
-    return {
-      coreIds: [...(spd?.combustors ?? []), ...(spd?.solidMotors ?? [])].map((m) => m.id),
-      nozzleIds: [...(spd?.nozzles ?? []), ...(spd?.solidNozzles ?? [])].map((n) => n.id),
-    };
-  }
-  const g = part.gameData;
-  return {
-    coreIds: [
-      ...g.combustors.map((c) => c.id),
-      ...g.solidMotors.map((m) => m.id),
-      ...part.subPartGameData.flatMap((s) => [
-        ...s.combustors.map((c) => c.id),
-        ...s.solidMotors.map((m) => m.id),
-      ]),
-    ],
-    nozzleIds: [
-      ...g.nozzles.map((n) => n.id),
-      ...g.solidNozzles.map((n) => n.id),
-      ...part.subPartGameData.flatMap((s) => [
-        ...s.nozzles.map((n) => n.id),
-        ...s.solidNozzles.map((n) => n.id),
-      ]),
-    ],
-  };
-}
-
 const ROOT = '\0root';
 
 /**
@@ -200,7 +185,7 @@ export function IdSelect({
   onChange: (id: string | null) => void;
 }) {
   const present = value ?? (allowRoot ? ROOT : '');
-  const base = allowRoot ? [ROOT, ...ids] : [...ids];
+  const base = allowRoot ? [ROOT, ...new Set(ids)] : [...new Set(ids)];
   const options = value && !ids.includes(value) ? [value, ...base] : base;
   return (
     <Field label={label}>

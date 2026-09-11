@@ -5,6 +5,7 @@ import {
   createGlow,
   createPartAnimation,
   createPartLight,
+  createSubPartGameData,
   identityTransform,
 } from './types';
 import type { CustomMesh, EditingPart, EmissiveConfig, PartAnimation, PartCollider } from './types';
@@ -562,6 +563,28 @@ describe('built-in SubPart GameData export variants (never redefine the built-in
   // flexo_<base>_<ns>_<templateId>: the `ns` segment is what stops two parts of one project
   // from minting the same variant id for a template they both place (MULTI_PART_PLAN P3.04).
   const VID = `flexo_MyLight_${LIGHT_NS}_${SPOTLIGHT}`;
+
+  it('keeps a built-in template isolated when disabling its only IVA component', async () => {
+    const part = partWithBuiltinLight();
+    part.lights = [];
+    const spd = createSubPartGameData(SPOTLIGHT);
+    spd.unknownChildren.push({ tag: 'IVASeat', attrs: { Id: 'pilot' }, children: [] });
+    part.subPartGameData.push(spd);
+    part.gameData.ivaEnabled = false;
+
+    const content = buildModContent(part, 'MyLight', lightCatalog());
+    expect(content.partXml).toContain(`InstanceOf="${VID}"`);
+    expect(content.partXml).not.toContain(`InstanceOf="${SPOTLIGHT}"`);
+    expect(content.gameDataXml).not.toContain('<IVASeat');
+    const bundle = await bundleOnePart(part, content.base, undefined, content.variants);
+    expect(bundle.assetsXml).toContain(`<SubPart Id="${VID}"`);
+    expect(bundle.assetsXml).not.toContain('<IVASeat');
+
+    part.gameData.ivaEnabled = true;
+    expect(buildModContent(part, 'MyLight', lightCatalog()).gameDataXml).toContain(
+      '<IVASeat Id="pilot"/>',
+    );
+  });
 
   it('creates a variant for a placed built-in SubPart carrying GameData, reusing built-in mesh/material', () => {
     const v = buildExportVariantMap(

@@ -348,7 +348,7 @@ function appendPartGameData(
     const el = doc.createElement('EVADoor');
     // `SeatId` only when authored: KSA's default is "" and `ResolveAlignedSeats` skips an
     // empty one, so an always-emitted `SeatId=""` would be noise Core does not write.
-    if (game.evaDoor.seatId) el.setAttribute('SeatId', game.evaDoor.seatId);
+    if (game.ivaEnabled && game.evaDoor.seatId) el.setAttribute('SeatId', game.evaDoor.seatId);
     gd.appendChild(el);
   }
 
@@ -380,10 +380,16 @@ function appendPartGameData(
 
   // IVA camera vantage points, in DOCUMENT ORDER — that order is KSA's seat cycle order,
   // and the first seat is the one the interior view opens on.
-  for (const seat of part.ivaSeats) gd.appendChild(buildIvaSeatElement(doc, seat));
+  if (game.ivaEnabled) {
+    for (const seat of part.ivaSeats) gd.appendChild(buildIvaSeatElement(doc, seat));
+  }
 
-  // Unmodeled children flexo captured on import — re-emitted verbatim, last.
-  for (const node of game.unknownChildren) gd.appendChild(buildRawNode(doc, node));
+  // Disabled IVA omits its components without deleting the imported interior reference.
+  // Every other unmodeled child still round-trips verbatim.
+  for (const node of game.unknownChildren) {
+    if (!game.ivaEnabled && (node.tag === 'AttachedInternal' || node.tag === 'IVASeat')) continue;
+    gd.appendChild(buildRawNode(doc, node));
+  }
 
   assets.appendChild(gd);
 
@@ -424,7 +430,10 @@ function appendPartGameData(
       spdEl.appendChild(buildSolidGrainSegmentElement(doc, seg));
     if (owned.length > 0) spdEl.appendChild(buildColliderElement(doc, owned));
     // Unmodeled children flexo captured on import — re-emitted verbatim, last.
-    for (const node of spd.unknownChildren) spdEl.appendChild(buildRawNode(doc, node));
+    for (const node of spd.unknownChildren) {
+      if (!game.ivaEnabled && (node.tag === 'AttachedInternal' || node.tag === 'IVASeat')) continue;
+      spdEl.appendChild(buildRawNode(doc, node));
+    }
     assets.appendChild(spdEl);
   }
 

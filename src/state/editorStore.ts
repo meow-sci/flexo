@@ -2756,6 +2756,14 @@ export function setControllable(enabled: boolean): void {
   });
 }
 
+/** Discrete: suppress IVA on export without deleting the part's interior or seat data. */
+export function setIvaEnabled(enabled: boolean): void {
+  if ($part.get().gameData.ivaEnabled === enabled) return;
+  commitGameData('IVA mode', enabled ? 'on' : 'off', (g) => {
+    g.ivaEnabled = enabled;
+  });
+}
+
 // --- SubPart GameData (per-template) ---
 
 /**

@@ -1268,6 +1268,8 @@ export interface RawXmlNode {
  * space-tape's `PartGameDataState` (GameDataModels.cs / PartEditorState.cs).
  */
 export interface PartGameData {
+  /** Editor export preference: omit IVA seats and attached interiors when false, retaining their data. */
+  ivaEnabled: boolean;
   /** In-game display name (PartGameData DisplayName attribute). Blank omits it. */
   displayName: string;
   /** Mass override in kg, or null for the part's default mass. */
@@ -1462,6 +1464,7 @@ export function createPartLight(ownerTemplateId: string | null, id: string): Par
 export function createEmptyGameData(): PartGameData {
   return {
     displayName: '',
+    ivaEnabled: true,
     customMass: null,
     customMassExtras: [],
     diameterM: null,

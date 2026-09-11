@@ -97,6 +97,15 @@ function healthyPart(): { part: EditingPart; catalog: Map<string, CatalogSubPart
 }
 
 describe('validateIvaSeats', () => {
+  it('ignores retained seats when IVA is disabled and validates them again when enabled', () => {
+    const { part, catalog } = healthyPart();
+    part.ivaSeats[0].position.x = Number.NaN;
+    part.gameData.ivaEnabled = false;
+    expect(validateIvaSeats(part, catalog)).toEqual([]);
+    part.gameData.ivaEnabled = true;
+    expect(codes(part, catalog)).toContain('iva-seat-non-finite');
+  });
+
   it('is silent for a part with a seat and interior geometry', () => {
     const { part, catalog } = healthyPart();
     expect(validateIvaSeats(part, catalog)).toEqual([]);

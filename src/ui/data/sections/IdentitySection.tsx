@@ -13,6 +13,7 @@ import {
   setDisplayName,
   setEditorTags,
   setExtraDiameters,
+  setIvaEnabled,
   setPartId,
 } from '../../../state/editorStore';
 import type { EditingPart } from '../../../ksa/types';
@@ -104,6 +105,15 @@ export function IdentitySection({ part, meta }: { part: EditingPart; meta: Secti
           </span>
         </>
       )}
+
+      <Switch isSelected={g.ivaEnabled} onChange={setIvaEnabled}>
+        IVA mode
+      </Switch>
+      <p className="text-xs text-fg-subtle">
+        Allow this part’s interior camera in game. Turning this off excludes attached interiors and
+        IVA seats from export; their data stays in the project so you can turn it back on. Enabling
+        IVA requires an attached interior or seats added in Build mode.
+      </p>
 
       <Switch isSelected={g.controllable} onChange={setControllable}>
         Command capable (controllable)

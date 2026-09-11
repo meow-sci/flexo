@@ -127,6 +127,7 @@ function richPart(): EditingPart {
     },
   ];
   p.gameData.diameterM = 2.5;
+  p.gameData.ivaEnabled = false;
   p.gameData.crashTolerancePa = 3e6; // <Part CrashTolerance> (KSA 2026.9.7.5402)
   p.gameData.controllable = true;
   // Unmodeled passthrough on the part itself: a nested <Collider> (attrs + child tree).
@@ -911,6 +912,26 @@ describe('layer color codec', () => {
       pts: [{ l: [{ i: 'layer1', n: 'Engines', c: 'plaid' }] }],
     }).parts[0].data;
     expect(back.layers[0].color).toBeUndefined();
+  });
+});
+
+describe('IVA export preference codec', () => {
+  it('defaults a payload without the preference to enabled', () => {
+    const part = createEmptyPart();
+    part.gameData.displayName = 'Capsule';
+    expect(encodeOne(part).g).not.toHaveProperty('iva');
+    expect(roundTripOne(part).gameData.ivaEnabled).toBe(true);
+  });
+
+  it('preserves disabled IVA and its attached interior through sharing', () => {
+    const part = createEmptyPart();
+    part.gameData.ivaEnabled = false;
+    part.gameData.unknownChildren.push({
+      tag: 'AttachedInternal',
+      attrs: { InstanceOf: 'CoreIVASpaceA_Prefab_MediumCapsuleA' },
+      children: [],
+    });
+    expect(roundTripOne(part).gameData).toEqual(part.gameData);
   });
 });
 

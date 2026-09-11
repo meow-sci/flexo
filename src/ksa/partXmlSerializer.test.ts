@@ -1168,6 +1168,68 @@ describe('serializeGameData IVA seats', () => {
     expect(xml.indexOf('<IVASeat>')).toBeLessThan(xml.indexOf('<AttachedInternal'));
   });
 
+  it('disables imported and authored IVA without losing data, and restores identical XML when enabled', () => {
+    const imported = gameDataFromAssets(
+      `<Assets><PartGameData Id="P">
+        <AttachedInternal InstanceOf="CoreIVASpaceA_Prefab_MediumCapsuleA" />
+        <EVADoor SeatId="pilot" />
+        <Control />
+        <GrabRail Id="rail"><Node><Position X="1" /></Node></GrabRail>
+      </PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!;
+    const spd = createSubPartGameData('Chair');
+    spd.unknownChildren = [
+      { tag: 'IVASeat', attrs: { Id: 'chairSeat' }, children: [] },
+      { tag: 'AttachedInternal', attrs: { InstanceOf: 'Interior' }, children: [] },
+      { tag: 'GrabRail', attrs: { Id: 'chairRail' }, children: [] },
+    ];
+    const part = editingPart({
+      gameData: imported.gameData,
+      ivaSeats: [seat({ ksaId: 'pilot' })],
+      subPartGameData: [spd],
+    });
+    const enabledXml = serializeGameData(part);
+    expect(tags(parse(enabledXml), 'IVASeat')).toHaveLength(2);
+    expect(tags(parse(enabledXml), 'AttachedInternal')).toHaveLength(2);
+
+    part.gameData.ivaEnabled = false;
+    const retained = structuredClone(part);
+    const disabledXml = serializeGameData(part);
+    const disabled = parse(disabledXml);
+    expect(tags(disabled, 'IVASeat')).toHaveLength(0);
+    expect(tags(disabled, 'AttachedInternal')).toHaveLength(0);
+    expect(tags(disabled, 'EVADoor')[0].hasAttribute('SeatId')).toBe(false);
+    expect(tags(disabled, 'GrabRail')).toHaveLength(2);
+    expect(disabledXml).toContain('<Control/>');
+    expect(disabledXml).not.toContain('ivaEnabled');
+    expect(part).toEqual(retained);
+
+    part.gameData.ivaEnabled = true;
+    expect(serializeGameData(part)).toBe(enabledXml);
+  });
+
+  it('disables IVA only on the selected Part in a multi-Part export', () => {
+    const disabled = editingPart({
+      partId: 'Disabled',
+      gameData: { ...createEmptyGameData(), ivaEnabled: false },
+      ivaSeats: [seat({ ksaId: 'disabledSeat' })],
+    });
+    const enabled = editingPart({
+      partId: 'Enabled',
+      ivaSeats: [seat({ ksaId: 'enabledSeat' })],
+    });
+    const xml = serializeGameDataXml(
+      [
+        { part: disabled, remap: new Map() },
+        { part: enabled, remap: new Map() },
+      ],
+      'Fleet',
+    );
+    expect(tags(parse(xml), 'IVASeat').map((el) => el.getAttribute('Id'))).toEqual(['enabledSeat']);
+  });
+
   it('round-trips positions and orientations through serialize → parse', () => {
     const seats = [
       seat({ id: '_seat1', position: { x: -0.45, y: 0.42, z: -0.35 } }),

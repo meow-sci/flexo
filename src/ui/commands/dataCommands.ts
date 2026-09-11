@@ -1,6 +1,6 @@
 import type { Command } from '../../state/commandStore';
 import { jumpToSection, sectionsFor, setDataScope } from '../../state/dataModeStore';
-import { $part } from '../../state/editorStore';
+import { $part, setIvaEnabled } from '../../state/editorStore';
 import { setMode } from '../../state/modeStore';
 
 /**
@@ -20,8 +20,7 @@ import { setMode } from '../../state/modeStore';
  * child rows fire the same `jumpToSection` intent directly, and these entries exist so a
  * section is reachable by name without hunting for its chip.
  *
- * **Undo enrollment: NONE** — scope and jumps are ephemeral view state (§A10), and a mode
- * switch is never an undo step (foundation §2.3).
+ * Scope and jumps are ephemeral view state; the IVA toggle records one document undo step.
  */
 
 /** Enters Data mode (if needed) and scopes the left form to the Part. */
@@ -37,6 +36,13 @@ function scopeTemplate(templateId: string): void {
 }
 
 export const DATA_COMMANDS: Command[] = [
+  {
+    id: 'data.toggleIva',
+    title: 'Toggle part IVA mode',
+    keywords: 'gamedata interior camera seat enable disable attached internal',
+    checked: () => $part.get().gameData.ivaEnabled,
+    run: () => setIvaEnabled(!$part.get().gameData.ivaEnabled),
+  },
   {
     id: 'data.scopePart',
     title: 'Edit part data',

@@ -12,6 +12,28 @@ gotchas) lives in
 > fixed camera, the free-look limits, the seat cycling) is engine behaviour driven off three
 > vectors.
 
+## Enable or disable IVA for export
+
+In **Data mode → Part → Identity**, the **IVA mode** switch controls whether the part
+exports its IVA seats and attached interior. Turn it off to disable IVA on an imported
+stock capsule without deleting its preserved `<AttachedInternal>` definition. Turn it
+back on to restore the original export behavior.
+
+`PartGameData.ivaEnabled` defaults to `true`. It is an editor-only export preference:
+KSA has no corresponding boolean XML element. Turning it off omits the part's modeled
+`<IVASeat>` elements and preserved `<IVASeat>` / `<AttachedInternal>` GameData children
+from export. The project retains the seats, references and their original order. The
+switch is undoable and survives project saves and project-file/share-link round trips;
+older compatible projects default to enabled without a schema-version change.
+Modeled EVA doors keep their `<EVADoor>` elements, but omit `SeatId` while IVA is off
+so exported hatches do not point to suppressed seats. Re-enabling restores the links.
+IVA-seat export validation is skipped while IVA is disabled.
+
+The switch affects this part's exported IVA sources. Other parts in a vehicle can still
+provide IVA seats. It does not hide geometry in Flexo or exit the seat-camera preview;
+those remain the separate **Hide interior** and **Exit** controls. Enabling the switch
+does not create a seat or interior if the part has none.
+
 ## Document model
 
 `EditingPart.ivaSeats: IvaSeat[]` — a flat top-level list pinned to the built-in **IVA
@@ -416,11 +438,13 @@ EVA Door card:
 - **Part-level seats only.** `<IVASeat>` is schema-legal on a `<SubPart>`/`<SubPartGameData>`
   too, and such a seat would even follow joint animation — but Core authors none, and it would
   double the frame math (per-placement visuals + write-back inversion). A SubPart-level seat
-  on an imported part round-trips **verbatim** through the passthrough; it just isn't editable.
+  on an imported part round-trips **verbatim** through the passthrough while IVA mode is
+  enabled; its seat properties are not editable.
 - **No `AttachedInternal` authoring.** Core puts its seats in a separate interior Part and
   references it; flexo authors seats on its own Part, so the seat frame **is** the part frame
-  with no offset to compose. An imported `<AttachedInternal>` is preserved verbatim, but flexo
-  will not follow the reference to import another Part's seats.
+  with no offset to compose. An imported `<AttachedInternal>` is preserved verbatim in the
+  project and exported while IVA mode is enabled, but flexo will not follow the reference
+  to import another Part's seats.
 - **A seat has no in-game NAME, only an id.** The picker labels seats by their ordinal
   ("Seat 1", "Seat 2") because document order is the `C`-cycle order; `ksaId` is a machine
   reference, not a display name.

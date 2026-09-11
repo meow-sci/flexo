@@ -364,6 +364,16 @@ pairs are again functionally identical (the additive `Components` merge). flexo 
 array order, which is KSA's in-game seat cycle order. The SubPart-level pair stays on the
 passthrough (`'IVASeat'` is in `KNOWN_PART_GAMEDATA_CHILDREN` only).
 
+**Data → Part → Identity → IVA mode** stores the editor-only
+`PartGameData.ivaEnabled` preference (default `true`). When disabled, export omits
+modeled seats and preserved `<IVASeat>` / `<AttachedInternal>` children of Part and
+SubPart GameData. It never emits an invented IVA boolean into KSA XML and never deletes
+these definitions from the project, so re-enabling restores them. A KSA XML export made
+with IVA disabled contains no record of the omitted definitions; use the Flexo project
+format to preserve the reversible setting. See [iva-seats.md](iva-seats.md).
+The exporter also omits modeled `<EVADoor SeatId>` attributes while disabled, retaining
+the doors themselves and restoring their seat links when re-enabled.
+
 ```xml
 <PartGameData Id="...">
     …

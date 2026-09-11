@@ -46,7 +46,7 @@ export function PassthroughViewer({
   return (
     <DataSection sectionId="passthrough" count={meta.count} issue={meta.issue}>
       <p className="text-xs text-fg-subtle">
-        flexo preserves XML it doesn&rsquo;t model and re-exports it verbatim. Read-only by design.
+        flexo preserves XML it doesn&rsquo;t model. Read-only by design.
       </p>
 
       {empty ? (

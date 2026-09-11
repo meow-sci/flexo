@@ -21,7 +21,7 @@ with its `<ConnectorRef>` ids remapped through the regenerated connector ids on 
 (see [What changed in 4826](#what-changed-in-4826)). See
 [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md).
 
-**Two flexo-side changes since the 5018 re-vet, both in this doc:**
+**Flexo-side changes since the 5018 re-vet:**
 
 - **`<IVASeat>` is now MODELED** at both Part-level authoring sites (it used to ride the gap-6
   `<PartGameData>` passthrough) — parse, serialize, catalog, built-in-part import, project
@@ -30,6 +30,8 @@ with its `<ConnectorRef>` ids remapped through the regenerated connector ids on 
   and an in-editor **seat preview** that runs the game's own view clamps (`ivaLook.ts`).
 - **The automatic interior-prop export rewrite is DELETED.** `<Internal>` is now
   per-SubPart-template user data that flexo mirrors from the game by default. Contract below.
+- **Part IVA export can be disabled** in Data mode's Identity section. The project retains
+  the definitions; the exporter omits IVA sources while `PartGameData.ivaEnabled` is false.
 
 ---
 
@@ -174,7 +176,30 @@ child of `<PartGameData>`. Its ENTIRE authored schema is three vectors:
   `VehicleEditor.cs:5186-5210`). flexo edits exactly one Part, so the reuse that buys is not a flexo
   workflow — and authoring directly means the seat frame **is** the part frame, with no
   `AttachedInternal` `<Transform>` to compose. An imported part's `<AttachedInternal>` round-trips
-  verbatim on the `<PartGameData>` passthrough; flexo does not follow the reference.
+  verbatim on the `<PartGameData>` passthrough while IVA mode is enabled; flexo does not
+  follow the reference.
+
+**Part IVA mode is an export preference, not a KSA schema flag.**
+
+Data mode's **Part → Identity → IVA mode** switch writes `PartGameData.ivaEnabled`
+(default `true`, persisted and undoable). Disabling it suppresses modeled `<IVASeat>`
+output and preserved `<IVASeat>` / `<AttachedInternal>` children in Part and SubPart
+GameData, while retaining the original definitions in the project for re-enabling.
+It does not alter `<PartModel><Internal>` or the editor's seat preview. Enabling an
+otherwise seatless part does not synthesize an interior or a seat.
+Modeled `<EVADoor>` elements are retained but their `SeatId` attributes are omitted
+while IVA is off, preventing exported links to suppressed seats; project links remain
+intact. `validateIvaSeats` skips its checks for a disabled part.
+
+The current game anchors are `decomp/KSA/IVAController.cs` `OnSwitchOn` (skips IVA
+when `vehicle.Parts.Modules.Get<IVASeat>()` is empty), `decomp/KSA/AttachedInternal.cs`
+`Template` (`InstanceOf` attribute and `Transform` child), and
+`decomp/KSA/VehicleEditor.cs` (instantiates the referenced template as a child Part).
+Core's concrete source is `Content/Core/CoreCommandAGameData.xml`'s
+`<AttachedInternal InstanceOf="CoreIVASpaceA_Prefab_MediumCapsuleA"/>`, whose seats
+live in `Content/Core/CoreIVASpaceAGameData.xml`. Suppressing the reference also omits
+that attached interior Part and its contents; it is not a camera-only flag on that
+interior. Other Parts' seats still make IVA available to the vehicle.
 
 **The seat preview — flexo's stand-in for a preview the game does not have**
 

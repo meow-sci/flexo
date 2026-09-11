@@ -396,6 +396,7 @@ function decPowerConsumer(c: CPowerConsumer): PowerConsumer {
 }
 
 interface CGameData {
+  iva?: 0; // IVA disabled; omitted means enabled
   dn?: string; // displayName
   cm?: number; // customMass
   cmx?: RawXmlNode[]; // customMassExtras (unmodeled <CustomMass> children, passthrough)
@@ -426,6 +427,7 @@ interface CGameData {
 
 function encGameData(g: PartGameData): CGameData {
   const o: CGameData = {};
+  if (!g.ivaEnabled) o.iva = 0;
   if (g.displayName.trim()) o.dn = g.displayName;
   if (g.customMass != null) o.cm = round(g.customMass);
   if (g.customMass != null && g.customMassExtras.length) o.cmx = g.customMassExtras;
@@ -470,6 +472,7 @@ function encGameData(g: PartGameData): CGameData {
 function decGameData(c: CGameData | undefined): PartGameData {
   const g = createEmptyGameData();
   if (!c) return g;
+  g.ivaEnabled = c.iva !== 0;
   g.displayName = str(c.dn);
   g.customMass = typeof c.cm === 'number' ? c.cm : null;
   g.customMassExtras = g.customMass != null ? decRawNodes(c.cmx) : [];

@@ -172,6 +172,7 @@ import {
   setTankShape,
   updateTank,
   setControllable,
+  setIvaEnabled,
   setCustomMassEnabled,
   setDecouplerEnabled,
   setDecouplerForce,
@@ -1375,6 +1376,27 @@ describe('editorStore', () => {
     expect($part.get().gameData.diameterM).toBe(1);
     undo();
     expect($part.get().gameData.diameterM).toBeNull();
+  });
+
+  it('toggles IVA with undo/redo while retaining attached interiors and seats', () => {
+    addIvaSeat();
+    const part = structuredClone($part.get());
+    part.gameData.unknownChildren.push({
+      tag: 'AttachedInternal',
+      attrs: { InstanceOf: 'CoreIVASpaceA_Prefab_MediumCapsuleA' },
+      children: [],
+    });
+    $part.set(part);
+    setIvaEnabled(false);
+    expect($part.get().gameData.ivaEnabled).toBe(false);
+    expect($part.get().ivaSeats).toEqual(part.ivaSeats);
+    expect($part.get().gameData.unknownChildren).toEqual(part.gameData.unknownChildren);
+    undo();
+    expect($part.get()).toEqual(part);
+    redo();
+    expect($part.get().gameData.ivaEnabled).toBe(false);
+    setIvaEnabled(true);
+    expect($part.get()).toEqual(part);
   });
 
   it('toggles the command-capable marker with undo', () => {

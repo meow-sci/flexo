@@ -818,6 +818,7 @@ describe('normalization (default-fill, never conversion)', () => {
     ] as unknown as Record<string, unknown>[];
     // One stripped field at each of the four levels the normalizer covers.
     delete stalePart.kittens; // EditingPart
+    delete stalePart.gameData.ivaEnabled;
     delete stalePart.gameData.rocketControllers; // PartGameData
     delete stalePart.subPartGameData[0].solidMotors; // SubPartGameData entry
     delete (stalePart.customMeshes[0].emissive as Record<string, unknown>).coverage;
@@ -831,6 +832,7 @@ describe('normalization (default-fill, never conversion)', () => {
     expect(db.meta.has(id)).toBe(true); // preserved, not purged
     const part = $part.get();
     expect(part.kittens).toEqual([]);
+    expect(part.gameData.ivaEnabled).toBe(true);
     expect(part.gameData.rocketControllers).toEqual([]);
     expect(part.subPartGameData[0].solidMotors).toEqual([]);
     expect(part.gameData.solidGrainSegments[0]).toMatchObject({
@@ -863,12 +865,16 @@ describe('normalization (default-fill, never conversion)', () => {
     };
     const stacks = stale.byPart[snapshotOf(id).activePartId];
     expect(stacks.undo.length).toBeGreaterThan(0);
-    for (const entry of stacks.undo) delete entry.part.kittens;
+    for (const entry of stacks.undo) {
+      delete entry.part.kittens;
+      delete (entry.part.gameData as Record<string, unknown>).ivaEnabled;
+    }
     db.history.set(id, stale);
 
     await createProject('Elsewhere');
     await openProject(id);
     undo();
+    expect($part.get().gameData.ivaEnabled).toBe(true);
     // Undo landed on a complete document, not the field-shy one that was stored.
     expect($part.get().placements.length).toBe(1);
     expect($part.get().kittens).toEqual([]);
@@ -886,6 +892,7 @@ describe('normalization (default-fill, never conversion)', () => {
     stored.editorTags = ['tag-a'];
     stored.gameData.displayName = 'Lander';
     stored.gameData.controllable = true;
+    stored.gameData.ivaEnabled = false;
     stored.customMeshes = [
       {
         id: 'mesh_1',
@@ -904,6 +911,7 @@ describe('normalization (default-fill, never conversion)', () => {
     expect(part.editorTags).toEqual(['tag-a']);
     expect(part.gameData.displayName).toBe('Lander');
     expect(part.gameData.controllable).toBe(true);
+    expect(part.gameData.ivaEnabled).toBe(false);
     expect(part.customMeshes[0].emissive).toEqual({
       ...createGlow(),
       strength: 0.9,

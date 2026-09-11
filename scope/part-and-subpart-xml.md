@@ -116,6 +116,14 @@ The parser reads a **fixed allow-list** into typed objects; the serializer **reb
 
 Consequences / what's STILL drop-on-round-trip (passthrough is scoped to GameData containers):
 
+- **Explicit IVA export suppression:** Data → Part → Identity → IVA mode stores
+  `PartGameData.ivaEnabled` (default `true`). False omits modeled `<IVASeat>` and
+  preserved `<IVASeat>` / `<AttachedInternal>` GameData children without deleting their
+  project data. No IVA flag is written to KSA XML. The controlling game contracts are
+  `decomp/KSA/IVAController.cs` `OnSwitchOn` (empty vehicle seat list skips IVA) and
+  `decomp/KSA/AttachedInternal.cs` `Template` (`InstanceOf` attribute, `Transform`
+  child); see [connectors-coordinates-iva.md](connectors-coordinates-iva.md). This is a
+  deliberate exception to the passthrough re-emission rule, not a parser loss.
 - The geometry `<Part>` (placements/connectors), `<SubPart>` **templates** (mesh/material/atlas), and **top-level** `<Assets>` children other than `<PartGameData>`/`<SubPartGameData>`/`<FixedReaction>` are NOT passthrough — a new unmodeled element there still vanishes.
 - Within `<PartGameData>`, a `<SubPart>` child is "modeled" (a `<Gimbal>` overlay, and — since 5402 — a GameData-ADDED placement when it carries `InstanceOf`, folded into the geometry placements on import), so a `<SubPart>` carrying only other unmodeled data isn't preserved. Mixed text+element content isn't preserved (game-data XML has none).
 - So each game update must still re-check this scope for added schema **outside** the GameData child/attr surface; inside it, additions now round-trip harmlessly until explicitly modeled.

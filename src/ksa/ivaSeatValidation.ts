@@ -122,6 +122,8 @@ export function validateIvaSeats(
   part: EditingPart,
   catalog: ReadonlyMap<string, CatalogSubPart>,
 ): IvaSeatIssue[] {
+  // Seats and attached interiors remain editable but are absent from this Part's export.
+  if (!part.gameData.ivaEnabled) return [];
   const issues: IvaSeatIssue[] = [];
   const block = (code: string, message: string) =>
     issues.push({ severity: 'block', code, message });

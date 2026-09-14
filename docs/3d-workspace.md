@@ -309,21 +309,27 @@ detached the gizmo silently.
 ### Chain preview ghosts
 
 While an action-chain session is open, `ChainPreviewLayer` draws what
-Apply would produce: one translucent accent-green clone per evaluated instance. It is the
-only overlay built by *cloning* document objects rather than authoring its own geometry, so
-its rules are about not paying for that twice:
+Apply would produce: translucent green ghosts of evaluated SubParts or colliders. SubPart
+ghosts clone document scene objects; collider ghosts reuse `ColliderObject` wireframes and fills:
 
 - Its group lives on **`viewport.scene`, not `EditorScene.root`** (the `MeasurementLayer`
   precedent) — ghosts are an editor aid, so they stay out of the exported `flexo-part`
   hierarchy, out of `applyLayerView`'s visibility/opacity bookkeeping, and out of the pick
   set. Every cloned node additionally gets a no-op `raycast`, so a ghost can never steal a
   click from the real object underneath it.
-- `Group.clone(true)` shares geometry by reference and **every cloned mesh's material is
+- For SubParts, `Group.clone(true)` shares geometry by reference and **every cloned mesh's material is
   replaced with one module-level singleton** (`MeshBasicMaterial`, unlit + translucent).
   A refresh therefore allocates no GPU resources and disposes none — `refresh()` is
   `group.clear()` plus re-clone, cheap enough to run on every keystroke, and the singleton
   outlives the layer. Swapping the material also means a selected seed's highlight emissive
   never bleeds into its ghosts.
+- Collider ghosts are reused across refreshes, with surplus objects disposed when the output
+  shrinks or the session closes. `setCollider` keeps the outlines and dimensions consistent
+  with real colliders, including capsule proportions. They explicitly follow collider-kind
+  visibility and their seed's layer visibility and opacity.
+- Collider chains evaluate in the common owner's local frame. Template-owned ghosts are
+  composed through `colliderWorld` onto every placement of that template; one evaluated
+  collider can therefore consume several visible ghost slots.
 - A **cap of 500 ghosts** (`PREVIEW_MAX_GHOSTS`; the chain itself may evaluate up to 2000
   instances). Past it the preview stops adding and the palette footer says it was capped.
 - A seed is ghosted **only when the chain moves it** (any of its 9 transform numbers differs

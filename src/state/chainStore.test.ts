@@ -33,9 +33,34 @@ function sessionOps(from: ChainStore = store): ChainOp[] {
 }
 
 describe('chain session lifecycle', () => {
+  it('opens collider sessions and remembers circular arrangement parameters', () => {
+    store.openChain(['_collider1'], 'collider');
+    const id = store.addChainOp('circular-array');
+    expect(sessionOps()[0]).toMatchObject({ count: 16, axis: 'y', openingDiameter: 1 });
+    store.updateChainOp(id, { count: 24, openingDiameter: 0.25, axis: 'z' });
+    store.closeChain();
+    store.openChain(['_collider2'], 'collider');
+    store.addChainOp('circular-array');
+    expect(store.$chainSession.get()?.seedKind).toBe('collider');
+    expect(sessionOps()[0]).toMatchObject({ count: 24, axis: 'z', openingDiameter: 0.25 });
+  });
+
+  it('clamps circular counts and invalid opening dimensions', () => {
+    store.openChain(['_collider1'], 'collider');
+    const id = store.addChainOp('circular-array');
+    store.updateChainOp(id, { count: 999, openingDiameter: -1 });
+    expect(sessionOps()[0]).toMatchObject({ count: 360, openingDiameter: 0 });
+    store.updateChainOp(id, { count: 2.7, openingDiameter: Infinity });
+    expect(sessionOps()[0]).toMatchObject({ count: 3, openingDiameter: 1 });
+  });
+
   it('opens with the given seed ids and no steps', () => {
     store.openChain(['a_1', 'b_2']);
-    expect(store.$chainSession.get()).toEqual({ seedIds: ['a_1', 'b_2'], ops: [] });
+    expect(store.$chainSession.get()).toEqual({
+      seedKind: 'subpart',
+      seedIds: ['a_1', 'b_2'],
+      ops: [],
+    });
   });
 
   it('copies the seed ids instead of aliasing the caller array', () => {
@@ -49,7 +74,7 @@ describe('chain session lifecycle', () => {
     store.openChain(['a_1']);
     store.addChainOp('translate');
     store.openChain(['c_3']);
-    expect(store.$chainSession.get()).toEqual({ seedIds: ['c_3'], ops: [] });
+    expect(store.$chainSession.get()).toEqual({ seedKind: 'subpart', seedIds: ['c_3'], ops: [] });
   });
 
   it('closes to null', () => {

@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { $chainEval } from './chainEval';
-import { applyPlacement } from './coords';
+import { applyPlacement, colliderWorld } from './coords';
+import { ColliderObject } from './ColliderObject';
+import { $part } from '../state/editorStore';
+import { isLayerVisible, layerOpacity } from '../state/layerStore';
+import { isKindVisible } from '../state/viewStore';
 import type { PlacementTransform } from '../state/editorStore';
 import type { SubPartObject } from './SubPartObject';
 import type { Viewport } from './Viewport';
@@ -69,6 +73,7 @@ export class ChainPreviewLayer {
   private readonly viewport: Viewport;
   private readonly getObject: (instanceId: string) => SubPartObject | undefined;
   private readonly group = new THREE.Group();
+  private readonly colliderGhosts: ColliderObject[] = [];
 
   constructor(viewport: Viewport, getObject: (instanceId: string) => SubPartObject | undefined) {
     this.viewport = viewport;
@@ -79,10 +84,9 @@ export class ChainPreviewLayer {
 
   /**
    * Rebuilds every ghost from the current evaluation. Cheap enough to run
-   * wholesale: `group.clear()` drops scene-graph nodes only — the geometry belongs
-   * to the shared mesh cache (`Group.clone(true)` shares it by reference) and the
-   * material is the module singleton, so a rebuild allocates no GPU resources and
-   * must dispose none.
+   * wholesale: SubPart ghosts share cached geometry and the singleton material.
+   * Collider ghosts reuse owned primitive objects, rebuilding geometry only for a
+   * changed shape or capsule aspect; unused objects are disposed after each refresh.
    *
    * One invalidate at the end covers the whole layer on the on-demand loop.
    */
@@ -90,6 +94,8 @@ export class ChainPreviewLayer {
     this.group.clear();
 
     const state = $chainEval.get();
+    const part = $part.get();
+    let colliderGhostCount = 0;
     // No session, or a chain that can't evaluate (bad params, vanished seeds) —
     // the palette reports the error in text; the scene just shows nothing.
     if (state && !state.result.error) {
@@ -105,6 +111,38 @@ export class ChainPreviewLayer {
         // target while the real object stays where it is, which is what makes a
         // pure-transform chain (no arrays) previewable at all.
         if (!instance.isSeed || transformsDiffer(instance.transform, seedTransform)) {
+          if (state.session.seedKind === 'collider') {
+            const seed = part.colliders.find((c) => c.id === seedId);
+            if (!seed) continue;
+            const collider = { ...seed, ...instance.transform };
+            const owners = part.placements.filter(
+              (p) => p.subPartTemplateId === seed.ownerTemplateId,
+            );
+            const transforms =
+              owners.length > 0
+                ? owners.map((owner) => colliderWorld(collider, owner))
+                : [instance.transform];
+            for (const transform of transforms) {
+              if (ghosts >= PREVIEW_MAX_GHOSTS) break;
+              let ghost = this.colliderGhosts[colliderGhostCount];
+              if (!ghost) {
+                ghost = new ColliderObject(collider);
+                ghost.setSelected(true);
+                ghost.group.traverse((node) => {
+                  node.raycast = () => {};
+                });
+                this.colliderGhosts.push(ghost);
+              }
+              ghost.setCollider(collider, transform);
+              ghost.setLayerOpacity(0.7 * layerOpacity(seed.layerId));
+              ghost.group.visible = isLayerVisible(seed.layerId) && isKindVisible('collider');
+              ghost.group.name = 'chain-collider-ghost';
+              this.group.add(ghost.group);
+              colliderGhostCount++;
+              ghosts++;
+            }
+            continue;
+          }
           // Not built yet (async geometry load still in flight) — skip it; the
           // EditorScene build completion calls back into refresh().
           const src = this.getObject(seedId);
@@ -124,13 +162,16 @@ export class ChainPreviewLayer {
       }
     }
 
+    while (this.colliderGhosts.length > colliderGhostCount) this.colliderGhosts.pop()!.dispose();
     this.viewport.invalidate();
   }
 
   dispose(): void {
     this.viewport.scene.remove(this.group);
-    // Clones only — the geometry is the shared cache's and the material is the
-    // module singleton. Disposing either would break every other SubPart.
+    for (const ghost of this.colliderGhosts) ghost.dispose();
+    this.colliderGhosts.length = 0;
+    // Remaining SubPart clones share cached geometry and the singleton material.
+    // Disposing those resources would break the real SubParts.
     this.group.clear();
   }
 }

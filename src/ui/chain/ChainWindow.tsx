@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { $chainSession, addChainOp, type ChainOpKind } from '../../state/chainStore';
+import { $part } from '../../state/editorStore';
 import { $chainEval } from '../../three/chainEval';
 import { PREVIEW_MAX_GHOSTS } from '../../three/ChainPreviewLayer';
 import {
@@ -99,6 +100,7 @@ export function ChainWindow() {
  */
 function ChainBody({ phone = false }: { phone?: boolean }) {
   const session = useStore($chainSession);
+  const part = useStore($part);
   const evalState = useStore($chainEval);
   const [query, setQuery] = useState('');
   // The kit SearchField owns its <input>, so reach it through the wrapper to restore
@@ -115,7 +117,9 @@ function ChainBody({ phone = false }: { phone?: boolean }) {
 
   const q = query.trim().toLowerCase();
   const commands = CHAIN_COMMANDS.filter(
-    (c) => q === '' || c.label.toLowerCase().includes(q) || c.keywords.some((k) => k.includes(q)),
+    (c) =>
+      (c.kind !== 'circular-array' || session.seedKind === 'collider') &&
+      (q === '' || c.label.toLowerCase().includes(q) || c.keywords.some((k) => k.includes(q))),
   );
   // The command list is the palette's empty state: it stays up until there is at least
   // one step, then hides itself unless the user starts searching again.
@@ -125,14 +129,31 @@ function ChainBody({ phone = false }: { phone?: boolean }) {
   const error = result?.error ?? null;
   const totalInstances = result?.totalInstances ?? 0;
   const newCount = result?.newCount ?? 0;
+  const colliderOwner =
+    session.seedKind === 'collider'
+      ? part.colliders.find((c) => c.id === evalState?.resolvedSeedIds[0])?.ownerTemplateId
+      : null;
+  const ownerCount = colliderOwner
+    ? Math.max(1, part.placements.filter((p) => p.subPartTemplateId === colliderOwner).length)
+    : 1;
+  const previewInstances = totalInstances * ownerCount;
 
   return (
     <div className="flex min-h-0 flex-col">
+      {session.seedKind === 'collider' && (
+        <p className="mb-2 text-[11px] text-fg-muted">
+          Collider chain · coordinates use the colliders’ owner frame (Part or SubPart).
+        </p>
+      )}
       <div ref={searchRef} className="shrink-0">
         <SearchField
           size="sm"
           aria-label="Add step"
-          placeholder="Add step — translate, radial, grid…"
+          placeholder={
+            session.seedKind === 'collider'
+              ? 'Add step — circular, translate, grid…'
+              : 'Add step — translate, radial, grid…'
+          }
           value={query}
           onChange={setQuery}
           // Never on touch: an autofocused field raises the software keyboard over the
@@ -179,6 +200,11 @@ function ChainBody({ phone = false }: { phone?: boolean }) {
       )}
 
       <div className="mt-2 flex shrink-0 flex-col gap-2">
+        {result?.warnings?.map((warning) => (
+          <p key={warning} className="text-xs text-warning">
+            {warning}
+          </p>
+        ))}
         <span className={cn('text-xs', error ? 'text-danger' : 'text-fg-muted')}>
           {error ?? (
             <>
@@ -186,7 +212,7 @@ function ChainBody({ phone = false }: { phone?: boolean }) {
               {/* Ghosts are capped; the chain still APPLIES in full, so say which one the
                   user is looking at. Instance count is the ceiling on ghosts, so this can
                   read one instance early — cheaper than tracking the layer's real tally. */}
-              {totalInstances > PREVIEW_MAX_GHOSTS && (
+              {previewInstances > PREVIEW_MAX_GHOSTS && (
                 <span className="text-fg-subtle"> · preview capped at {PREVIEW_MAX_GHOSTS}</span>
               )}
             </>

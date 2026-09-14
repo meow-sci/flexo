@@ -57,13 +57,13 @@ describe('$activeScopes', () => {
   });
 
   it('activates surface:chain from the SESSION, with no focus involved', () => {
-    $chainSession.set({ seedIds: ['a'], ops: [] });
+    $chainSession.set({ seedKind: 'subpart', seedIds: ['a'], ops: [] });
     expect($focusedSurface.get()).toBe(null);
     expect(scopes()).toContain('surface:chain');
   });
 
   it('adds the focused surface, and tolerates it duplicating the chain scope', () => {
-    $chainSession.set({ seedIds: ['a'], ops: [] });
+    $chainSession.set({ seedKind: 'subpart', seedIds: ['a'], ops: [] });
     $focusedSurface.set('chain');
     expect(scopes()).toEqual(['global', 'mode:build', 'surface:chain', 'viewport']);
   });

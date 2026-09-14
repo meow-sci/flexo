@@ -62,7 +62,7 @@ describe('rung order', () => {
   it('does nothing when something above already consumed the event (rungs 1–2)', () => {
     // A dirty numeric field's revert preventDefaults + stopPropagations; if the event does
     // reach the document, `defaultPrevented` is the tell.
-    $chainSession.set({ seedIds: ['a'], ops: [] });
+    $chainSession.set({ seedKind: 'subpart', seedIds: ['a'], ops: [] });
     const event = esc();
     event.preventDefault();
     dispatchEsc(event);
@@ -72,7 +72,7 @@ describe('rung order', () => {
   it('lets an open overlay dialog own Escape (rung 2 beats every flexo rung)', () => {
     $openDialog.set({ id: 'chain-discard-confirm' });
     $seatView.set('seat1');
-    $chainSession.set({ seedIds: ['a'], ops: [] });
+    $chainSession.set({ seedKind: 'subpart', seedIds: ['a'], ops: [] });
     dispatchEsc(esc());
     expect($seatView.get()).toBe('seat1');
     expect($chainSession.get()).not.toBe(null);
@@ -80,7 +80,7 @@ describe('rung order', () => {
 
   it('closes the palette (3) before cancelling a chain session (6)', () => {
     $paletteOpen.set(true);
-    $chainSession.set({ seedIds: ['a'], ops: [] });
+    $chainSession.set({ seedKind: 'subpart', seedIds: ['a'], ops: [] });
     const event = esc();
     dispatchEsc(event);
     expect($paletteOpen.get()).toBe(false);
@@ -98,7 +98,7 @@ describe('rung order', () => {
 
   it('disarms the measure tool (5) before cancelling a chain session (6)', () => {
     setMeasureTool('point');
-    $chainSession.set({ seedIds: ['a'], ops: [] });
+    $chainSession.set({ seedKind: 'subpart', seedIds: ['a'], ops: [] });
     dispatchEsc(esc());
     expect($measureTool.get()).toBe('none');
     expect($chainSession.get()).not.toBe(null);
@@ -106,7 +106,7 @@ describe('rung order', () => {
 
   it('cancels the chain from inside a text field (rung 6 enableWhileTyping)', () => {
     typeInAField();
-    $chainSession.set({ seedIds: ['a'], ops: [] });
+    $chainSession.set({ seedKind: 'subpart', seedIds: ['a'], ops: [] });
     const event = esc();
     dispatchEsc(event);
     expect($chainSession.get()).toBe(null);

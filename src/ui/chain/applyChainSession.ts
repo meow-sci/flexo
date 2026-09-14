@@ -1,5 +1,9 @@
 import { closeChain } from '../../state/chainStore';
-import { applyActionChain, type ChainCommitEntry } from '../../state/editorStore';
+import {
+  applyActionChain,
+  applyColliderActionChain,
+  type ChainCommitEntry,
+} from '../../state/editorStore';
 import { $chainEval } from '../../three/chainEval';
 import { toast } from '../toast';
 
@@ -26,15 +30,22 @@ export function applyChainSession(): void {
     transform: instance.transform,
     isSeed: instance.isSeed,
   }));
+  const noun = state.session.seedKind === 'collider' ? 'colliders' : 'SubParts';
   const detail =
-    result.newCount > 0 ? `+${result.newCount} SubParts` : `${result.totalInstances} transformed`;
-  const created = applyActionChain(entries, detail);
+    result.newCount > 0 ? `+${result.newCount} ${noun}` : `${result.totalInstances} transformed`;
+  const created =
+    state.session.seedKind === 'collider'
+      ? applyColliderActionChain(entries, detail)
+      : applyActionChain(entries, detail);
   closeChain();
   // -1 means a seed vanished between the last recompute and this click — nothing was
   // committed and no undo entry was pushed, so say so rather than claiming success.
   if (created < 0) {
-    toast({ title: 'Chain not applied — seeds no longer exist', variant: 'warning' });
+    toast({
+      title: 'Chain not applied — seeds are missing, locked, or have different owners',
+      variant: 'warning',
+    });
     return;
   }
-  toast({ title: `Applied chain · ${created > 0 ? `+${created} SubParts` : detail}` });
+  toast({ title: `Applied chain · ${created > 0 ? `+${created} ${noun}` : detail}` });
 }

@@ -5,7 +5,6 @@ import {
   $canUndo,
   $hasClipboard,
   $historyList,
-  $selection,
   copySelected,
   cutSelected,
   duplicateSelected,
@@ -18,7 +17,7 @@ import {
 import { $hasSelection, $selectionCount } from '../../state/selectors';
 import { requestStatusConfirm, status, undoStatusAction } from '../../state/statusStore';
 import { confirmThreshold } from '../../state/settingsStore';
-import { beginActionChain } from '../chain/openChainPalette';
+import { beginActionChain, chainSelectionError } from '../chain/openChainPalette';
 import { toast } from '../toast';
 
 // The §14.3 confirm threshold lives in `settingsStore` (`$confirmThreshold`, edited in
@@ -138,8 +137,9 @@ export const EDIT_COMMANDS: Command[] = [
     id: 'chain.begin',
     title: 'Begin Action Chain…',
     menuPath: 'Edit',
-    keywords: 'array grid radial ring repeat',
-    enabled: () => $selection.get().some((ref) => ref.kind === 'subpart'),
+    keywords: 'array grid radial circular ring repeat collider wheel bore',
+    enabled: () => chainSelectionError() === null,
+    disabledReason: () => chainSelectionError() ?? '',
     run: () => beginActionChain(),
   },
   {

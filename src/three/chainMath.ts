@@ -1,10 +1,12 @@
 import * as THREE from 'three';
-import type { Vec3 } from '../ksa/types';
+import type { ColliderShape, Vec3 } from '../ksa/types';
+import { normalizeColliderSize } from '../ksa/colliderSize';
 import type {
   ChainAxis,
   ChainOp,
   ChainPivotMode,
   ChainPlane,
+  CircularArrayOp,
   GridArrayOp,
   LinearArrayOp,
   RadialArrayOp,
@@ -83,6 +85,7 @@ export interface ChainEvalResult {
   /** How many placements Apply would create (`totalInstances - seeds`). */
   newCount: number;
   error: string | null;
+  warnings?: string[];
 }
 
 /** Hard ceiling on an evaluated chain — past this, preview and commit stop being usable. */
@@ -292,7 +295,91 @@ function gridArray(groups: readonly ChainGroup[], op: GridArrayOp): ChainGroup[]
   return out;
 }
 
-function applyOp(groups: readonly ChainGroup[], op: ChainOp): ChainGroup[] {
+/** Exact support extent along a direction, using the same local-Y primitives as export. */
+function colliderExtent(t: PlacementTransform, shape: ColliderShape, direction: Vec3): number {
+  const q = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(t.rotation.x, t.rotation.y, t.rotation.z, 'ZYX'),
+  );
+  const local = new THREE.Vector3(direction.x, direction.y, direction.z).applyQuaternion(
+    q.invert(),
+  );
+  const s = t.scale;
+  const r = s.x / 2;
+  switch (shape) {
+    case 'Box':
+      return (Math.abs(local.x) * s.x + Math.abs(local.y) * s.y + Math.abs(local.z) * s.z) / 2;
+    case 'Sphere':
+      return r;
+    case 'Cylinder':
+      return r * Math.hypot(local.x, local.z) + (Math.abs(local.y) * s.y) / 2;
+    case 'Capsule':
+      return r + (Math.abs(local.y) * (s.y - s.x)) / 2;
+  }
+}
+
+/**
+ * Push a rigid seed group beyond the opening's tangent plane, then rotate it in full.
+ * This guarantees at least the requested bore for arbitrary shapes/rotations. For a
+ * single axial cylinder the distance is exactly holeRadius + cylinderRadius.
+ */
+function circularArray(
+  groups: readonly ChainGroup[],
+  op: CircularArrayOp,
+  shapes: readonly ColliderShape[],
+  warnings: Set<string>,
+): ChainGroup[] {
+  const direction = RADIAL_FALLBACK[op.axis];
+  const axis = new THREE.Vector3().copy(AXIS_VECTORS[op.axis]);
+  const out: ChainGroup[] = [];
+  for (const group of groups) {
+    const center = centroidOf(group.members.map((t) => t.position));
+    const near = Math.min(
+      ...group.members.map(
+        (t, i) =>
+          (t.position.x - center.x) * direction.x +
+          (t.position.y - center.y) * direction.y +
+          (t.position.z - center.z) * direction.z -
+          colliderExtent(t, shapes[i], direction),
+      ),
+    );
+    const distance = op.openingDiameter / 2 - near;
+    for (const [i, t] of group.members.entries()) {
+      if (shapes[i] !== 'Cylinder') continue;
+      const q = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(t.rotation.x, t.rotation.y, t.rotation.z, 'ZYX'),
+      );
+      const cylinderAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+      if (Math.abs(cylinderAxis.dot(axis)) < 1 - 1e-8) {
+        warnings.add(
+          'Cylinder axes are not parallel to the axle axis. Choose the matching axis or rotate the seeds first.',
+        );
+      } else if (group.members.length === 1) {
+        const separation = 2 * distance * Math.sin(Math.PI / op.count);
+        if (separation >= t.scale.x - 1e-8) {
+          warnings.add(
+            'Neighboring cylinders do not overlap. Increase the count or cylinder diameter, or reduce the opening.',
+          );
+        }
+      }
+    }
+    const pushed = group.members.map((t) => translatedTransform(t, scaledVec(direction, distance)));
+    for (let k = 0; k < op.count; k++) {
+      const q = new THREE.Quaternion().setFromAxisAngle(axis, (k * 2 * Math.PI) / op.count);
+      out.push({
+        members: k === 0 ? pushed : pushed.map((t) => rotatedAroundOriginTransform(t, q, center)),
+        isSeedGroup: k === 0 && group.isSeedGroup,
+      });
+    }
+  }
+  return out;
+}
+
+function applyOp(
+  groups: readonly ChainGroup[],
+  op: ChainOp,
+  shapes: readonly ColliderShape[],
+  warnings: Set<string>,
+): ChainGroup[] {
   switch (op.kind) {
     case 'translate':
       return mapGroups(groups, (t) => translatedTransform(t, op.delta));
@@ -302,7 +389,7 @@ function applyOp(groups: readonly ChainGroup[], op: ChainOp): ChainGroup[] {
       return mapGroups(groups, (t) => rotatedAroundOriginTransform(t, q, pivot));
     }
     case 'scale': {
-      // Kind is always 'subpart' (only placements seed a chain), so scale always applies.
+      // Both placements and colliders scale; collider shape constraints are applied after each op.
       const pivot = op.mode === 'smart' ? pivotPoint(groups, op.pivot, op.center) : null;
       return mapGroups(groups, (t) => groupScaledTransform('subpart', t, op.factor, pivot));
     }
@@ -310,6 +397,8 @@ function applyOp(groups: readonly ChainGroup[], op: ChainOp): ChainGroup[] {
       return linearArray(groups, op);
     case 'radial-array':
       return radialArray(groups, op);
+    case 'circular-array':
+      return circularArray(groups, op, shapes, warnings);
     case 'grid-array':
       return gridArray(groups, op);
   }
@@ -320,6 +409,7 @@ function spawnCount(op: ChainOp): number {
   switch (op.kind) {
     case 'linear-array':
     case 'radial-array':
+    case 'circular-array':
       return op.count;
     case 'grid-array':
       return op.countA * op.countB;
@@ -356,6 +446,20 @@ function validateOp(op: ChainOp): string | null {
         arrayCountError(op.count) ??
         (Math.abs(op.sweepDeg) < AXIS_EPSILON ? 'Sweep must be non-zero' : null)
       );
+    case 'circular-array':
+      return (
+        (!Number.isInteger(op.count) || !Number.isFinite(op.count)
+          ? 'Count must be a whole number'
+          : null) ??
+        arrayCountError(op.count) ??
+        (op.count > 360 ? 'Circular arrangement too large (max 360)' : null) ??
+        (!['x', 'y', 'z'].includes(op.axis) ? 'Choose an axle axis' : null) ??
+        (!Number.isFinite(op.openingDiameter) ||
+        op.openingDiameter < 0 ||
+        op.openingDiameter > 10000
+          ? 'Opening diameter must be between 0 and 10000 m'
+          : null)
+      );
     case 'grid-array': {
       const total = op.countA * op.countB;
       if (total < 2) return 'Grid must produce at least 2 instances';
@@ -381,15 +485,32 @@ function errorResult(error: string): ChainEvalResult {
 export function evalChain(
   seeds: readonly PlacementTransform[],
   ops: readonly ChainOp[],
+  colliderShapes?: readonly ColliderShape[],
 ): ChainEvalResult {
   if (seeds.length === 0) return errorResult('Seeds no longer exist');
 
   for (const op of ops) {
     const error = validateOp(op);
     if (error !== null) return errorResult(error);
+    if (op.kind === 'circular-array' && colliderShapes?.length !== seeds.length) {
+      return errorResult('Circular arrangement requires collider seeds');
+    }
   }
 
-  let groups: ChainGroup[] = [{ members: seeds.map(copyTransform), isSeedGroup: true }];
+  const normalizeGroups = (input: ChainGroup[]): ChainGroup[] =>
+    colliderShapes
+      ? input.map((group) => ({
+          ...group,
+          members: group.members.map((t, i) => ({
+            ...t,
+            scale: normalizeColliderSize(colliderShapes[i], t.scale),
+          })),
+        }))
+      : input;
+  const warnings = new Set<string>();
+  let groups: ChainGroup[] = normalizeGroups([
+    { members: seeds.map(copyTransform), isSeedGroup: true },
+  ]);
   for (const op of ops) {
     const spawns = spawnCount(op);
     if (spawns > 1) {
@@ -398,7 +519,7 @@ export function evalChain(
         return errorResult(`Too many instances (${total} > ${MAX_CHAIN_INSTANCES})`);
       }
     }
-    groups = applyOp(groups, op);
+    groups = normalizeGroups(applyOp(groups, op, colliderShapes ?? [], warnings));
   }
 
   const instances: ChainInstance[] = [];
@@ -418,5 +539,6 @@ export function evalChain(
     totalInstances,
     newCount: totalInstances - seeds.length,
     error: null,
+    ...(warnings.size > 0 ? { warnings: [...warnings] } : {}),
   };
 }

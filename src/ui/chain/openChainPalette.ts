@@ -5,50 +5,45 @@ import { openDialog } from '../../state/dialogStore';
 import { $mode, registerModeHooks, setMode } from '../../state/modeStore';
 import { status } from '../../state/statusStore';
 
-/**
- * Opens, re-seeds and closes an action-chain session over the current SubPart selection.
- *
- * The guards live here rather than in `chainStore` so the store stays free of UI
- * concerns: the store only knows how to hold a session, this decides whether starting one
- * makes sense. Every entry point — the `⇧⌘K` binding, the `chain.begin` command (and
- * therefore the ⌘K palette and the Edit menu) and the multi-select panel's Chain button —
- * routes through this file, so they can never disagree about what a legal session is.
- *
- * Only SubPart placements seed a chain (per-kind clone rules for connectors, colliders
- * and friends are deliberately out of scope), so a selection of other kinds reads as
- * "nothing to chain".
- *
- * Seeds are the selected placements' `instanceId`s in SELECTION order and are frozen
- * for the life of the session — changing the selection afterwards leaves the chain
- * alone, which is what lets the user keep working (and even nudge a seed) while the
- * preview follows. That non-modality is LOCKED (DECISIONS.md), which is exactly why every
- * exit below CONFIRMS instead of silently discarding a session that has steps.
- *
- * Refusals are status flashes, not toasts: a guard message is high-frequency posture
- * feedback and must never accrue in the notification center (design-system-services §2.2).
- */
-function tryOpenChain(): void {
+/** Shared selection guard for the command, inspector buttons, and session opener. */
+export function chainSelectionError(): string | null {
+  const selection = $selection.get();
+  if (selection.length === 0) return 'Select SubParts or colliders to chain';
+  const kind = selection[0].kind;
+  if ((kind !== 'subpart' && kind !== 'collider') || selection.some((ref) => ref.kind !== kind)) {
+    return 'Select only SubParts or only colliders to chain';
+  }
   const part = $part.get();
-  // Selection ORDER is the seed order and is frozen at open (design-build-mode §9.1) —
-  // the ordered `$selection` makes that exact.
-  const placements = $selection.get().flatMap((ref) => {
-    if (ref.kind !== 'subpart') return [];
-    const placement = part.placements.find((p) => p.instanceId === ref.id);
-    return placement ? [placement] : [];
-  });
+  const seeds = selection.map((ref) =>
+    kind === 'collider'
+      ? part.colliders.find((c) => c.id === ref.id)
+      : part.placements.find((p) => p.instanceId === ref.id),
+  );
+  if (seeds.some((seed) => !seed)) return 'Seeds no longer exist';
+  if (seeds.some((seed) => seed && isLayerLocked(seed.layerId))) {
+    return 'Selection is on a locked layer';
+  }
+  if (kind === 'collider') {
+    const owners = new Set(
+      selection.map((ref) => part.colliders.find((c) => c.id === ref.id)!.ownerTemplateId),
+    );
+    if (owners.size !== 1) return 'Select colliders with the same owner';
+  }
+  return null;
+}
 
-  if (placements.length === 0) {
-    status('Select SubParts to chain', { severity: 'warning' });
+/** Freeze a homogeneous selection in its common Part or owner-local frame. */
+function tryOpenChain(): void {
+  const error = chainSelectionError();
+  if (error) {
+    status(error, { severity: 'warning' });
     return;
   }
-  // A chain would move or clone into a locked layer; every other transform tool refuses
-  // the same way (see selectionTransform), so refuse at open instead of at Apply.
-  if (placements.some((p) => isLayerLocked(p.layerId))) {
-    status('Selection is on a locked layer', { severity: 'warning' });
-    return;
-  }
-
-  openChain(placements.map((p) => p.instanceId));
+  const selection = $selection.get();
+  openChain(
+    selection.map((ref) => ref.id),
+    selection[0].kind === 'collider' ? 'collider' : 'subpart',
+  );
 }
 
 /**

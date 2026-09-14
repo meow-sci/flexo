@@ -177,8 +177,7 @@ function ActionsRow({ count, isDisabled }: { count: number; isDisabled: boolean 
         <Copy className="size-3.5" />
         Duplicate
       </Button>
-      {/* Opens the action-chain session over the current SubPart selection; the open guards
-          re-check that it holds unlocked placements. */}
+      {/* Opens the action-chain session over a homogeneous SubPart or collider selection. */}
       <Button size="sm" isDisabled={isDisabled} onPress={() => beginActionChain()}>
         <Workflow className="size-3.5" />
         Chain…

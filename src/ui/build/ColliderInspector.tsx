@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react';
 import { Button, ListBoxItem, Select } from '../kit';
 import { TransformGroups } from './TransformGroups';
+import { runCommand } from '../../state/commandStore';
 import { CoveragePanel } from './CoveragePanel';
 import { $part, setColliderOwner, setColliderShape } from '../../state/editorStore';
 import { requestColliderFit } from '../../state/colliderStore';
@@ -130,6 +131,9 @@ export function ColliderInspector({
         </span>
       </div>
 
+      <Button size="sm" isDisabled={locked} onPress={() => runCommand('chain.begin')}>
+        Chain…
+      </Button>
       <CoveragePanel />
     </>
   );

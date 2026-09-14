@@ -12,7 +12,7 @@ the 3D scene subscribes with vanilla `subscribe()`, React reads via
 | `$selection` | `readonly SelectionRef[]` | **THE selection** — one ordered list of `{kind, id}` refs spanning every entity kind (`'subpart' \| 'connector' \| 'collider' \| 'ivaSeat' \| 'light' \| 'kitten'`). The LAST element is the primary. Ephemeral: never persisted, never undone, survives mode switches. See "The selection" below. |
 | `$lightEditContext` | `Record<string, number>` | Per light id, **which placement of its owner template** was last clicked. |
 | `$activeLayerId` | `string` | Layer new items land in. Ephemeral (not persisted, not undone); clamped to a live layer. See [layers.md](./layers.md). |
-| `$chainSession` | `ChainSession \| null` | The open action-chain session (`src/state/chainStore.ts`): frozen seed `instanceId`s + the ordered step list. **Ephemeral by design** — never persisted, never undone; the document is untouched until Apply, which is what makes Cancel unconditionally safe. The only persisted piece is the module-private `flexo:chainDefaults` (last-used parameters per op kind). See [action-chains.md](./action-chains.md). |
+| `$chainSession` | `ChainSession \| null` | The open action-chain session (`src/state/chainStore.ts`): frozen seed ids and kind (`subpart` or `collider`) + the ordered step list. Collider seeds share one owner. **Ephemeral by design** — never persisted, never undone; the document is untouched until Apply, which is what makes Cancel unconditionally safe. The only persisted piece is the module-private `flexo:chainDefaults` (last-used parameters per op kind). See [action-chains.md](./action-chains.md). |
 | `$toolMode` | `'translate'\|'rotate'\|'scale'` | Drives the 3D gizmo. |
 | `$gizmoSpace` | `'world' \| 'local'` | Which axes the gizmo's handles use. Persisted (`flexo:gizmoSpace`), never undone; the Tool bar's **W/L** segmented control and the `tool.toggleGizmoSpace` command are its writers. |
 | `$snap` | `{ translate?, rotateDeg? }` | Grid / rotation snap (0/undefined = off). **It has real UI now** — see "Snap" below; nothing else writes it. |
@@ -310,16 +310,19 @@ Three of them are Data mode's own:
   in-game EVA button.
 
 **Action-chain actions** (see [action-chains.md](./action-chains.md)) live in two places. The
-**session** is `src/state/chainStore.ts` — `openChain(seedIds)` / `closeChain()` /
+**session** is `src/state/chainStore.ts` — `openChain(seedIds, seedKind)` / `closeChain()` /
 `addChainOp(kind)` / `updateChainOp(id, patch)` / `removeChainOp(id)` / `moveChainOp(id, ±1)`
 / `moveChainOpTo(id, index)` (the drag-reorder commit), plus `defaultOp` and `clampOp`. **None of them push undo**: the session is ephemeral UI state
 (selection-tier), not document state, so the invariant below does not apply to them.
 `updateChainOp` also writes the op's parameters to the persisted `flexo:chainDefaults` blob,
 which `defaultOp` reads back defensively (unknown or malformed fields degrade to the hardcoded
-defaults — no migration). The **commit** is `applyActionChain(entries, detail)` in
-`editorStore.ts`, a discrete mutation that collapses seed moves *and* every clone into one undo
-entry, and selects seeds + copies afterwards. The live evaluation between the two,
-`$chainEval`, is a `computed([$part, $chainSession], …)` in **`src/three/chainEval.ts`** rather
+defaults — no migration). The **commit** is `applyActionChain(entries, detail)` for SubParts
+or `applyColliderActionChain(entries, detail)` for colliders, both in `editorStore.ts`. Each
+is a discrete mutation that collapses seed moves *and* every clone into one undo entry,
+and selects seeds + copies afterwards. Collider commits validate all seed ids, layer locks
+and common ownership before writing; clones preserve shape, owner and layer with fresh ids,
+and dimensions are normalized on assignment. The live evaluation between the two,
+`$chainEval`, is a `computed([$part, $chainSession, $layerView], …)` in **`src/three/chainEval.ts`** rather
 than `src/state/` — it needs the three.js math engine (`chainMath.ts`), and it is what both the
 palette footer and the ghost preview read.
 
@@ -366,7 +369,7 @@ one of two patterns:
 
 1. **Discrete** (one gesture = one change): the action calls `pushUndo()` itself.
    `addSubPart`, `addPart`, `addConnector`, `removeSelected`, `duplicateSelected`,
-   `applyActionChain` (a whole action chain — seed moves + every clone — is one step),
+   `applyActionChain` / `applyColliderActionChain` (a whole action chain — seed moves + every clone — is one step),
    `setConnectorFlags`, `setEditorTags`, the GameData list/toggle/Select actions
    (`addTank`/`removeTank`/`setTankShape`, power add/remove, coupling enable +
    `set*Connector`, `setCustomMassEnabled`), and the layer mutators `createLayer`,

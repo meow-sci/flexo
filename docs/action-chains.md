@@ -7,20 +7,22 @@ a 6 × 4 solar-cell grid, or a fifteen-step helix without duplicating and nudgin
 times. (It is not the ⌘K **command palette** — that is the app-wide command search; see
 [ui-shell.md](./ui-shell.md#3-commands-and-menus).)
 
-Action chains are **editor-only**. They create and move ordinary SubPart placements through
-the existing store paths, so there is no KSA game contract here and no `scope/` entry —
-everything a chain produces is indistinguishable from hand placement by the time it is
-exported.
+Action chains are **editor-only**. They create and move ordinary SubPart placements or
+colliders through the existing store paths. Collider dimensions and owner frames follow
+[scope/colliders.md](../scope/colliders.md); export uses the existing collider XML without
+serializing the chain itself.
 
 ## What a chain is
 
 A chain applies an ordered list of **steps** (ops) to the **seeds** — the SubPart placements
-that were selected when the session opened. Two families:
+or colliders that were selected when the session opened. A selection must contain only one
+of those kinds; collider seeds must all have the same owner (the Part, or one SubPart template).
+Collider chains run in that owner's local frame. Two families:
 
 - **Transform steps** — Translate / Rotate / Scale. They move the whole current working set,
   exactly as the multi-select "transform by" panel does, with a pivot choice added.
-- **Array steps** — Linear / Radial / Grid Array. They **replicate** the working set into
-  `count` instances.
+- **Array steps** — Linear / Radial / Grid Array, plus collider-only **Circular Arrangement**.
+  They **replicate** the working set into `count` instances.
 
 Because a later step applies to *everything* the earlier steps produced, arrays **compose**:
 `[Linear ×5 on X][Linear ×3 on Y]` is a 15-cell grid, and `[Radial ×6][Translate +2 Y]` is a
@@ -62,8 +64,14 @@ ghosts disambiguate instantly.
 
 The pivot resolves once per step (`pivotPoint` in `chainMath.ts`): `'centroid'` is the centroid
 of **every member of every current group** (so a rotate after an array spins the whole array),
-`'origin'` is the Part origin, `'custom'` is the typed `center`. `'inPlace'` scaling grows each
+`'origin'` is the Part origin (the owner template's origin for owned colliders), `'custom'` is
+the typed `center` in that frame. `'inPlace'` scaling grows each
 member where it stands, so the card hides the pivot row for it.
+
+For colliders, `scale` means outer dimensions in meters. `normalizeColliderSize` runs on the
+seeds and after every step, so subsequent steps see the same valid primitive dimensions as
+the preview, commit and XML exporter: spheres remain uniform, cylinders have equal X/Z
+diameters, and capsules are at least as tall as their diameter.
 
 ### Linear Array
 
@@ -107,6 +115,38 @@ a circle about the axis line through `center`.
 - `axialStep` adds `k · axialStep` along the axis, which is how you get a helix.
   `startAngleDeg ≠ 0` rotates the seed group too; it is still the seed group.
 
+### Circular Arrangement (colliders only)
+
+`{ count, axis, openingDiameter }` arranges copies of a collider or rigid collider group around
+an empty central opening. Defaults are **16 total groups**, **1 m opening diameter**, and
+**Y axle axis**, matching an unrotated KSA cylinder's local Y axis. Sizes stay unchanged; set
+the seed cylinder's diameter and height before opening the chain.
+
+The hole is centered on the arithmetic mean of the seed positions. The original group moves
+outward with the copies; it does not remain inside the hole. Each copy rotates as a rigid
+group by `k · 360° / count`, preserving the relative arrangement of multiple selected
+colliders. If an earlier array produced several groups, each group gets its own ring centered
+on its own mean position.
+
+The initial outward direction is +Y for axis X and +X for axes Y/Z. The evaluator finds each
+rotated shape's support extent in that direction, then shifts the group until its nearest
+support plane is tangent to the requested hole. Box, Sphere, Cylinder and Capsule dimensions
+and rotations all participate. This guarantees **at least** the requested open diameter;
+an irregular group can leave a larger opening because the tangent-plane bound is conservative.
+
+For one cylinder parallel to the axle, radius `r` and hole radius `h`, the center moves by
+exactly `h + r` and the outside radius is `h + 2r`. Equivalently, for target outside radius
+`R`, choose seed radius `(R − h) / 2`. Cylinder height remains the wheel width. Neighboring
+cylinder centers are `2(h + r) sin(π / count)` apart; positive overlap requires this to be
+less than `2r`. The window warns when a single aligned cylinder's neighbors do not overlap,
+and warns when cylinder axes are tilted relative to the chosen axle. It does not analyze
+overlap for compound groups. Warnings do not block Apply.
+These checks describe the Circular Arrangement step; later chain transforms can change the
+opening or overlap.
+
+The ring remains scalloped at the tread and bore. The tool constructs geometry; it does not
+simulate axle retention or establish stability in KSA physics.
+
 ### Grid Array
 
 `{ plane, countA, countB, spacingA, spacingB, centered }` — `i` outer, `j` inner over the
@@ -124,6 +164,8 @@ authority (a session can hold ops that were never written through the clamp).
 |---|---|---|---|
 | Linear `count` | int 2…500 | 1 | `Count must be ≥ 2` / `Array too large (max 500)` |
 | Radial `count` | int 2…360 | 1 | same (360 = one instance per degree; finer is never intent) |
+| Circular `count` | int 2…360 | 1 | `Count must be ≥ 2` / `Circular arrangement too large (max 360)` |
+| Circular `openingDiameter` | 0…10000 m | 0.1 | must be finite and nonnegative |
 | Grid `countA`, `countB` | int 1…500 | 1 | product < 2 → `Grid must produce at least 2 instances`; > 500 → `Grid too large (max 500)` |
 | Distances — `delta`, `offset`, `center`, `spacingA/B`, `radialOffset`, `axialStep` | ±10000 m | 0.1 | — |
 | Angles — `degreesDeg`, `stepRotateDeg`, `startAngleDeg`, `sweepDeg` | ±360° | 15 | a sweep within `1e-6` of zero → `Sweep must be non-zero` |
@@ -143,10 +185,10 @@ being converted — the defensive read this codebase mandates instead of migrati
 
 ## What Apply does — and does not do
 
-`applyActionChain(entries, detail)` (`src/state/editorStore.ts`) is the only write:
+SubPart chains write through `applyActionChain(entries, detail)` (`src/state/editorStore.ts`):
 
 - It resolves **every** distinct `seedInstanceId` first and returns `-1` (no mutation, no undo
-  entry) if any is gone — a partial commit would be worse than none.
+  entry) if any is gone or on a locked layer — a partial commit would be worse than none.
 - One `pushUndo('action chain', detail)` for the whole thing: seed moves *and* every clone
   collapse into a single history step.
 - Seed entries **overwrite** their original placement's `position`/`rotation`/`scale`; identity,
@@ -169,6 +211,13 @@ mass-produce collisions. The existing duplicate paths are **not** changed by thi
 propellant feeds or couplings; they are plain new placements. Everything keyed by
 `subPartTemplateId` (SubPart game data, SubPart-owned colliders and lights, `internalFlags`)
 applies to a clone automatically, because it is keyed by template, not by instance.
+
+Collider chains use `applyColliderActionChain(entries, detail)`. It resolves all seeds and
+checks layer locks and common ownership before mutating. One `pushUndo` covers every original
+move and every clone. Originals keep their ids, shape, owner and layer; clones inherit those
+properties with fresh collider ids, and both receive the evaluated transforms with normalized
+sizes. The result is selected as colliders. Undo restores the entire previous document.
+Owned collider clones apply to every placement of their template, exactly like their seeds.
 
 ## Session lifecycle and keyboard
 
@@ -209,11 +258,11 @@ is what makes the discard rule impossible to route around.
 The chain is deliberately **not** a `$activeTool` tenant (foundation §2.6): it is a parallel
 session that legitimately co-exists with a tool, so measuring mid-chain is fine.
 
-**Open guards** (`tryOpenChain`, `src/ui/chain/openChainPalette.ts`), in order: no SubPart
-placements in the selection → the status bar's message channel flashes *"Select SubParts to
-chain"*; any seed on a locked layer → *"Selection is on a locked layer"* (every other transform
-tool refuses the same way).
-Otherwise the selected placements' `instanceId`s are frozen **in selection order** as the seeds.
+**Open guards** (`tryOpenChain`, `src/ui/chain/openChainPalette.ts`): an empty selection asks for
+SubParts or colliders; a mixed or unsupported selection asks for only SubParts or only
+colliders. Missing entities and locked layers block opening. Collider seeds with different
+owners are rejected. Otherwise the selected entities' ids and kind are frozen **in selection
+order** as the seeds.
 
 **While open the palette is non-modal**, on purpose. Orbiting, gizmo drags, the single-key
 rotate/nudge tools and undo all stay live, and because `$chainEval` re-evaluates against the
@@ -235,10 +284,11 @@ take the first press. Escape, the ✕ and the footer **Cancel** all run `cancelC
 **≥1 step raises the discard confirm, an empty session closes silently.**
 
 **Apply** reads `$chainEval` fresh, maps instances to `ChainCommitEntry[]`, commits, closes and
-flashes `Applied chain · +N SubParts` in the status bar's message channel (or `· N transformed`
+flashes `Applied chain · +N SubParts` or `Applied chain · +N colliders` in the status bar's
+message channel (or `· N transformed`
 when the chain created nothing). If a seed vanished between the last recompute and the click,
-`applyActionChain` returns `-1` and the message says *"Chain not applied — seeds no longer
-exist"* rather than claiming success.
+the commit returns `-1` and the message reports missing seeds, locked layers or different
+owners rather than claiming success.
 
 While a session is open the status bar mirrors the chain window's footer as a chip
 (`⛓ N instances · +M new`, or the evaluation error in red) — `ToolSegment.tsx`, fed by
@@ -273,21 +323,25 @@ tuned numbers, and the next radial ring starts where the last one left off.
 
 ## Preview and its limits
 
-`ChainPreviewLayer` (`src/three/ChainPreviewLayer.ts`) draws one translucent accent-green clone
-per evaluated instance. Its scene-graph rules — group on `viewport.scene`, no-op `raycast`,
-shared geometry, one singleton material — are documented in
+`ChainPreviewLayer` (`src/three/ChainPreviewLayer.ts`) draws translucent green ghosts for the
+evaluated instances. SubParts use cloned scene objects; colliders use reusable `ColliderObject`
+wireframes and fills, once per owner placement for template-owned seeds. The scene-graph rules
+— group on `viewport.scene`, no-op `raycast` — are documented in
 [3d-workspace.md § Chain preview ghosts](./3d-workspace.md#chain-preview-ghosts). The honest
 limits:
 
 - **500 ghosts max** (`PREVIEW_MAX_GHOSTS`), against a chain that may legally evaluate 2000
   instances. Past the cap the preview stops adding and the footer appends
   `· preview capped at 500`. **Apply still commits the whole chain** — a 30 × 30 grid previews
-  500 and applies 900. (The footer keys off `totalInstances`, so it can read one instance early
-  when a seed's ghost is suppressed; tracking the layer's real tally is not worth the wiring.)
-- **A hidden layer hides its ghosts.** The layer system never touches the preview group — but
+  500 and applies 900. The footer uses `totalInstances`, multiplied by the number of owner
+  placements for a template-owned collider session. This is a ceiling: unchanged originals
+  omit their ghosts, so the warning can appear before the actual cap is reached.
+- **A hidden layer hides its ghosts.** For SubParts, the layer system never touches the preview group — but
   ghosts are made with `Group.clone(true)`, and three's `Object3D.copy` copies `visible`, so a
   seed whose layer is hidden clones into hidden ghosts. Conversely a layer's *opacity* fade does
   not carry, because every cloned mesh's material is replaced with the ghost singleton.
+  Collider ghosts explicitly honor their layer visibility and opacity and the collider-kind
+  visibility toggle.
 - **Async-load catch-up**: an instance whose source `SubPartObject` is still building is skipped,
   not queued. The `SubPartObject.create` completion block calls `refresh()`, so a seed that
   finishes loading mid-session gets its ghosts on the next tick.
@@ -303,13 +357,12 @@ limits:
   A correct mirror needs winding-reversed *geometry*, which is a custom-mesh pipeline feature,
   not a transform — so it is unreachable from a chain by construction (`clampOp` floors scale at
   0.01, `evalChain` rejects ≤ 0).
-- **Placements only.** Connectors, colliders, lights, IVA seats and kittens cannot seed a chain:
-  per-kind clone rules (id schemes, pinned layers, owner frames) multiply the surface, and
-  placements are the 95% case. `ChainInstance.seedIndex` leaves room for more later.
+- **SubParts or colliders only.** Connectors, lights, IVA seats and kittens cannot seed a
+  chain. Mixing kinds or collider owners is unsupported. Circular Arrangement requires
+  collider seeds; other steps support either kind.
 - **No saved or named presets / macros.** `flexo:chainDefaults` (last values per op kind) covers
   most of the reuse; a preset library is a separate feature.
-- **Layer lock is checked at open, not at Apply** — locking a seed's layer mid-session does not
-  block the commit.
+- **Layer locks block opening and live evaluation.** Both commit actions recheck locks.
 - Also out: viewport pivot picking (click-to-set `center`), per-instance jitter, expression
   inputs, per-ghost labels. (**A draggable/resizable window and step drag-reorder shipped** —
   they were on this list in v1.)
@@ -324,6 +377,9 @@ every clamp, and that a corrupted `flexo:chainDefaults` blob degrades to hardcod
 without throwing. `src/state/editorStore.test.ts` (`describe('applyActionChain')`) covers the
 single-undo round trip, clone template/layer inheritance, the fresh-id collision skip, the
 resulting selection, and the `-1` no-op path.
+The collider commit tests (`describe('applyColliderActionChain')`) cover owner and layer
+preservation, fresh ids, size normalization, the undo/redo round trip and rejection without
+mutation for missing, locked or differently owned seeds.
 
 ## Files
 
@@ -336,7 +392,7 @@ resulting selection, and the `-1` no-op path.
 | `src/ui/chain/openChainPalette.ts` | `beginActionChain()` (the `chain.begin` command), `cancelChainSession()`, the confirm handlers, the leave-Build mode hook, and the open guards they share |
 | `src/ui/chain/applyChainSession.ts` | `applyChainSession()` — the Apply path, shared by the footer button and the `chain.apply` binding |
 | `src/ui/chain/ChainWindow.tsx`, `ChainStepCard.tsx`, `chainCommands.ts` | the floating window (and its phone sheet), the step cards, and the command catalog |
-| `src/state/editorStore.ts` | `applyActionChain` + `ChainCommitEntry` + `nextChainInstanceId` |
+| `src/state/editorStore.ts` | `applyActionChain` + `applyColliderActionChain` + `ChainCommitEntry` + `nextChainInstanceId` |
 
 Layering follows [architecture.md](./architecture.md): the session store stays React- and
 three-free, the matrix math lives in `src/three/` beside `bulkTransform.ts`, and the commit

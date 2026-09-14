@@ -5,7 +5,7 @@ import { randomId } from './ids';
 
 /**
  * The action-chain SESSION: an ordered list of steps ("ops") applied to a frozen
- * set of seed SubPart placements. Pure UI state — no React, no three.js, and no
+ * set of seed SubPart placements or colliders. Pure UI state — no React, no three.js, and no
  * document state, so nothing here enrolls in undo (see the note on
  * {@link $chainSession}). The math that turns a session into instances lives in
  * `src/three/chainMath.ts`, beside the `bulkTransform.ts` primitives it composes.
@@ -32,6 +32,7 @@ export type ChainOpKind =
   | 'scale'
   | 'linear-array'
   | 'radial-array'
+  | 'circular-array'
   | 'grid-array';
 export type ChainAxis = 'x' | 'y' | 'z';
 export type ChainPlane = 'xy' | 'xz' | 'yz';
@@ -97,16 +98,27 @@ export interface GridArrayOp {
   centered: boolean;
 }
 
+/** Collider ring with a guaranteed empty central opening; sizes stay unchanged. */
+export interface CircularArrayOp {
+  id: string;
+  kind: 'circular-array';
+  count: number;
+  axis: ChainAxis;
+  openingDiameter: number;
+}
+
 export type ChainOp =
   | TranslateOp
   | RotateOp
   | ScaleOp
   | LinearArrayOp
   | RadialArrayOp
+  | CircularArrayOp
   | GridArrayOp;
 
 export interface ChainSession {
-  /** Seed placements' `instanceId`s, in selection order, FROZEN at open. */
+  seedKind: 'subpart' | 'collider';
+  /** Placement `instanceId`s or collider `id`s, in selection order, FROZEN at open. */
   seedIds: string[];
   ops: ChainOp[];
 }
@@ -191,6 +203,10 @@ function gridArrayBody(): Omit<GridArrayOp, 'id'> {
   };
 }
 
+function circularArrayBody(): Omit<CircularArrayOp, 'id'> {
+  return { kind: 'circular-array', count: 16, axis: 'y', openingDiameter: 1 };
+}
+
 /** The hardcoded (unpersisted) parameters for a kind — also the fallback for every bad field. */
 function hardcodedBody(kind: ChainOpKind): ChainOpBody {
   switch (kind) {
@@ -204,6 +220,8 @@ function hardcodedBody(kind: ChainOpKind): ChainOpBody {
       return linearArrayBody();
     case 'radial-array':
       return radialArrayBody();
+    case 'circular-array':
+      return circularArrayBody();
     case 'grid-array':
       return gridArrayBody();
   }
@@ -304,6 +322,16 @@ export function clampOp(op: ChainOp): ChainOp {
         axialStep: clampNumber(op.axialStep, -DISTANCE_LIMIT, DISTANCE_LIMIT, d.axialStep),
       };
     }
+    case 'circular-array': {
+      const d = circularArrayBody();
+      return {
+        id: op.id,
+        kind: 'circular-array',
+        count: clampCount(op.count, 2, RADIAL_COUNT_MAX, d.count),
+        axis: clampEnum(op.axis, ['x', 'y', 'z'] as const, d.axis),
+        openingDiameter: clampNumber(op.openingDiameter, 0, DISTANCE_LIMIT, d.openingDiameter),
+      };
+    }
     case 'grid-array': {
       const d = gridArrayBody();
       return {
@@ -355,8 +383,11 @@ export function defaultOp(kind: ChainOpKind): ChainOp {
 }
 
 /** Starts a session over `seedIds` (selection order), replacing any open one. */
-export function openChain(seedIds: readonly string[]): void {
-  $chainSession.set({ seedIds: [...seedIds], ops: [] });
+export function openChain(
+  seedIds: readonly string[],
+  seedKind: ChainSession['seedKind'] = 'subpart',
+): void {
+  $chainSession.set({ seedKind, seedIds: [...seedIds], ops: [] });
 }
 
 export function closeChain(): void {

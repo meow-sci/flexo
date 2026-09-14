@@ -67,6 +67,13 @@ export const CHAIN_COMMANDS: ChainCommandDef[] = [
     icon: Orbit,
   },
   {
+    kind: 'circular-array',
+    label: 'Circular Arrangement',
+    description: 'Repeat colliders around an empty center opening',
+    keywords: ['collider', 'cylinder', 'wheel', 'axle', 'bore', 'hole', 'circle', 'ring'],
+    icon: Orbit,
+  },
+  {
     kind: 'grid-array',
     label: 'Grid Array',
     description: 'Rows × columns on a plane',

@@ -820,10 +820,16 @@ export class EditorScene {
     // setting changes (fires immediately on subscribe — a harmless no-op when nothing
     // is selected).
     this.sub($selectionHighlight, () => this.updateSelection());
-    this.sub($layerView, () => this.applyLayerView());
+    this.sub($layerView, () => {
+      this.applyLayerView();
+      this.chainPreview.refresh();
+    });
     this.sub($hideInterior, () => this.applyLayerView());
     // View ▸ Display Filters composes into the same single visibility writer.
-    this.sub($kindVisibility, () => this.applyLayerView());
+    this.sub($kindVisibility, () => {
+      this.applyLayerView();
+      this.chainPreview.refresh();
+    });
     // $effectiveToolMode, not $toolMode: exhaust placement clamps Scale away (a nozzle
     // placement has nothing to scale), and the toolbar reads the same computed so the
     // displayed tool always matches the tool a drag performs.

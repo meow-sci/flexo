@@ -75,6 +75,7 @@ import {
   $undoDescription,
   addCollider,
   applyActionChain,
+  applyColliderActionChain,
   applyEngineWizard,
   removeCollider,
   addIvaSeat,
@@ -3242,6 +3243,90 @@ describe('IVA seat mutations', () => {
     expect(seat.position).toEqual({ x: 2, y: -4, z: 6 });
     expect(seat.rotation).toEqual({ x: 0, y: 0.5, z: 0 });
     expect(seat.scale).toEqual({ x: 1, y: 1, z: 1 });
+  });
+});
+
+describe('applyColliderActionChain', () => {
+  it('moves and clones owner-local colliders with fresh ids, preserved metadata, and one undo', () => {
+    const seed: PartCollider = {
+      ...importedCollider('_collider1'),
+      shape: 'Cylinder',
+      ownerTemplateId: 'Wheel',
+      scale: { x: 2, y: 0.5, z: 2 },
+    };
+    const part = createEmptyPart();
+    part.colliders = [seed, importedCollider('_collider3')];
+    $part.set(part);
+    const entries: ChainCommitEntry[] = [
+      {
+        seedInstanceId: seed.id,
+        isSeed: true,
+        transform: { ...seed, position: { x: 3, y: 0, z: 0 } },
+      },
+      {
+        seedInstanceId: seed.id,
+        isSeed: false,
+        transform: { ...seed, position: { x: -3, y: 0, z: 0 } },
+      },
+    ];
+    expect(applyColliderActionChain(entries, '+1 colliders')).toBe(1);
+    const applied = $part.get();
+    expect(applied.colliders[0].position).toEqual({ x: 3, y: 0, z: 0 });
+    expect(applied.colliders[2]).toEqual({
+      ...seed,
+      id: '_collider4',
+      position: { x: -3, y: 0, z: 0 },
+    });
+    expect($selection.get()).toEqual([
+      { kind: 'collider', id: '_collider1' },
+      { kind: 'collider', id: '_collider4' },
+    ]);
+    expect($undoDescription.get()).toBe('action chain');
+    undo();
+    expect($part.get()).toEqual(part);
+    expect($canUndo.get()).toBe(false);
+    redo();
+    expect($part.get()).toEqual(applied);
+  });
+
+  it('normalizes collider dimensions at the commit boundary', () => {
+    const seed: PartCollider = { ...importedCollider('_collider1'), shape: 'Capsule' };
+    $part.set({ ...createEmptyPart(), colliders: [seed] });
+    applyColliderActionChain(
+      [
+        {
+          seedInstanceId: seed.id,
+          isSeed: true,
+          transform: { ...seed, scale: { x: 2, y: 1, z: 3 } },
+        },
+        {
+          seedInstanceId: seed.id,
+          isSeed: false,
+          transform: { ...seed, scale: { x: 1, y: 4, z: 2 } },
+        },
+      ],
+      '+1 colliders',
+    );
+    expect($part.get().colliders.map((c) => c.scale)).toEqual([
+      { x: 3, y: 3, z: 3 },
+      { x: 2, y: 4, z: 2 },
+    ]);
+  });
+
+  it('refuses missing, locked, or differently owned seeds without mutation or undo', () => {
+    const seed = importedCollider('_collider1');
+    const other = { ...importedCollider('_collider2'), ownerTemplateId: 'Wheel' };
+    const before = { ...createEmptyPart(), colliders: [seed, other] };
+    $part.set(before);
+    const entry = { seedInstanceId: seed.id, isSeed: true, transform: seed };
+    expect(applyColliderActionChain([entry, { ...entry, seedInstanceId: 'missing' }], '')).toBe(-1);
+    expect(applyColliderActionChain([entry, { ...entry, seedInstanceId: other.id }], '')).toBe(-1);
+    setLayerLocked(seed.layerId, true);
+    expect(applyColliderActionChain([entry], '')).toBe(-1);
+    expect(applyColliderActionChain([], '')).toBe(-1);
+    expect($part.get()).toEqual(before);
+    expect($canUndo.get()).toBe(false);
+    $layerView.set({});
   });
 });
 

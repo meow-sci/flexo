@@ -2108,7 +2108,7 @@ export function duplicatePlacement(index: number): void {
 
 /** One evaluated action-chain instance, ready to commit (see {@link applyActionChain}). */
 export interface ChainCommitEntry {
-  /** `instanceId` of the seed placement this instance descends from. */
+  /** Stable id of the seed placement or collider this instance descends from. */
   seedInstanceId: string;
   /** Where the instance ends up — already fully evaluated by the chain engine. */
   transform: PlacementTransform;
@@ -2159,7 +2159,7 @@ export function applyActionChain(entries: readonly ChainCommitEntry[], detail: s
   for (const entry of entries) {
     if (seedIndexById.has(entry.seedInstanceId)) continue;
     const index = current.placements.findIndex((p) => p.instanceId === entry.seedInstanceId);
-    if (index < 0) return -1;
+    if (index < 0 || isLayerLocked(current.placements[index].layerId)) return -1;
     seedIndexById.set(entry.seedInstanceId, index);
   }
 
@@ -2189,6 +2189,49 @@ export function applyActionChain(entries: readonly ChainCommitEntry[], detail: s
       layerId: seed.layerId,
     });
     cloneRefs.push({ kind: 'subpart', id: instanceId });
+  }
+  $part.set(part);
+  select([...seedRefs, ...cloneRefs]);
+  return cloneRefs.length;
+}
+
+/**
+ * Commits collider transforms in their common owner-local frame, preserving each seed's
+ * shape, owner, and layer. Seed moves and fresh-id clones form ONE undo step.
+ * Returns -1 without mutation if a seed vanished, became locked, or the owners differ.
+ */
+export function applyColliderActionChain(
+  entries: readonly ChainCommitEntry[],
+  detail: string,
+): number {
+  if (entries.length === 0) return -1;
+  const current = $part.get();
+  const seedIndexById = new Map<string, number>();
+  const owners = new Set<string | null>();
+  for (const entry of entries) {
+    if (seedIndexById.has(entry.seedInstanceId)) continue;
+    const index = current.colliders.findIndex((c) => c.id === entry.seedInstanceId);
+    if (index < 0 || isLayerLocked(current.colliders[index].layerId)) return -1;
+    owners.add(current.colliders[index].ownerTemplateId);
+    seedIndexById.set(entry.seedInstanceId, index);
+  }
+  if (owners.size !== 1) return -1;
+
+  pushUndo('action chain', detail);
+  const part = clone(current);
+  const seedRefs: SelectionRef[] = [];
+  const cloneRefs: SelectionRef[] = [];
+  for (const entry of entries) {
+    const seed = part.colliders[seedIndexById.get(entry.seedInstanceId)!];
+    if (entry.isSeed) {
+      assignCollider(seed, entry.transform);
+      seedRefs.push({ kind: 'collider', id: seed.id });
+    } else {
+      const collider = { ...seed, id: nextColliderId(part) };
+      assignCollider(collider, entry.transform);
+      part.colliders.push(collider);
+      cloneRefs.push({ kind: 'collider', id: collider.id });
+    }
   }
   $part.set(part);
   select([...seedRefs, ...cloneRefs]);

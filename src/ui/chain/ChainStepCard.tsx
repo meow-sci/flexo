@@ -11,6 +11,7 @@ import {
   type ChainOp,
   type ChainPivotMode,
   type ChainPlane,
+  type CircularArrayOp,
   type GridArrayOp,
   type LinearArrayOp,
   type RadialArrayOp,
@@ -176,6 +177,8 @@ function StepParameters({ op }: { op: ChainOp }) {
       return <LinearArrayRows op={op} />;
     case 'radial-array':
       return <RadialArrayRows op={op} />;
+    case 'circular-array':
+      return <CircularArrayRows op={op} />;
     case 'grid-array':
       return <GridArrayRows op={op} />;
   }
@@ -413,6 +416,41 @@ function RadialArrayRows({ op }: { op: RadialArrayOp }) {
         {...DISTANCE}
         onCommit={(n) => updateChainOp(op.id, { axialStep: n })}
       />
+    </>
+  );
+}
+
+function CircularArrayRows({ op }: { op: CircularArrayOp }) {
+  return (
+    <>
+      <ScalarRow
+        label="Count"
+        value={op.count}
+        {...RADIAL_COUNT}
+        onCommit={(count) => updateChainOp(op.id, { count })}
+      />
+      <ScalarRow
+        label="Opening Ø (m)"
+        value={op.openingDiameter}
+        min={0}
+        max={10000}
+        step={0.1}
+        onCommit={(openingDiameter) => updateChainOp(op.id, { openingDiameter })}
+      />
+      <SelectRow
+        label="Axle axis"
+        value={op.axis}
+        onChange={(axis) => updateChainOp(op.id, { axis: axis as ChainAxis })}
+      >
+        <ListBoxItem id="x">X</ListBoxItem>
+        <ListBoxItem id="y">Y (unrotated cylinder)</ListBoxItem>
+        <ListBoxItem id="z">Z</ListBoxItem>
+      </SelectRow>
+      <p className="text-[11px] text-fg-subtle">
+        Count includes the originals. The hole stays at the selection center; collider sizes stay
+        unchanged. Groups turn together around the axle. The opening is a minimum clearance;
+        irregular groups can leave more space.
+      </p>
     </>
   );
 }

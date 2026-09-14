@@ -230,6 +230,48 @@ Shape usage across all of `Content/`: **Cylinder 66 · Box 29 · Sphere 21 · Ca
 
 ---
 
+### Circular Arrangement authoring
+
+The collider-only **Circular Arrangement** action-chain step (`src/three/chainMath.ts`) adds
+no XML element or persisted document field. It produces ordinary `PartCollider` entities,
+exported under the existing `<Collider Id>` with `<Box Id>`, `<Sphere Id>`, `<Cylinder Id>`
+or `<Capsule Id>`. Positions remain `<LocationAsmb X Y Z>`, rotations remain
+`<Collider2Asmb X Y Z>`, and sizes remain `<Radius M>` and `<LengthX M>` / `<LengthY M>` /
+`<LengthZ M>` as appropriate. The contract is still owned by
+`decomp/KSA/ColliderModule.cs`, `decomp/KSA/ColliderTemplate.cs` and the four analytic
+`*ColliderTemplate.cs` classes.
+
+The operation relies directly on `decomp/KSA/CylinderColliderTemplate.cs`: a cylinder's
+axis is local Y, `<Radius M>` is its radius, and `<LengthY M>` is its full axial length.
+Therefore the default axle axis is Y. For a single aligned cylinder with radius `r` and
+requested opening radius `h`, the center distance is `h + r`; the outside radius is
+`h + 2r`. The cylinder's original dimensions are retained. All copies, including the moved
+original, remain under the same Part or SubPart owner. This does not create separate physics
+bodies: `decomp/KSA/Vehicle.cs` still builds the vehicle's compound from its collider modules.
+
+For a group, the hole center is the mean of the current seed positions in their common
+owner frame. Shape support extents along an initial radial direction include each shape's
+rotation. The group moves outward until its nearest support plane is tangent to the requested
+hole, then rotates rigidly around the axle for each copy. This is a conservative guarantee
+of at least the requested opening, with an exact radius for a single aligned cylinder.
+Capsule support uses the same hemispherical caps and cylindrical-segment length as §3;
+`normalizeColliderSize` runs before evaluation and after each step so support math uses
+the dimensions that export will emit.
+
+Owned collider seeds must share a template and are evaluated in its local frame, matching
+the `ColliderModule` owner-frame composition described in §5. Preview composes the result
+onto every placement through `colliderWorld`, without applying placement scale. The shape
+and owner serialization rules do not change.
+
+For one aligned cylinder the authoring warning checks whether
+`2(h + r) sin(π / count) < 2r`, the condition for positive neighbor overlap. Tilted cylinder
+axes receive a separate warning. Compound-group overlap, continuous collision behavior,
+axle retention and wheel stability are not simulated or verified by this tool. Re-check
+these authoring calculations if primitive radius, axial-length, orientation or owner-frame
+semantics change in the game.
+Warnings describe the Circular Arrangement step; subsequent chain transforms can change
+the opening or overlap.
+
 ## 4. Four authoring sites — and their equivalence
 
 `Components` is mapped by element name onto **every `PartTemplate` subclass** via

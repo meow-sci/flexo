@@ -149,6 +149,35 @@ becomes **"Size (m)"** with per-shape fields (Box: X/Y/Z · Sphere: Ø · Cylind
 `normalizeColliderSize` derives the rest. Changing the **owner** converts the transform
 through the old and new placements so the shape doesn't visually jump.
 
+### Circular arrangements and action chains
+
+Select one collider or a group sharing the same owner, open **Edit ▸ Begin Action Chain…**
+(`⇧⌘K`), and add **Circular Arrangement**. Set the **opening diameter**, **total count**
+(including the originals), and **axle axis**. Defaults are 1 m, 16, and Y. For a wheel, start
+with a cylinder whose diameter supplies the required tread depth and whose height is the
+wheel width; its local Y axis should be parallel to the chosen axle axis.
+
+The hole stays centered on the mean position of the selected colliders. The originals move
+outward and the copies rotate with the ring as rigid groups. Sizes stay unchanged. With one
+aligned cylinder of radius `r` and opening radius `h`, every cylinder center is `h + r` from
+the hole center and the outer radius is `h + 2r`. To target outer radius `R`, use seed radius
+`(R − h) / 2`. Multiple colliders and rotated primitives use their directional extents to
+preserve at least the requested opening; their resulting hole can be larger.
+
+The preview warns when a single aligned cylinder's neighbors do not overlap, or when a
+cylinder's axis is tilted away from the chosen axle. Compound-group overlap is not analyzed.
+These warnings describe that step; later chain transforms can change the opening or overlap.
+The tread and bore are still scalloped, and this authoring tool does not verify in-game
+axle retention or collision stability.
+
+All other chain transforms and arrays also accept collider seeds. A chain operates entirely
+in the common owner's frame: Part coordinates for part-level colliders, template-local
+coordinates for owned colliders. Owned previews appear on every placement of that template.
+Apply preserves each seed's shape, owner and layer, gives copies fresh ids, selects the
+result, and records the entire change as **one undo step**. Dimensions are normalized after
+each step so later operations, preview and export agree. See
+[action-chains.md](action-chains.md#circular-arrangement-colliders-only) for the math and limits.
+
 ## Fitting
 
 **Add ▸ Collider ▸ Fit to Selection ▸ \<shape\>** wraps the selected placements (or the

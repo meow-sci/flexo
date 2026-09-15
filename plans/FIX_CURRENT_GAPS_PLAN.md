@@ -1,17 +1,32 @@
 # Plan — Fix flexo gaps from KSA updates (running)
 
-> **Latest review: `2026.8.22.5348` → `2026.9.7.5402` (see below). NO BREAKING gap; the two
-> MISSING-CAPABILITY gaps that touched live Core data are ✅ FIXED in the review itself** — KSA's
-> new part-failure model added `<Part CrashTolerance>`, a geometry-root attribute `ApplyGameData`
-> never merges and Core authors on five engines (U1); and Core began authoring SubPart templates and
-> GameData-ADDED placements inside a `*GameData.xml` file, so the parachute bay imported without its
-> chutes (U4). Newly 📋 OPEN from 5402: the `<Parachute>` module (U2, passthrough-safe) and
-> `<SubPartGroup>` (U3, no consumer yet). Still 📋 OPEN from 5348: the `<Alpha>` material slot
-> (T1), `<PartModel><Terrain>` (T2), `<PrimarySequenceModule>` (T3, passthrough-safe) and the
-> retired kitten MMU asset (T4); from 5261: the `<ConvexHull>` collider primitive (S1) and the
-> `<Grab>` handhold anchors (S2, passthrough-safe). Carried forward from 5168: the ground-clutter
-> asset-bundler rework (R1, scaffold-only) and the "Control From Here" reference-orientation drift
-> (R2, docs-only). Earlier reviews follow as history.
+> **Latest review: `2026.9.7.5402` → `2026.9.10.5438`.** The upgrade re-ports the
+> solid-motor preview, refreshes Core exhaust ids, updates crash-tolerance guidance, and
+> refreshes the real-data fixtures. Full evidence and validation are in
+> [KSA_5438_REVIEW.md](KSA_5438_REVIEW.md); every changed/added/removed file is routed in
+> [KSA_5438_FILE_AUDIT.md](KSA_5438_FILE_AUDIT.md). Changes remain uncommitted.
+>
+> Historical authoring gaps remain separate: U2 parachute editing, U3 unused SubPart groups,
+> T1 alpha materials on Part rendering, T2 Terrain on Part models, T3 geometry-side primary
+> sequencing, T4 current kitten MMU, S1 convex-hull colliders, S2 geometry-side grab anchors,
+> and R1 the old cartoon-moon scaffold. A clean new-build contract review does not close them.
+
+## 5438 review — `2026.9.7.5402` → `2026.9.10.5438`
+
+| ID | Severity | Outcome / current implementation |
+| --- | --- | --- |
+| V1 | BREAKING (numeric preview) | **FIXED.** Switch the solid burn-grid calculation to current `SolidMotor.TryComputeBurnGrid` / `TryEvaluateThrustProfile` and `RecomputeUnburnableGrain`. Use trapezoidal reciprocal burn-rate integration, the interpolated quench endpoint, and the actual unburnable mass. `src/ksa/solidMotorPhysics.ts:649` (grid), `:719` (thrust), and `:586` (remaining mass); regression in `src/ksa/solidMotorPhysics.test.ts:254`. |
+| V2 | SCHEMA-DRIFT (asset reference) | **FIXED.** Current Core defines `EngineAAuxiliary`, replacing the two former auxiliary templates. Refreshed `VOLUMETRIC_EXHAUST_IDS` in `src/ksa/types.ts:821` and the real propulsion fixture; warning in `src/ksa/engineValidation.ts:710`. References remain external asset ids; a generic engine/export warning flags ids missing from current Core, without blocking a separate providing mod. Never alias or auto-convert old values. |
+| V3 | COSMETIC (incorrect author guidance) | **FIXED.** `src/ui/data/sections/IdentitySection.tsx:103` and `docs/xml-io.md` now describe collider-volume density and the 9 MPa default; the stored `<Part CrashTolerance>` override remains pressure in Pa. |
+| V4 | NONE (new content preserved) | Refreshed electrical fixture preserves current analytic mass geometry; new Utility fixture checks ordered `<Parachute><PbrMaterialRef>` children at both Part and SubPart scope. Existing GameData passthrough already handles them correctly. |
+| V5 | NONE (documentation correction) | Current `ConstraintSim.UpdateStaticObjectCollider` still chooses one nearest launch pad within 300 m. Corrected the prior review's mistaken all-pads claim; no ICRP code change. |
+
+**Persistence:** the numeric curve is derived data; the authored fields keep their layout,
+units and meaning. `PROJECT_SCHEMA_VERSION = 4` and `PROJECT_EXPORT_VERSION = 11` stay unchanged. No schema migration or legacy parsing path is added. Historical missing
+capabilities are not silently relabeled as fixed. See the current per-area scope documents
+for the retained limitations.
+
+**Validation:** see the complete gate results in [KSA_5438_REVIEW.md](KSA_5438_REVIEW.md).
 
 ---
 

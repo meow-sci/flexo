@@ -4,7 +4,7 @@
 > `<PartGameData>` / `<SubPartGameData>` documents. Each block maps to a KSA `*Template`
 > class. Engine modules have their own file ([engines.md](engines.md)).
 
-**Baseline:** re-vetted against KSA build **2026.9.7.5402** (decomp @ 5402 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.9.10.5438** (decomp @ 5438 + shipped Core XML).
 **Baseline status:** ✅ **INTACT, one new module opaque** — 5402 added exactly one `Components`
 module, `<Parachute>` (gap **U2**): Core authors it under both `<PartGameData>` and
 `<SubPartGameData>`, where the `RawXmlNode` passthrough round-trips it verbatim but the editor
@@ -111,7 +111,7 @@ ships a new `FuelPort` module (passthrough-preserved) — see
 - **A tank / grain segment is ABSOLUTE — no owner transform touches it.** `CylindricalTankTemplate.GetTankGeometryPaf` and `SolidGrainSegment.CreateComponents` read `Length`/`OuterRadius`/`WallThickness` straight off the XML, and `PartTree.RecomputeStaticMass` transforms the resulting mass offset by a **quaternion** (`Asmb2VehicleAsmb`) plus the owner's position — so a SubPart's `<Scale>` reaches neither the dimensions nor `<LocationAsmb>`. Consequence for flexo: **Scale Everything must multiply the numbers itself**, at both scopes (`scaleContainerGeometry` in `editorStore.ts`) — the cylinder axis is **X** (`TankGeometry.ComputeCylindricalTank` offsets its domes along `CentroidPaf.X`), so `lengthM` rides the X factor while the radius rides the cross-section factor. `WallThickness` is deliberately left alone (an authored manufacturing spec, not geometry), and `<Diameter>` — a VAB _matching key_, not a measurement — is scaled then SNAPPED to the 0.5 m rack grid (floor 0.5; Core's 0.125/0.25 probe classes are the lossy case).
 - `Vector3Reference` defaults missing attributes to 0 for all of Position/Rotation/Scale; `<Scale>` must always carry X, Y, Z (see [part-and-subpart-xml.md](part-and-subpart-xml.md)).
 - Light `Scale` is never emitted (KSA ignores it), and neither is flexo's editor-only
-  `PartLight.id` — an incoming `<Light Id>` is dropped on import.
+  `PartLight.id`. The separate `PartLight.ksaId` preserves and emits the load-bearing `<Light Id>`.
 - `Battery.cs`'s save-state `[XmlElement("Charge")]` (was `"Joules"`) is **save-game state, not authored template** — irrelevant to flexo.
 
 ## Ported light falloff & pose math (visualization contract)
@@ -149,6 +149,38 @@ re-check the validator's strings alongside the two evaluators.
 
 On each game update, re-verify per the checklist item in
 [GAME_UPDATE_CHECKLIST.md](GAME_UPDATE_CHECKLIST.md) (grep anchors are listed there).
+
+## What changed in 5438
+
+**Existing modeled modules and units intact; added content survives passthrough.**
+`BatteryTemplate`, `GeneratorTemplate`, `PowerConsumerTemplate`, `SolarPanelTemplate`,
+`DockingPortTemplate`, `ControlTemplate`, `EnergyReference`, `PowerReference`, `ImpulseReference`,
+`MassReference`, `DistanceReference`, `AreaReference`, and `PressureReference` are byte-identical
+to 5402. `CustomMassTemplate` and `InertiaTemplate` changed only log-source line numbers;
+`InertMass.CreateComponents` now delegates registration to `Part.SetInertMassPropertiesAsmb`.
+The authored `<CustomMass><Mass Kg>` form and mass/inertia scaling rules did not change.
+
+- `decomp/KSA/Parachute.cs`, `Parachute.TemplateData.Materials`, adds repeatable
+  `<PbrMaterialRef Id="…"/>`. The first entry is `DefaultMaterial`; `ResolveMaterials()` resolves
+  the ids in order. `Content/Core/CoreUtilityAGameData.xml` now authors six choices on each
+  stock parachute, at both Part and SubPart scope. Flexo preserves the entire unmodeled
+  `<Parachute>` node, including this ordered list, through `RawXmlNode` passthrough. Gap U2
+  remains an older authoring limitation, not a 5438 import/export loss. The new
+  `Parachute.SaveData.CanopyMaterial` attribute is saved **vehicle state**, not template XML.
+- `CoreElectricalAGameData.xml` adds `SolidCylinderMass`/`SolidCuboidMass` for batteries,
+  lights, solar panels and the fuel cell; `CoreLandingAGameData.xml` adds five mass nodes
+  (cuboid, cylinders, sphere) for the landing leg; `CoreStructuralAGameData.xml` adds two
+  cuboids for the large radial decoupler. Exact child forms are `<Mass Kg>`, dimensions
+  (`<Length M>`, `<Radius M>`, `<LengthX|LengthY|LengthZ M>`), `<LocationAsmb X Y Z>`, and
+  `<Paf2Asmb X Y Z>`. These already survive as unknown GameData children, including repeated
+  mass elements. No constructor/default or persisted schema change is required.
+- The light contract is unchanged: `LightModule.cs`, `KSA.Rendering.Lighting/Light.cs`,
+  `Shaders/Lighting/LightPrePass.comp`, and `LightData.glsl` are byte-identical. Changed
+  `LightUtils`/`LightDebug` hunks only rename locals; attenuation, spot-angle clamps, +X aim,
+  owner-scale position mapping and `<DisableInIva>` need no re-port.
+
+The current crash-pressure derivation is documented in
+[part-and-subpart-xml.md](part-and-subpart-xml.md#what-changed-in-5438).
 
 ## What changed in 5402
 

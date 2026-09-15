@@ -775,6 +775,72 @@ describe('editor-tag registry (gap 5)', () => {
 });
 
 describe('unmodeled-XML passthrough (gap 6)', () => {
+  it.each([
+    ['CoreElectricalA_Prefab_InlineBatteryBankA', 'SolidCylinderMass', 1, 87],
+    ['CoreElectricalA_Prefab_LightSmallB', 'SolidCuboidMass', 1, 6],
+    ['CoreElectricalA_Prefab_SolarPanelB', 'SolidCuboidMass', 4, 19],
+    ['CoreElectricalA_Prefab_BayFuelcellSmall', 'SolidCylinderMass', 1, 49],
+  ] as const)('preserves 5438 mass geometry for %s', (partId, tag, count, massKg) => {
+    const parsed = gameDataFromAssets(
+      readVendoredAsset('CoreElectricalAGameData.xml'),
+      partId,
+      new DOMParser(),
+    )!;
+    const masses = parsed.gameData.unknownChildren.filter((n) => n.tag === tag);
+    expect(masses).toHaveLength(count);
+    expect(
+      masses.reduce(
+        (sum, n) => sum + Number(n.children.find((c) => c.tag === 'Mass')!.attrs.Kg),
+        0,
+      ),
+    ).toBe(massKg);
+    const reparsed = gameDataFromAssets(
+      serializeGameData(editingPart({ partId, gameData: parsed.gameData })),
+      partId,
+      new DOMParser(),
+    )!;
+    expect(reparsed.gameData.unknownChildren.filter((n) => n.tag === tag)).toEqual(masses);
+  });
+
+  it('preserves 5438 ordered parachute material choices at Part and SubPart scope', () => {
+    const partId = 'CoreUtilityA_Prefab_ParachuteBayB';
+    const parsed = gameDataFromAssets(
+      readVendoredAsset('CoreUtilityAGameData.xml'),
+      partId,
+      new DOMParser(),
+    )!;
+    // Every radial Part and both standalone SubParts author the six current Core choices.
+    const radial = gameDataFromAssets(
+      readVendoredAsset('CoreUtilityAGameData.xml'),
+      'CoreUtilityA_Prefab_RadialParachuteMediumA',
+      new DOMParser(),
+    );
+    expect(radial).not.toBeNull();
+    const partChute = radial!.gameData.unknownChildren.find((n) => n.tag === 'Parachute')!;
+    expect(partChute).toBeDefined();
+    const subPart = parsed.subPartGameData.find(
+      (s) => s.subPartTemplateId === 'CoreUtilityA_Subpart_StandaloneParachuteB',
+    )!;
+    const subChute = subPart.unknownChildren.find((n) => n.tag === 'Parachute')!;
+    for (const chute of [partChute, subChute]) {
+      expect(chute.children.filter((n) => n.tag === 'PbrMaterialRef')).toHaveLength(6);
+    }
+    expect(subChute.children.find((n) => n.tag === 'PbrMaterialRef')!.attrs.Id).toBe(
+      'ParachuteCanopy_Material_StripesRed',
+    );
+    const source = editingPart({
+      partId: 'CoreUtilityA_Prefab_RadialParachuteMediumA',
+      gameData: radial!.gameData,
+      subPartGameData: parsed.subPartGameData,
+    });
+    const reparsed = gameDataFromAssets(serializeGameData(source), source.partId, new DOMParser())!;
+    expect(reparsed.gameData.unknownChildren).toEqual(source.gameData.unknownChildren);
+    expect(
+      reparsed.subPartGameData.find((s) => s.subPartTemplateId === subPart.subPartTemplateId)
+        ?.unknownChildren,
+    ).toEqual(subPart.unknownChildren);
+  });
+
   const xml = `<Assets>
     <PartGameData Id="P">
       <EditorTag Value="Fuel Tanks" />

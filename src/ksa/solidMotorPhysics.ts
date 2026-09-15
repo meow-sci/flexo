@@ -4,7 +4,7 @@
  *
  * A verbatim port, on the same terms as {@link import('./enginePhysics')}: identical
  * formulae, constants, iteration counts and clamps, so the curve flexo draws is the curve
- * KSA's own vehicle editor draws. Ported from the decompiled C# at build **2026.8.3.5117**
+ * KSA's own vehicle editor draws. Ported from the decompiled C# at build **2026.9.10.5438**
  * (`ksa-game-assemblies/current/decomp/KSA/`):
  *
  * | Game-side member                                    | Here                              |
@@ -47,6 +47,7 @@ import {
   combustorConditions,
   nozzleConditions,
   nozzlePerformance,
+  rocketPerformance,
   G0,
   type CombustionLut,
   type NozzlePerformanceResult,
@@ -295,19 +296,6 @@ function solidNozzlePerformance(
   return { ...perf, actualExhaustVelocity: perf.actualExhaustVelocity * nozzle.twoPhaseEfficiency };
 }
 
-/**
- * `NozzlePerformance.GetTotalThrust()` = momentum thrust + pressure thrust, deliberately
- * WITHOUT the `max(pressure, −momentum)` clamp `GetRocketPerformance()` applies (decomp:
- * `KSA/NozzlePerformance.cs:43-46` vs `:48-68`). The thrust curve is sampled in vacuum, where
- * the pressure term is never negative and the two agree — but porting the member the game
- * actually calls means the two can never drift apart if that ever changes.
- */
-function totalThrust(perf: NozzlePerformanceResult): number {
-  const momentum = perf.massFlowRate * perf.actualExhaustVelocity;
-  const pressure = (perf.exhaust.pressure - perf.ambientPressure) * perf.exhaustArea;
-  return momentum + pressure;
-}
-
 // ---------------------------------------------------------------------------
 // The motor
 // ---------------------------------------------------------------------------
@@ -376,6 +364,12 @@ interface MotorState {
   lutMinPressurePa: number;
   lutMaxPressurePa: number;
 }
+
+const ZERO_CORE_CONDITIONS: RocketCoreConditions = {
+  gas: { gamma: 1, specificGasConstant: 8.314463 },
+  core: { pressure: 0, temperature: 0 },
+  exit: { pressure: 0, temperature: 0 },
+};
 
 /** `SolidMotor.MaxChamberPressure` — the peak once resized, else the authored default. */
 function maxChamberPressure(motor: MotorState): number {
@@ -588,6 +582,179 @@ function resizeNozzles(motor: MotorState): ThrustCurveFailure | null {
   return null;
 }
 
+/** `SolidMotor.RecomputeUnburnableGrain` — finds the depth where pressure quenches. */
+function unburnableGrainMasses(motor: MotorState): number[] {
+  const maxDepthM = stackMaxDepthM(motor);
+  if (maxDepthM <= 0 || motor.segments.length === 0) {
+    return motor.segments.map(() => 0);
+  }
+
+  const step = maxDepthM / (DEPTH_STEPS - 1);
+  let depthM = maxDepthM;
+  let previousDepthM = 0;
+  let previousPressurePa = maxChamberPressure(motor);
+  const ignitionArea = stackBurningArea(motor, 0);
+  const ignition = solveConditionsForArea(motor, ignitionArea, previousPressurePa);
+  previousPressurePa = ignition?.core.pressure ?? 0;
+  const quenchPressurePa = motor.input.minimumBurnPressurePa * QUENCH_PRESSURE_FRACTION;
+
+  for (let i = 1; i < DEPTH_STEPS; i++) {
+    const depth = step * i;
+    const pressure =
+      solveConditionsForArea(motor, stackBurningArea(motor, depth), previousPressurePa)?.core
+        .pressure ?? 0;
+    if (pressure < quenchPressurePa) {
+      depthM = interpolateQuenchDepth(
+        previousDepthM,
+        previousPressurePa,
+        depth,
+        pressure,
+        quenchPressurePa,
+      );
+      break;
+    }
+    previousDepthM = depth;
+    previousPressurePa = pressure;
+  }
+
+  return motor.segments.map((segment) =>
+    grainMassAtDepth(segment, depthM, motor.input.storageDensityKgPerM3),
+  );
+}
+
+/** `SolidMotor.InterpolateQuenchDepth` — linearly locates the burn-pressure cutoff. */
+function interpolateQuenchDepth(
+  previousDepthM: number,
+  previousPressurePa: number,
+  depthM: number,
+  pressurePa: number,
+  quenchPressurePa: number,
+): number {
+  const pressureDrop = previousPressurePa - pressurePa;
+  const amount =
+    pressureDrop > 0
+      ? Math.min(Math.max((previousPressurePa - quenchPressurePa) / pressureDrop, 0), 1)
+      : 0;
+  return previousDepthM + amount * (depthM - previousDepthM);
+}
+
+interface BurnGrid {
+  times: number[];
+  chamberPressures: number[];
+  conditions: RocketCoreConditions[];
+  elapsed: number;
+}
+
+/** `SolidMotor.TryComputeBurnGrid` — the single burn-profile depth walk used by KSA. */
+function computeBurnGrid(motor: MotorState): BurnGrid | null {
+  const maxDepthM = stackMaxDepthM(motor);
+  if (maxDepthM <= 0 || motor.segments.length === 0) return null;
+
+  const step = maxDepthM / (DEPTH_STEPS - 1);
+  const times: number[] = [];
+  const chamberPressures: number[] = [];
+  const conditions: RocketCoreConditions[] = [];
+  let elapsed = 0;
+  let previousPressurePa = maxChamberPressure(motor);
+  let previousInverseBurnRate = 0;
+
+  for (let i = 0; i < DEPTH_STEPS; i++) {
+    const depthM = step * i;
+    const combustion = solveConditionsForArea(
+      motor,
+      stackBurningArea(motor, depthM),
+      previousPressurePa,
+    );
+    const pressurePa = combustion?.core.pressure ?? 0;
+    const quenchPressurePa =
+      i === 0 ? motor.input.minimumBurnPressurePa : motor.input.minimumBurnPressurePa * 0.5;
+    const inverseBurnRate = 1 / Math.max(evaluateBurnRate(motor.input.burnRate, pressurePa), 1e-6);
+
+    if (pressurePa < quenchPressurePa) {
+      if (i === 0) return null;
+      const previousDepth = step * (i - 1);
+      const quenchDepth = interpolateQuenchDepth(
+        previousDepth,
+        previousPressurePa,
+        depthM,
+        pressurePa,
+        quenchPressurePa,
+      );
+      const quenchCombustion = solveConditionsForArea(
+        motor,
+        stackBurningArea(motor, quenchDepth),
+        previousPressurePa,
+      );
+      const quenchInverseBurnRate =
+        1 / Math.max(evaluateBurnRate(motor.input.burnRate, quenchPressurePa), 1e-6);
+      elapsed +=
+        (quenchDepth - previousDepth) * 0.5 * (previousInverseBurnRate + quenchInverseBurnRate);
+      times.push(elapsed);
+      chamberPressures.push(quenchCombustion?.core.pressure ?? 0);
+      conditions.push(quenchCombustion ?? ZERO_CORE_CONDITIONS);
+      break;
+    }
+
+    previousPressurePa = pressurePa;
+    if (i > 0) elapsed += step * 0.5 * (previousInverseBurnRate + inverseBurnRate);
+    previousInverseBurnRate = inverseBurnRate;
+
+    times.push(elapsed);
+    chamberPressures.push(pressurePa);
+    conditions.push(combustion ?? ZERO_CORE_CONDITIONS);
+  }
+
+  if (times.length < 2 || elapsed <= 0) return null;
+  return { times, chamberPressures, conditions, elapsed };
+}
+
+interface EvaluatedThrustProfile {
+  thrusts: number[];
+  isps: number[];
+  peakThrustN: number;
+  massFlowAtPeak: number;
+}
+
+/** `SolidMotor.TryEvaluateThrustProfile` — evaluates one ambient-pressure profile. */
+function evaluateThrustProfile(
+  motor: MotorState,
+  conditions: readonly RocketCoreConditions[],
+  ambientPressurePa: number,
+): EvaluatedThrustProfile | null {
+  const thrusts: number[] = [];
+  const isps: number[] = [];
+  let peakThrustN = 0;
+  let massFlowAtPeak = 0;
+
+  for (let i = 0; i < conditions.length; i++) {
+    let thrustN = 0;
+    let massFlow = 0;
+    // `RocketCoreConditions.Zero` is the game's zero-flow sentinel. Its gamma=1 gas values
+    // make JavaScript's `1 ** Infinity` produce NaN, whereas .NET's MathF.Pow returns 1 here;
+    // short-circuit the sentinel to the same zero performance before entering nozzle math.
+    if (conditions[i].core.pressure <= 0) {
+      thrusts.push(0);
+      isps.push(0);
+      continue;
+    }
+    for (const nozzle of motor.nozzles) {
+      const performance = rocketPerformance(
+        solidNozzlePerformance(nozzle, conditions[i], ambientPressurePa),
+      );
+      thrustN += performance.totalThrust;
+      massFlow += performance.massFlowRate;
+    }
+    if (thrustN > peakThrustN) {
+      peakThrustN = thrustN;
+      massFlowAtPeak = massFlow;
+    }
+    thrusts.push(thrustN);
+    isps.push(massFlow > 0 ? thrustN / (massFlow * G0) : 0);
+  }
+  if (peakThrustN <= 0 || massFlowAtPeak <= 0) return null;
+  return { thrusts, isps, peakThrustN, massFlowAtPeak };
+}
+
 /** Builds the resolved motor state, or null when the authored input is degenerate. */
 function buildMotor(input: SolidMotorInput): MotorState | null {
   if (input.lut.rows.length === 0) return null;
@@ -623,8 +790,9 @@ function buildMotor(input: SolidMotorInput): MotorState | null {
  *
  * Walks 256 equal depth steps to the stack's max regression depth, solving the chamber
  * pressure at each (warm-started from the last), stopping when pressure falls below the
- * ignition limit (or, after ignition, half of it — the quench fraction). Time accumulates as
- * `Σ Δdepth / burnRate(p)`, and the irregular time base is finally resampled onto
+ * ignition limit (or, after ignition, half of it — the quench fraction). Time accumulates by
+ * trapezoidal integration of reciprocal burn rate, with the final interval ending at a
+ * linearly interpolated quench depth. The irregular time base is finally resampled onto
  * `sampleCount` evenly-spaced points by linear interpolation, exactly as the game does for
  * its editor graph.
  *
@@ -642,60 +810,11 @@ export function sampleThrustCurve(
   if (!motor || motor.segments.length === 0 || motor.nozzles.length === 0) return null;
   if (resizeNozzles(motor) !== null) return null;
 
-  const maxDepthM = stackMaxDepthM(motor);
-  if (maxDepthM <= 0) return null;
-
-  const step = maxDepthM / (DEPTH_STEPS - 1);
-  const times: number[] = [];
-  const thrusts: number[] = [];
-  const impulses: number[] = [];
-  const pressures: number[] = [];
-  let elapsed = 0;
-  let peakThrustN = 0;
-  let massFlowAtPeak = 0;
-  let warmStart = maxChamberPressure(motor);
-
-  for (let j = 0; j < DEPTH_STEPS; j++) {
-    const area = stackBurningArea(motor, step * j);
-    if (area <= 0 && j > 0) break;
-    const combustion = solveConditionsForArea(motor, area, warmStart);
-    const pressure = combustion?.core.pressure ?? 0;
-    const quench =
-      j === 0
-        ? motor.input.minimumBurnPressurePa
-        : motor.input.minimumBurnPressurePa * QUENCH_PRESSURE_FRACTION;
-    if (!combustion || pressure < quench) {
-      if (j === 0) return null; // never lit
-      break;
-    }
-    warmStart = pressure;
-
-    let thrust = 0;
-    let massFlow = 0;
-    for (const nozzle of motor.nozzles) {
-      const perf = solidNozzlePerformance(nozzle, combustion, 0);
-      thrust += totalThrust(perf);
-      massFlow += perf.massFlowRate;
-    }
-    if (thrust > peakThrustN) {
-      peakThrustN = thrust;
-      massFlowAtPeak = massFlow;
-    }
-    if (j > 0) elapsed += step / Math.max(evaluateBurnRate(motor.input.burnRate, pressure), 1e-6);
-    times.push(elapsed);
-    thrusts.push(thrust);
-    impulses.push(massFlow > 0 ? thrust / (massFlow * G0) : 0);
-    pressures.push(pressure);
-  }
-
-  const count = times.length;
-  if (count < 2 || elapsed <= 0 || peakThrustN <= 0 || massFlowAtPeak <= 0) return null;
-
-  const finalDepthM = step * count;
-  let unburnableGrainKg = 0;
-  for (const segment of motor.segments) {
-    unburnableGrainKg += grainMassAtDepth(segment, finalDepthM, motor.input.storageDensityKgPerM3);
-  }
+  const unburnableMasses = unburnableGrainMasses(motor);
+  const grid = computeBurnGrid(motor);
+  if (!grid) return null;
+  const profile = evaluateThrustProfile(motor, grid.conditions, 0);
+  if (!profile) return null;
 
   const outTimes = new Float32Array(sampleCount);
   const outThrust = new Float32Array(sampleCount);
@@ -703,14 +822,14 @@ export function sampleThrustCurve(
   const outPressure = new Float32Array(sampleCount);
   let n = 0;
   for (let i = 0; i < sampleCount; i++) {
-    const t = (elapsed * i) / (sampleCount - 1);
-    while (n < count - 2 && times[n + 1] < t) n++;
-    const span = times[n + 1] - times[n];
-    const amount = span > 0 ? Math.min(Math.max((t - times[n]) / span, 0), 1) : 0;
+    const t = (grid.elapsed * i) / (sampleCount - 1);
+    while (n < grid.times.length - 2 && grid.times[n + 1] < t) n++;
+    const span = grid.times[n + 1] - grid.times[n];
+    const amount = span > 0 ? Math.min(Math.max((t - grid.times[n]) / span, 0), 1) : 0;
     outTimes[i] = t;
-    outThrust[i] = lerp(thrusts[n], thrusts[n + 1], amount);
-    outIsp[i] = lerp(impulses[n], impulses[n + 1], amount);
-    outPressure[i] = lerp(pressures[n], pressures[n + 1], amount);
+    outThrust[i] = lerp(profile.thrusts[n], profile.thrusts[n + 1], amount);
+    outIsp[i] = lerp(profile.isps[n], profile.isps[n + 1], amount);
+    outPressure[i] = lerp(grid.chamberPressures[n], grid.chamberPressures[n + 1], amount);
   }
 
   return {
@@ -718,11 +837,11 @@ export function sampleThrustCurve(
     thrustN: outThrust,
     ispS: outIsp,
     chamberPressurePa: outPressure,
-    peakThrustN,
-    burnSeconds: elapsed,
-    ignitionThrustN: thrusts[0],
-    vacuumIspS: peakThrustN / (massFlowAtPeak * G0),
-    unburnableGrainKg,
+    peakThrustN: profile.peakThrustN,
+    burnSeconds: grid.elapsed,
+    ignitionThrustN: profile.thrusts[0],
+    vacuumIspS: profile.peakThrustN / (profile.massFlowAtPeak * G0),
+    unburnableGrainKg: unburnableMasses.reduce((total, mass) => total + mass, 0),
     areaRatio: motor.nozzles[0].exitAreaM2 / motor.nozzles[0].throatAreaM2,
   };
 }

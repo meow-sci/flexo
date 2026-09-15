@@ -6,9 +6,8 @@ Full evidence: [analysis/icrp/KSA_LAUNCH_SITES_AND_MODS.md](../analysis/icrp/KSA
 and [analysis/icrp/PEBKAC_SYSTEM_MODS.md](../analysis/icrp/PEBKAC_SYSTEM_MODS.md);
 plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (L1–L9) + §Phase 7.
 
-**Baseline:** re-verified against KSA build **2026.9.7.5402** — schema classes byte-identical; the
-physics now collides against every launch pad on a body, not just the nearest; see
-[What changed in 5402](#what-changed-in-5402).
+**Baseline:** re-verified against KSA build **2026.9.10.5438** — authored schema unchanged,
+CPU decal evaluation rejects distant points; see [What changed in 5438](#what-changed-in-5438).
 
 ## Contract facts
 
@@ -79,14 +78,37 @@ and re-clones on export; drift = re-export), `SolSystem.xml` (**mixed**: `LoadFr
 `Path=` attrs — the texture rules run over EVERY inline body in ICRP's output),
 `mod.toml`, `manifest.toml`, `Textures/Planets/_Decals/circle.dds`.
 
+## What changed in 5438
+
+**Authored contract INTACT.** `LocationReference`, `LandmarkReference`, `CelestialTemplate`,
+`AstronomicalTemplate`, `SystemTemplate`, `SystemInfo`, `AstronomicalReference`,
+`ProceduralModifiersReference`, and Core `Astronomicals.xml`/`SolSystem.xml` are byte-identical.
+The exact `<Landmark IsLaunchPad StaticObject>` and latitude/longitude forms, unique top-level
+body ids, `<LoadFromLibrary>` references, absolute texture-path workaround and spawn-height
+calculation are unchanged. Static-object and mod registration remain as previously documented.
+
+`decomp/KSA/DecalModifierReference.cs:Apply` adds an early return when the squared distance
+between the point and decal center exceeds `2.0001 × radius²`, before projecting UVs.
+This avoids applying the planar projection far from its intended surface patch. Its
+`<Modifier Type="Decal">`, `<Radius>`, `<AltitudeOffset>` and `<Location>` schema is unchanged.
+`TilingDetailModifierReference` now calls wrapped bilinear texture sampling directly and skips
+zero-weight tile samples; no authored fields changed. ICRP clones/emits this XML and does not
+port CPU terrain evaluation, so neither needs an application change.
+
+**5402 review correction:** caching all launch-pad poses does not enable all their colliders.
+`ConstraintSim.UpdateStaticObjectCollider` in both 5402 and 5438 selects only the nearest
+candidate within 300 m and installs one static collider. The older claim that two nearby pads
+both collide was unsupported; the historical note below is corrected. No persisted-schema
+change is needed.
+
 ## What changed in 5402
 
 **Nothing in the schema.** `LandmarkReference`, `DecalModifierReference`, `SystemTemplate`,
 `Mod.cs`, `ModManifest` and `Astronomicals.xml` / `SolSystem.xml` are unchanged; `LocationReference`
-changed only by `IGameViewport` types and a cursor hit-test guard in its debug UI. One behavioural
-move worth knowing for site export: `ConstraintSim` used to pick the single nearest launch-pad
-landmark within 300 m as the static collider; at 5402 `ResolveLaunchPads` builds a `LaunchPadPose`
-list of **every** `LandmarkReference { IsLaunchPad }` on the current celestial whose
+changed only by `IGameViewport` types and a cursor hit-test guard in its debug UI. One runtime
+refactor caches launch-pad candidates: `ResolveLaunchPads` builds a `LaunchPadPose` list of
+every `LandmarkReference { IsLaunchPad }` on the current celestial whose
 `GetStaticObject().CollisionShape.Exists`, posed by `ForwardCcf × (MeanRadius + terrain height)`
-and `LandmarkReference.GetAxesCcf(out up, out east, out north)`. Two ICRP sites placed close
-together therefore both collide now, instead of the farther one being ignored.
+and `LandmarkReference.GetAxesCcf(out up, out east, out north)`. `UpdateStaticObjectCollider`
+then selects the nearest candidate within 300 m, as before. The list is a cache, not a change
+from one active pad collider to many.

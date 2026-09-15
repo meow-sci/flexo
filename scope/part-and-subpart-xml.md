@@ -5,7 +5,11 @@
 > other feature hangs off. Read alongside [docs/xml-io.md](../docs/xml-io.md) and
 > [docs/subpart-catalog.md](../docs/subpart-catalog.md) (the flexo-internal view).
 
-**Baseline:** KSA build **2026.9.7.5402** — `PartTemplate` gained the geometry-root attribute
+**Baseline:** KSA build **2026.9.10.5438** — geometry/XML schema unchanged from 5402;
+crash-tolerance derivation now uses subtree inert mass and summed collider volume. See
+[What changed in 5438](#what-changed-in-5438).
+
+At **2026.9.7.5402**, `PartTemplate` gained the geometry-root attribute
 `CrashTolerance` (gap **U1**, modeled) and `<SubPartGroup>` (gap **U3**, no consumer yet), and Core
 began authoring SubPart **templates** and GameData-**added** placements inside a `*GameData.xml` file
 (gap **U4**, modeled) — see [What changed in 5402](#what-changed-in-5402).
@@ -68,12 +72,12 @@ see [colliders.md](colliders.md). `<IVASeat>` has likewise moved out of the pass
 **Document shape**
 
 - Root element `<Assets>`. Geometry `<Part Id>` and metadata `<PartGameData Id>` are matched by **exact `Id`**.
-- Geometry `<Part>` root attributes flexo reads AND emits: `Id`, and (since 5402) `CrashTolerance` — Pa, `PartTemplate.CrashTolerance`, default `NaN`. It is meaningful **only** on the geometry element: `PartTemplate.ApplyGameData` never copies it, so a `<PartGameData CrashTolerance>` is dead. Omitted when unset / `≤ 0` (the game then derives it from inert mass ÷ bounding-box volume). See [What changed in 5402](#what-changed-in-5402).
+- Geometry `<Part>` root attributes flexo reads AND emits: `Id`, and (since 5402) `CrashTolerance` — Pa, `PartTemplate.CrashTolerance`, default `NaN`. It is meaningful **only** on the geometry element: `PartTemplate.ApplyGameData` never copies it, so a `<PartGameData CrashTolerance>` is dead. Omitted when unset / `≤ 0` (the game derives it from subtree inert mass ÷ summed analytic collider volume; see the 5438 note). See [What changed in 5402](#what-changed-in-5402).
 - A `<SubPart>` is a **placement** iff it has `InstanceOf`; one without is skipped. A `<SubPart>` is a **template** iff it has `<PartModel>`/`<PartModelDynamic>`. Both may ALSO appear in a `*GameData.xml` file (since 5402 Core does): a `<PartGameData><SubPart Id InstanceOf><Transform>` whose `Id` matches no geometry instance is **appended** by `PartTemplate.ApplyOrAddSubPartInstance` (a matching `Id` only gets a Transform/Gimbal/SolarTracker overlay), and a top-level `<SubPart>` template in a GameData file resolves its `<Mesh Id>`/`<Material Id>` from KSA's global registry. flexo folds the former into the one placement list on import (re-emitted in the geometry `<Part>`, which the game treats identically) and catalogs the latter against the sibling Assets file's atlas/material tables.
 - Placement: `<SubPart Id InstanceOf>` + `<Transform>` with `<Position>/<Rotation>/<Scale>` each carrying `X`/`Y`/`Z`. Defaults position 0, rotation 0, scale 1; an element is omitted when every axis prints as its default under G6 (not just within `EPSILON = 1e-9` — the decision follows the formatted value).
 - **`Vector3Reference` defaults a MISSING attribute to 0 for all of Position/Rotation/Scale** (`X = Y = Z = 0.0` field initialisers; `XmlSerializer` leaves absent attributes there). `TransformReference.ScaleValue` substitutes `double3.One` only when the whole `<Scale>` element is absent. So `<Position>`/`<Rotation>` may omit a zero axis losslessly, but **`<Scale>` must always carry X, Y, Z** — `<Scale X="2"/>` loads as (2, 0, 0), `CreateScale` goes singular and the SubPart/Connector renders blank. flexo's `buildScaleElement` emits all three axes (fixed 2026-08-23; earlier exports with non-uniform scale must be re-exported); the importer keeps the lenient 1 for a missing axis but logs a warning. All 465 `<Scale>` in shipped Content carry X, Y and Z.
 - Rotation is **Euler XYZ radians** (KSA "XYZ" ⇒ three.js `'ZYX'` — see [connectors-coordinates-iva.md](connectors-coordinates-iva.md)).
-- `<Connector Id>` carries `<Transform>` + a comma-space `<Flags>` body; connector faces local **+X**. Flag enum is exactly `Internal | ToSurface | FromSurface`; unknown flags dropped.
+- `<Connector Id>` carries `<Transform>` + a whitespace-separated `<Flags>` body; connector faces local **+X**. Flag enum is exactly `Internal | ToSurface | FromSurface`; unknown flags dropped.
 - `<PartGameData>` children flexo reads: `DisplayName` attr; `<EditorTag Value>`; `<Diameter M>`; `<CustomMass><Mass Kg>` (other CustomMass children — inertia/offsets — preserved verbatim as `customMassExtras`); `<Control/>`; `<Connector Id><Flags>`; `<Decoupler>`; `<DockingPort>`; `<EVADoor>`; power modules; engine modules; `<KeyframeAnimationModule>`. (See [gamedata-modules.md](gamedata-modules.md) for module detail.)
 
 **Catalog / file-path conventions**
@@ -203,6 +207,30 @@ registration ship the wrong mesh.
 - Connector `<Flags>` live on `<PartGameData>`, **not** on the geometry `<Part>` — without the GameData merge, `ToSurface`/etc. are lost.
 - A `<Part>` with no matching `<PartGameData>` has no tags/modules → invisible in the part picker.
 - `DockingPort` parses only the current child-element form (`<ConnectorId Value>`, `<LatchingKineticEnergy J>`, `<PushoffImpulse Ns>`) — no legacy fallback; see [gamedata-modules.md](gamedata-modules.md).
+
+## What changed in 5438
+
+**XML contract intact; crash-model explanation corrected.** `decomp/KSA/PartTemplate.cs`,
+`SubPartTemplate.cs`, `EditorTagDefinition.cs` and `Content/Core/CoreEditorTagsGameData.xml`
+are byte-identical to 5402. No new geometry-root or placement field needs modeling, and the
+static editor-tag snapshot needs no refresh. The XML declaration sweep found additions under
+`<Parachute>` (GameData passthrough) and `<PbrMaterial DisplayName>` (material metadata), plus
+standalone explosion/particle assets; none adds a field to `<Part>` or `<SubPart>`.
+
+`Part.CrashTolerancePascals` now calls
+`PartStructuralLimits.ResolveCrashTolerance(Template.CrashTolerance, ComputeSubtreeInertMass(), ColliderVolumeCubicMetres)`.
+`ColliderVolumeCubicMetres` **sums** every subtree `ColliderModule.VolumeCubicMetres`, including
+overlaps; it does not fall back to the visual bounding box. For positive mass and finite,
+positive volume, the derived pressure is
+`clamp(9e6 × clamp((mass / max(volume, 1e-6)) / 330, 0.1, 8), 1e5, 1e8)` Pa.
+Otherwise it returns 9 MPa. An authored finite positive `<Part CrashTolerance>` still wins
+unchanged. Flexo stores the authored pressure or null and delegates derivation to KSA, so this
+changes help text/documentation, not the persisted value's meaning: **no schema-version bump**.
+See [colliders.md](colliders.md#what-changed-in-5438) for the volume formulas.
+
+Core added analytic inert-mass nodes to electrical, landing, and structural GameData; these
+remain in the existing `unknownChildren` passthrough. The electrical fixture is refreshed;
+there is no new parser allow-list entry. Historical U2/U3 and collider S1 remain separate backlog.
 
 ## What changed in 5402
 

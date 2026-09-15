@@ -251,6 +251,54 @@ describe('sampleThrustCurve — SolidMotor.TrySampleThrustCurve', () => {
     expect(sampleThrustCurve(motorWith(NEUTRAL), 1)).toBeNull();
   });
 
+  it.each([0, 0.35])(
+    'integrates the constant-perimeter quench tail analytically (n=%s)',
+    (exponent) => {
+      const motor = motorWith(NEUTRAL, {
+        burnRate: { coefficientMPerS: 0.01, exponent },
+      });
+      const curve = sampleThrustCurve(motor, 64)!;
+
+      // Neutral's perimeter keeps the solved pressure at the authored 7 MPa until the final
+      // sample. The 5438 grid uses the final step only up to the linearly interpolated half-min
+      // quench pressure, so this duration is independently derived from those two rates.
+      const innerRadiusM = 0.6 - 0.006;
+      const maxDepthM = grainMaxDepth(NEUTRAL) * innerRadiusM;
+      const stepM = maxDepthM / 255;
+      const previousDepthM = maxDepthM - stepM;
+      const pressurePa = motor.authoredChamberPressurePa;
+      const quenchPressurePa = motor.minimumBurnPressurePa * 0.5;
+      const quenchDepthM = previousDepthM + stepM * ((pressurePa - quenchPressurePa) / pressurePa);
+      const pressureRate = evaluateBurnRate(motor.burnRate, pressurePa);
+      const quenchRate = evaluateBurnRate(motor.burnRate, quenchPressurePa);
+      const expectedBurnSeconds =
+        previousDepthM / pressureRate +
+        (quenchDepthM - previousDepthM) * 0.5 * (1 / pressureRate + 1 / quenchRate);
+      expect(curve.burnSeconds).toBeCloseTo(expectedBurnSeconds, 6);
+
+      // The same independently derived quench depth gives the remaining grain from the neutral
+      // profile's linear port-area growth, exercising RecomputeUnburnableGrain as well.
+      const normalizedQuenchDepth = quenchDepthM / innerRadiusM;
+      const remainingPortArea = NEUTRAL.portArea[0] + NEUTRAL.perimeter[0] * normalizedQuenchDepth;
+      const expectedUnburnableKg =
+        (grainInitialArea(NEUTRAL) - (remainingPortArea - NEUTRAL.portArea[0])) *
+        innerRadiusM ** 2 *
+        4 *
+        motor.storageDensityKgPerM3;
+      expect(curve.unburnableGrainKg).toBeCloseTo(expectedUnburnableKg, 8);
+    },
+  );
+
+  it('uses the consolidated 5438 burn profile and quench endpoint', () => {
+    // KSA 2026.9.10.5438 (rev 5414) integrates each depth interval with the
+    // trapezoidal reciprocal burn rate and computes unburnable grain at the
+    // interpolated half-minimum-pressure cutoff.
+    const curve = sampleThrustCurve(motorWith(REGRESSIVE), 64)!;
+    expect(curve.burnSeconds).toBeCloseTo(52.830702, 5);
+    expect(curve.unburnableGrainKg).toBeCloseTo(2723.6454, 3);
+    expect(curve.times[63]).toBeCloseTo(curve.burnSeconds, 5);
+  });
+
   // KSA 2026.8.22.5348 (rev 5329): `SolidMotor.ResizeNozzles` and `ComputeTotalThroatArea`
   // apportion the stack's throat by `SolidMotorNozzle.ThroatSizingArea`
   // (= `ExitArea / AreaRatioMultiplier`) instead of the raw exit area.

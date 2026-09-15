@@ -817,13 +817,12 @@ export const KNOWN_REACTIONS: readonly KnownReaction[] = [
   { id: 'DoubleBase', name: 'Double-Base', kind: 'Fixed', category: 'Solid' },
 ];
 
-/** The 7 `<VolumetricExhaust>` plume templates shipped in Core (referenced by id; auto-scale to the nozzle). */
+/** The 6 `<VolumetricExhaust>` plume templates shipped in Core (referenced by id; auto-scale to the nozzle). */
 export const VOLUMETRIC_EXHAUST_IDS: readonly string[] = [
   'EngineALarge',
   'EngineAMed',
   'EngineACompact',
-  'EngineAVernier',
-  'EngineATurbine',
+  'EngineAAuxiliary',
   'RCS',
   'MmuRcsVac',
 ];
@@ -1304,8 +1303,9 @@ export interface PartGameData {
    * attribute**, NOT GameData: `PartTemplate.CrashTolerance` (default `NaN`) is never copied by
    * `ApplyGameData`, so the serializer emits it on the `<Part>` element even though it lives in
    * this popup-only bag. `null` — or `≤ 0`, which the game treats like `NaN` — ⇒ derived
-   * in-game from inert mass ÷ bounding-box volume (`PartStructuralLimits.DeriveCrashTolerance`:
-   * 3 MPa × clamp(density ÷ 40, 0.5, 4), clamped to 0.1–20 MPa). Core authors `3e6` on the five
+   * in-game from subtree inert mass ÷ collider volume (`PartStructuralLimits.DeriveCrashTolerance`
+   * at 5438: 9 MPa × clamp(density ÷ 330, 0.1, 8), clamped to 0.1–100 MPa;
+   * missing mass or invalid volume uses 9 MPa). Core authors `3e6` on the five
    * CorePropulsionA engines.
    */
   crashTolerancePa: number | null;

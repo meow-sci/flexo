@@ -10,6 +10,6 @@
     "ksa-mods/**",
     "thirdparty/**",
     "scripts/**",
-    ".claude/**"
+    ".agents/**"
   ]
 }

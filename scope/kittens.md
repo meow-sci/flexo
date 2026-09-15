@@ -4,7 +4,7 @@
 > scale/placement aides (never exported) — a faithful three.js re-implementation of KSA's
 > Character rendering. The contract is a long list of asset/material/bone names + render quirks.
 
-**Baseline:** re-verified against KSA build **2026.9.7.5402** (decomp @ 5402 + shipped Core XML).
+**Baseline:** re-verified against KSA build **2026.9.10.5438** (decomp + shipped Core XML + private character binaries).
 **Baseline status:** 📝 **INTACT, one stale asset** — 5402 added `<HeadMeshIndices>` to
 `CharacterCore` for a first-person head hide (`KittenRenderable.HideHead`), which the editor aide
 never needs (see [What changed in 5402](#what-changed-in-5402)); at 5348 `CharacterAssets.xml` re-pointed the
@@ -73,6 +73,26 @@ refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code
 5. Don't `computeVertexNormals()` (faceted helmet dome from seam-split verts).
 6. Attachment correction is required & order-sensitive.
 7. `Characters/` atlases stay raw **BC7** (for verbatim mod bundle-export); without BPTC/RGTC they fall back to flat.
+
+## What changed in 5438
+
+**Verdict: no new schema break; the existing MMU gap T4 includes an authored transform.**
+`Content/Core/CharacterAssets.xml`, `decomp/KSA/KittenRenderable.cs`, `AnimatedRenderable.cs`,
+`CharacterRenderResources.cs`, and `Shaders/Mesh/ModelTranslucent.frag` are byte-identical to 5402. SHA-256 comparison finds all **43 `Characters/` files unchanged**. Of 26 files under
+`Textures/Characters/`, only `Attachments/KSA_MMU_Texts.ktx2` changes; that same path is already
+used by flexo's labels material. Body material names, `Head_M` / `Chest_M` socket bones and the
+`DefaultORM.png` redirect therefore remain intact.
+
+The current `Characters/KittenMMU/SK_KSA_MMU.glb` has five skinned meshes, split across the
+existing material names `KSA_MMU_mt` and `KSA_MMU_labels_mt`. Switching the path alone is
+insufficient: `CharacterAssets.xml:CharacterMMUAttachment` authors
+`<Transform><Position X="0" Y="1" Z="-1.1"/><Rotation X="1.570796" Y="2.853613" Z="1.570796"/></Transform>`
+(rotation in radians). `CharacterAvatar.TransformToFloat4x4` composes that local transform and
+`KittenRenderable` multiplies it before the socket correction and bone matrix in KSA's row-vector
+convention. The equivalent three.js composition is `bone.matrixWorld · ATTACHMENT_CORRECTION ·
+authoredTransform`. Both the aide and Make Kitten Mesh must use it when retiring the old GLTF;
+the existing bind-pose bake supports the new skinned attachment. This is a current asset
+replacement, with no old-path fallback or animation authoring added.
 
 ## What changed in 5402
 

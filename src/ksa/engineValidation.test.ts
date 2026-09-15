@@ -18,6 +18,7 @@ import {
   createTank,
   DEFAULT_LAYER_ID,
   identityTransform,
+  VOLUMETRIC_EXHAUST_IDS,
 } from './types';
 import type { ConnectorCapability, EditingPart } from './types';
 
@@ -27,6 +28,35 @@ const REACTIONS = REACTION_FIXTURES;
 const codes = (issues: EngineIssue[]) => issues.map((i) => i.code);
 const has = (part: EditingPart, code: string) =>
   codes(validateEngines(part, REACTIONS)).includes(code);
+
+describe('KSA 5438 Core exhaust catalog', () => {
+  it('keeps the six current volumetric exhaust template ids', () => {
+    expect(VOLUMETRIC_EXHAUST_IDS).toEqual([
+      'EngineALarge',
+      'EngineAMed',
+      'EngineACompact',
+      'EngineAAuxiliary',
+      'RCS',
+      'MmuRcsVac',
+    ]);
+  });
+
+  it('covers every CorePropulsionA game-data exhaust reference', () => {
+    const doc = new DOMParser().parseFromString(
+      readVendoredAsset('CorePropulsionAGameData.xml'),
+      'application/xml',
+    );
+    const ids = [
+      ...new Set(
+        Array.from(doc.getElementsByTagName('VolumetricExhaust')).map((element) =>
+          element.getAttribute('Id'),
+        ),
+      ),
+    ];
+    expect(ids).toContain('EngineAAuxiliary');
+    expect(ids.every((id) => id !== null && VOLUMETRIC_EXHAUST_IDS.includes(id))).toBe(true);
+  });
+});
 
 function connector(id: string, capabilities: ConnectorCapability[] = []) {
   return {
@@ -201,6 +231,52 @@ describe('validateEngines — KSA throws at load (blocking)', () => {
 });
 
 describe('validateEngines — KSA logs and the part misbehaves (warnings)', () => {
+  it('warns for an unknown volumetric exhaust id on both nozzle kinds and scopes', () => {
+    const p = createEmptyPart();
+    p.gameData.nozzles.push({
+      ...createNozzle('LiquidNozzle'),
+      reactionPlumes: [
+        {
+          reactionId: null,
+          isDefault: true,
+          volumetricExhaustId: 'EngineATurbine',
+          plumeTrailId: null,
+        },
+      ],
+    });
+    p.placements.push(placement('solid_1', 'SolidNozzle'));
+    p.subPartGameData.push({
+      ...createSubPartGameData('SolidNozzle'),
+      solidNozzles: [
+        {
+          ...createSolidMotorNozzle('SolidNozzle'),
+          reactionPlumes: [
+            {
+              reactionId: null,
+              isDefault: true,
+              volumetricExhaustId: 'EngineAVernier',
+              plumeTrailId: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    const issues = validateEngines(p, REACTIONS).filter(
+      (issue) => issue.code === 'nozzle-volumetric-exhaust-unknown',
+    );
+    expect(issues).toHaveLength(2);
+    expect(issues.every((issue) => issue.severity === 'warn')).toBe(true);
+    expect(issues.map((issue) => issue.source)).toEqual([
+      { templateId: null, module: 'nozzle', index: 0 },
+      { templateId: 'SolidNozzle', module: 'solidNozzle', index: 0 },
+    ]);
+
+    p.gameData.nozzles[0].reactionPlumes[0].volumetricExhaustId = 'EngineAAuxiliary';
+    p.subPartGameData[0].solidNozzles[0].reactionPlumes[0].volumetricExhaustId = 'EngineAAuxiliary';
+    expect(has(p, 'nozzle-volumetric-exhaust-unknown')).toBe(false);
+  });
+
   // PartTemplate.AddResolvedFeed: "feeds from unknown container '…'"
   it('flags a container feed naming no tank or grain segment', () => {
     const p = goodSolidPart();

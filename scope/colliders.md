@@ -6,11 +6,40 @@
 > [part-and-subpart-xml.md](part-and-subpart-xml.md) (which owns the surrounding `<Part>` /
 > `<PartGameData>` document structure).
 
-**Baseline:** re-verified against KSA build **2026.9.7.5402** (`decomp/` + shipped `Content/Core`)
+**Baseline:** re-verified against KSA build **2026.9.10.5438** (`decomp/` + shipped `Content/Core`)
 and the real GLB meshes in `flexo-private-assets/assets/Meshes`.
 **Baseline status:** 🟡 **MODELED, one primitive short.** The four analytic shapes are fully modeled
 (closing the 4939 geometry-template `<Collider>` gap **E**), but 5261 added a **fifth**,
 `<ConvexHull>` — gap **S1**, see [What changed in 5261](#what-changed-in-5261).
+
+## What changed in 5438
+
+**Shape XML intact; analytic volume now controls derived crash tolerance.**
+`decomp/KSA/ColliderModule.cs` still declares the same five allowed children of `<Collider>`:
+`<Box>`, `<Capsule>`, `<Cylinder>`, `<Sphere>`, and `<ConvexHull>`. Four-site loading,
+`LocationAsmb`/`Collider2Asmb`, dimensions and owner-transform rules are unchanged.
+The historical missing hull authoring capability S1 is not a new 5438 regression.
+
+The four analytic templates now override `ColliderTemplate.VolumeCubicMetres`:
+
+| Template                   | Volume from authored dimensions          |
+| -------------------------- | ---------------------------------------- |
+| `BoxColliderTemplate`      | `LengthX × LengthY × LengthZ`            |
+| `SphereColliderTemplate`   | `4π/3 × Radius³`                         |
+| `CylinderColliderTemplate` | `π × Radius² × LengthY`                  |
+| `CapsuleColliderTemplate`  | `π × Radius² × LengthY + 4π/3 × Radius³` |
+
+`ColliderModule.VolumeCubicMetres` multiplies the template volume by runtime `_scale³`.
+`MeshColliderTemplate`/`ConvexHullColliderTemplate` have no override and retain the base
+volume **0**. `Part.ColliderVolumeCubicMetres` sums all subtree modules, without overlap removal
+or a visual-bounding-box fallback. `Part.CrashTolerancePascals` pairs this with subtree inert
+mass; missing/nonpositive/nonfinite volume yields the 9 MPa default. See
+[the current pressure formula](part-and-subpart-xml.md#what-changed-in-5438).
+
+Flexo does not calculate crash pressure, so no geometry implementation or persisted schema
+change is needed. `ConstraintSim` changes contact-load/deformation bookkeeping, not collider
+XML. The vehicle's no-collider collision fallback remains separate from the crash-pressure
+volume calculation. Core's collider XML is unchanged in this transition.
 
 ## What changed in 5402
 

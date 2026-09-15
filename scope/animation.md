@@ -4,7 +4,7 @@
 > lets the user edit them, and re-exports animation GLBs that KSA's `KeyframeAnimationModule`
 > loads. The load-bearing integration is the **animation-GLB node-structure convention**.
 
-**Baseline:** re-verified against KSA build **2026.9.7.5402** (decomp @ 5402 + shipped Core XML);
+**Baseline:** re-verified against KSA build **2026.9.10.5438** (decomp + shipped Core XML + private animation GLBs);
 contract established at **2026.7.10.5056** and unchanged since.
 **Baseline status:** ✅ **INTACT** — but 5056 rewrote KSA's own GLB loader (rev 5034) to the
 semantics flexo already implemented, and in doing so made the scene ROOT node's transform
@@ -77,6 +77,22 @@ GameData schema (`KeyframeAnimationModule`) and the bone/transform math are unch
 3. **CubicSpline clips import APPROXIMATED, not corrupted** (was: silent corruption). KSA supports **CubicSpline** (`KeyframeAnimationData.cs` `SampleType {Linear, Step, CubicSpline}`); glTF stores such a sampler's output as `[inTangent, value, outTangent]` triplets (3× the input count). `decodeAnimationGlb` now **detects** `interpolation === 'CUBICSPLINE'`, keeps only the middle (VALUE) row of each triplet and treats the segments as LINEAR — so the keyframes are exact and only the in-between motion is approximated (the tangents are dropped; flexo has no tangent model). The clip is flagged `PartAnimation.cubicSplineApprox`, which feeds the KSA import report and the clip diagnostics (`computeClipIssues` → "clip imported with CubicSpline sampling — approximated"). Still unverifiable against a real asset from the snapshots (the `Animations/*.glb` are not shipped in the decomp); every shipped clip checked through flexo's mirror is LINEAR. flexo still handles FLOAT accessors only.
 4. Only `animations[0]` is read on both sides.
 5. Wrong rest anchor re-applies the deploy (the reason `restKeyframeId` exists).
+
+## What changed in 5438
+
+**Verdict: NONE.** `decomp/KSA/KeyframeAnimationData.cs` and
+`decomp/KSA/KeyframeAnimationModule.cs` are byte-identical to 5402. The module attributes
+`Id` / `ShowDeployRetract`, `<KeyframeAnimation Path Id>` and optional
+`<SolarTracking DegreesPerSecond SubPart>` / `<ExcludeSubPart>` schema are intact. Runtime
+vessel dents do not alter the animation hierarchy or allow connectors to become joint members.
+
+The two private asset snapshots contain the same **10 `Animations/*.glb` files**, all
+byte-identical by SHA-256. Reading each current GLB's JSON confirms exactly one identity root,
+FLOAT animation input/output accessors and **LINEAR** samplers throughout. This covers the three light clips,
+solar panel, landing leg, all four ServiceModule heights and the parachute-bay door. Thus the
+5034 root-TRS rule, leaf-instance-id matching, and deployed rest-anchor assumption have no new
+binary drift to accommodate. The parachute canopy's runtime skeletal/cloth animation remains
+separate from `<KeyframeAnimationModule>`.
 
 ## What changed in 5402
 

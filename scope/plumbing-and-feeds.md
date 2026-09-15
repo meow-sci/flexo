@@ -11,9 +11,10 @@
 > alongside [engines.md](engines.md), [connectors-coordinates-iva.md](connectors-coordinates-iva.md)
 > and [gamedata-modules.md](gamedata-modules.md).
 
-**Baseline:** re-verified against KSA build **2026.9.7.5402** (decomp @ 5402 + shipped Core XML);
+**Baseline:** re-verified against KSA build **2026.9.10.5438** (decomp @ 5438 + shipped Core XML);
 surface introduced at **2026.7.9.5018**.
-**Baseline status:** ✅ **CURRENT** — modeled end-to-end (parse, serialize, import/paste
+**Baseline status:** ✅ **CURRENT** — rev 5433 changed runtime resource-flow scheduling but left
+the authored feed contract unchanged. It remains modeled end-to-end (parse, serialize, import/paste
 remapping, project codec v4, authoring UI, export pre-flight) by the 5018 upgrade.
 
 ---
@@ -189,6 +190,20 @@ template-local `Components` id and is never regenerated, so it passes through un
   places the _part_), so flexo's "unwired consumer" check only fires for SubPart-level ones.
 
 ---
+
+## What changed in 5438
+
+**Verdict: NONE on the authored plumbing contract.** Rev 5433 changed runtime graph construction
+and resource-drain behavior in `decomp/KSA/ResourceManager.cs`, `ResourceManagerBase.cs`, and
+`PartFlowTopology.cs`. The resolver still consumes the same `<Capabilities>`, `<FeedsFrom>`, and
+`<ConsumerFeedWiring>` elements and the same container `Id` namespace through
+`PartTemplate.ResolveConsumerFeedPoints`, `ResolveConsumerFeeds`, and `AddResolvedFeed`. No
+parser, serializer, or feed-validation change is required for this build.
+
+The adjacent `SolidMotor` resource behavior also remains authoring-compatible: its grain feeds
+still use `<FeedsFrom Container>` / `<FeedsFrom Connector>` and `SolidMotorCase` capabilities;
+the 5414 changes are confined to solid-grain geometry and thrust-preview math (see
+[engines.md](engines.md#what-changed-in-5438)).
 
 ## What changed in 5402
 

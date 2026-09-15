@@ -5,8 +5,13 @@
 > **BREAKING** for the live thrust/Isp readout. Read alongside [docs/engines.md](../docs/engines.md)
 > and [analysis/KSA_ENGINE_DETAILS.md](../analysis/KSA_ENGINE_DETAILS.md).
 
-**Baseline:** re-vetted against KSA build **2026.9.7.5402** (decomp @ 5402 + shipped Core XML).
-**Baseline status:** ✅ **CURRENT** — 5402 left every ported class byte-identical;
+**Baseline:** re-vetted against KSA build **2026.9.10.5438** (decomp @ 5438 + shipped Core XML).
+**Baseline status:** ✅ **CURRENT** — rev 5414 changed the solid-motor preview contract and
+`solidMotorPhysics.ts` now follows the consolidated burn grid, trapezoidal reciprocal burn-time
+integration, interpolated quench endpoint, and unburnable-grain calculation. The current Core
+exhaust catalog also merges `EngineAVernier`/`EngineATurbine` into `EngineAAuxiliary`; the static
+catalog and preflight warning are updated. Rev 5433 changed runtime resource-flow scheduling but
+left the authoring contract unchanged. The prior 5402 audit remains below;
 `PlumeTrailTemplate` gained `<Color>` / `DensityMultiplier` / `<Lifetime>` and Core added a second
 trail template, `LiquidEnginePlumeTrail`, so the static `PLUME_TRAIL_IDS` snapshot was refreshed
 (gap **U5**, COSMETIC, fixed — see [What changed in 5402](#what-changed-in-5402)).
@@ -71,6 +76,61 @@ The follow-up field/UI audit is catalogued in
 manual ControlMap editing; grain inherited mass/density/orientation; reaction description;
 nozzle SoundEvent fields and ordered plume editing; and selected-rocket solid preview
 resolution. Additive constructor defaults preserve compatible saved projects.
+
+## What changed in 5438
+
+**Verdict: BREAKING on the solid-motor preview math (✅ fixed); no authoring break in resource
+flow.**
+
+### Rev 5414 — consolidated solid burn profile
+
+`decomp/KSA/SolidMotor.cs` now walks one `TryComputeBurnGrid` (`:445-519`) with 256 depth
+samples. It integrates each depth interval with the trapezoidal average of reciprocal burn rate,
+then appends a final point at the linearly interpolated half-`MinimumBurnPressure` quench depth.
+`TryEvaluateThrustProfile` (`:529-568`) evaluates each stored condition with
+`RocketNozzle.ComputePerformance(...).GetRocketPerformance()`. `RecomputeUnburnableGrain`
+(`:762-805`) repeats the same pressure walk and stores each segment's mass at the interpolated
+quench depth. `ThrustCurvePreview.VacuumIspSeconds` is now
+`PeakVacuumIspSeconds` (`SolidMotor.cs:16-24`).
+
+`src/ksa/solidMotorPhysics.ts` follows those members: the grid uses 256 steps, reciprocal-rate
+trapezoids, and the interpolated endpoint; thrust uses `rocketPerformance`; unburnable mass uses
+the separate quench walk. The game's remaining-mass and cumulative-impulse caches serve its
+maneuver planner; flexo's preview does not consume or compute them. A constant-perimeter analytical regression
+and a variable-pressure regression cover the quench and integration branches.
+
+`SolidGrainSegment.SetScale` and `RecomputeGrainVolume` (`SolidGrainSegment.cs:78-86,178-186`)
+now derive volume from `Geometry.Lut.InitialGrainArea × CasingInnerRadius² × Length`. flexo's
+`resolveSegment` already uses that formula, so no additional authoring change was required.
+`RocketCore.RecomputeDesignConditions` and its `DesignConditions` cache
+(`RocketCore.cs:11-18,153-156`) are runtime cache changes; `RocketControllerData.ComputeFromCores`
+(`RocketControllerData.cs:21-54`) only renames a local variable. Neither changes the exported
+engine contract.
+
+### Rev 5433 — resource flow is runtime-only
+
+`decomp/KSA/ResourceManager.cs`, `ResourceManagerBase.cs`, and the new
+`PartFlowTopology.cs` change graph construction, drain ordering, and runtime flow updates. The
+part authoring surfaces remain `<Capabilities>`, `<FeedsFrom>`, and `<ConsumerFeedWiring>` with
+the same container `Id` references. `src/ksa/engineValidation.ts` therefore needs no new feed
+rule; the existing scope is still valid.
+
+### Core exhaust template ids
+
+`Content/Core/ExhaustAssets.xml` removed the `VolumetricExhaustTemplate` ids
+`EngineAVernier` and `EngineATurbine`; the surviving template is
+`EngineAAuxiliary`. `Content/Core/CorePropulsionAGameData.xml` changed the two corresponding
+`<VolumetricExhaust Id>` references (lines 96 and 110) to `EngineAAuxiliary`. The six current Core
+ids are `EngineALarge`, `EngineAMed`, `EngineACompact`, `EngineAAuxiliary`, `RCS`, and `MmuRcsVac`.
+`decomp/KSA/VolumetricExhaustReference.cs:28-30` still resolves the authored `Id` through
+`VolumetricExhaustTemplate.Get(Id)`; a missing template leaves the reference without a renderable
+asset while the part remains loadable.
+`VOLUMETRIC_EXHAUST_IDS` matches this list. Engine preflight warns when a non-empty nozzle plume
+id is outside the current Core snapshot; a mod may still provide its own template, and no
+persisted-project schema bump or migration is required.
+
+Rev 5421/5436 changes to `RocketNozzle` and the volumetric exhaust/trail renderers remain visual
+runtime work. They do not alter thrust/Isp formulas or the authored nozzle XML fields.
 
 ## Flexo modules
 

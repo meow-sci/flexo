@@ -1,6 +1,7 @@
 <?xml version='1.0' encoding='utf-8' ?>
 <Assets>
   <PartGameData Id="CoreElectricalA_Prefab_InlineBatteryBankA">
+    <SolidCylinderMass><Mass Kg="87"/><Length M="0.2468"/><Radius M="0.5"/></SolidCylinderMass>
     <EditorTag Value="Electrical" />
     <EditorTag Value="NoFaceSnapping" />
     <Battery HasStatusLight="true">
@@ -9,6 +10,7 @@
   </PartGameData>
 
   <PartGameData Id="CoreElectricalA_Prefab_InlineBatteryBankB">
+    <SolidCylinderMass><Mass Kg="452"/><Length M="0.32"/><Radius M="1"/></SolidCylinderMass>
     <EditorTag Value="Electrical" />
     <EditorTag Value="NoFaceSnapping" />
     <Battery HasStatusLight="true">
@@ -17,6 +19,7 @@
   </PartGameData>
 
   <PartGameData Id="CoreElectricalA_Prefab_LightSmallA">
+    <SolidCuboidMass><Mass Kg="5"/><LengthX M="0.5"/><LengthY M="0.5"/><LengthZ M="0.5"/></SolidCuboidMass>
     <EditorTag Value="Lights" />
     <PowerConsumer LightSwitch="true">
       <Consumed W="60" />
@@ -40,6 +43,7 @@
   </PartGameData>
 
   <PartGameData Id="CoreElectricalA_Prefab_LightSmallB">
+    <SolidCuboidMass><Mass Kg="6"/><LengthX M="0.35"/><LengthY M="0.8"/><LengthZ M="0.5"/></SolidCuboidMass>
     <EditorTag Value="Lights" />
     <PowerConsumer LightSwitch="true">
       <Consumed W="120" />
@@ -63,6 +67,7 @@
   </PartGameData>
 
   <PartGameData Id="CoreElectricalA_Prefab_LightSmallC">
+    <SolidCuboidMass><Mass Kg="6"/><LengthX M="0.8902"/><LengthY M="0.5288"/><LengthZ M="0.3419"/></SolidCuboidMass>
     <EditorTag Value="Lights" />
     <PowerConsumer LightSwitch="true">
       <Consumed W="100" />
@@ -114,6 +119,7 @@
   </SubPartGameData>
 
   <PartGameData Id="CoreElectricalA_Prefab_RadialBatteryA">
+    <SolidCuboidMass><Mass Kg="11"/><LengthX M="0.4305"/><LengthY M="0.2652"/><LengthZ M="0.2099"/></SolidCuboidMass>
     <EditorTag Value="Electrical" />
     <Battery HasStatusLight="true">
       <MaximumCapacity J="1000" />
@@ -121,6 +127,7 @@
   </PartGameData>
 
   <PartGameData Id="CoreElectricalA_Prefab_RadialBatteryB">
+    <SolidCuboidMass><Mass Kg="52"/><LengthX M="0.6721"/><LengthY M="0.4828"/><LengthZ M="0.3549"/></SolidCuboidMass>
     <EditorTag Value="Electrical" />
     <Battery HasStatusLight="true">
       <MaximumCapacity J="5000" />
@@ -128,6 +135,7 @@
   </PartGameData>
 
   <PartGameData Id="CoreElectricalA_Prefab_SolarPanelA">
+    <SolidCuboidMass><Mass Kg="2"/><LengthX M="0.7947"/><LengthY M="0.596"/><LengthZ M="0.0253"/></SolidCuboidMass>
     <EditorTag Value="Electrical" />
     <SolarPanel>
       <Produced W="200" />
@@ -141,6 +149,10 @@
   </PartGameData>
 
   <PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
+    <SolidCuboidMass><Mass Kg="4.75"/><LocationAsmb X="4.2255" Z="-0.034"/><LengthX M="1.1893"/><LengthY M="0.7987"/><LengthZ M="0.0253"/></SolidCuboidMass>
+    <SolidCuboidMass><Mass Kg="4.75"/><LocationAsmb X="3.3056" Z="-0.034"/><LengthX M="1.1893"/><LengthY M="0.7987"/><LengthZ M="0.0253"/></SolidCuboidMass>
+    <SolidCuboidMass><Mass Kg="4.75"/><LocationAsmb X="2.3909" Z="-0.034"/><LengthX M="1.1893"/><LengthY M="0.7987"/><LengthZ M="0.0253"/></SolidCuboidMass>
+    <SolidCuboidMass><Mass Kg="4.75"/><LocationAsmb X="1.4708" Z="-0.034"/><LengthX M="1.1893"/><LengthY M="0.7987"/><LengthZ M="0.0253"/></SolidCuboidMass>
     <EditorTag Value="Electrical" />
     <KeyframeAnimationModule Id="SolarPanelAnimation" ShowDeployRetract="true">
       <KeyframeAnimation Path="Animations/CoreElectricalA_Prefab_SolarPanelB_Anim.glb" Id="CoreElectricalA_Prefab_SolarPanelB_Anim" />
@@ -161,6 +173,10 @@
       </Transform>
     </SolarPanel>
   </SubPartGameData>
+
+  <PartGameData Id="CoreElectricalA_Prefab_BayFuelcellSmall">
+    <SolidCylinderMass><Mass Kg="49"/><Length M="0.6"/><Radius M="0.1935"/></SolidCylinderMass>
+  </PartGameData>
 
   <PartGameData Id="LightPart">
     <PowerConsumer LightSwitch="true">

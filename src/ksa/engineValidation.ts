@@ -13,7 +13,7 @@
  * without the private asset tree (and so a modded reaction library validates too).
  */
 
-import { isCustomReactionExportable, KNOWN_REACTIONS } from './types';
+import { isCustomReactionExportable, KNOWN_REACTIONS, VOLUMETRIC_EXHAUST_IDS } from './types';
 import type {
   Combustor,
   EditingPart,
@@ -701,6 +701,25 @@ export function validateEngines(
             `apply no thrust.`,
       source,
     );
+  }
+
+  // --- Volumetric exhaust references (VolumetricExhaustReference.Load) ---
+  // The current Core asset `ExhaustAssets.xml` owns this id catalog. KSA leaves an unknown
+  // reference unresolved (the part still loads, but its plume is absent), so this is a warning
+  // and accepts mod-provided ids by keeping the check limited to the current Core snapshot.
+  const volumetricExhaustIds = new Set(VOLUMETRIC_EXHAUST_IDS);
+  for (const { nozzle, source } of locateNozzleModules(part)) {
+    for (const plume of nozzle.reactionPlumes) {
+      const id = plume.volumetricExhaustId;
+      if (!id || volumetricExhaustIds.has(id)) continue;
+      warn(
+        'nozzle-volumetric-exhaust-unknown',
+        `Nozzle ${nozzle.id} references volumetric exhaust '${id}', which is not in current ` +
+          `Core ExhaustAssets.xml. Without a mod that defines it, KSA cannot render this plume; ` +
+          `choose one of the current Core templates.`,
+        source,
+      );
+    }
   }
 
   // --- Gimbals (Gimbal.cs / GimbalController.RecomputeStaticData, decomp 2026.7.9) ---

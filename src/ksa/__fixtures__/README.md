@@ -16,6 +16,7 @@ git-ignored and not present in open-source CI).
 | `CoreFuelTankAGameData.xml`                                 | Fuel-tank `<PartGameData>` (editor tags, `<Diameter>`, `<Collider>`).                                    |
 | `CoreElectricalAAssets.xml`                                 | Electrical `<Part>` / `<SubPart>` geometry (the `SolarPanelB` prefab).                                   |
 | `CoreElectricalAGameData.xml`                               | Electrical `<PartGameData>` + `<SubPartGameData>` (the solar-cell `<SolarPanel>` data).                  |
+| `CoreUtilityAGameData.xml`                                  | Parachute modules at Part and SubPart scope, including 5438's ordered `<PbrMaterialRef>` choices.        |
 | `CoreIVASpaceAGameData.xml`                                 | The ONLY shipped `<IVASeat>` data — the two-seat `MediumCapsuleA` interior.                              |
 | `PartGameData.xml`                                          | Shared file holding the fuel-tank `<SubPartGameData>` `<Tank>` metadata (the duplicate-`Id` merge case). |
 | `CoreLaunchPadAAssets.xml`                                  | The static-object catalog: 8 `<StaticSubObject>`s + the `<StaticObject>` launch-pad prefab (ICRP).       |

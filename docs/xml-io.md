@@ -40,8 +40,13 @@ must NOT go on `<PartGameData>`: `PartTemplate.CrashTolerance` is a geometry-tem
 `PartTemplate.ApplyGameData` never merges, so a GameData-side attribute would be silently dead.
 flexo therefore keeps it in `part.gameData` (it is edited in Data mode's Identity section) but
 serializes it on the `<Part>` element. `null` / `≤ 0` ⇒ omitted, and the game derives a tolerance
-from inert mass ÷ bounding-box volume (`PartStructuralLimits.DeriveCrashTolerance`, 0.1–20 MPa).
-Core authors `3e6` on the CorePropulsionA engines.
+from subtree inert mass ÷ collider volume. At KSA `2026.9.10.5438`,
+`PartStructuralLimits.DeriveCrashTolerance` uses `9 MPa × clamp(density / 330, 0.1, 8)`,
+with a final 0.1–100 MPa clamp; missing mass or invalid volume uses 9 MPa.
+`Part.ColliderVolumeCubicMetres` sums the part subtree's collider volumes (overlaps count).
+There is no bounding-box fallback; a zero or invalid sum uses the 9 MPa default.
+Core authors `3e6` on the CorePropulsionA engines. The stored override remains Pa, so this
+runtime formula change needs no project-schema bump.
 
 Rules (verified against Core XML + the C# serializer):
 - `<Transform>` is **omitted** when position=0 ∧ rotation=0 ∧ scale=1.

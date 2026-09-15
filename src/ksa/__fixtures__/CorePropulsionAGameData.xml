@@ -96,7 +96,7 @@
       <ExhaustLocation X="-0.198407" Y="0.0" Z="0.0" />
       <ExhaustDirection X="-1" Y="0" Z="0" />
       <ReactionPlume Default="true">
-        <VolumetricExhaust Id="EngineATurbine" />
+        <VolumetricExhaust Id="EngineAAuxiliary" />
       </ReactionPlume>
     </DeLavalNozzle>
   </SubPartGameData>
@@ -110,7 +110,7 @@
       <ExhaustLocation X="-0.169143" Y="0.0" Z="0.0" />
       <ExhaustDirection X="-1" Y="0" Z="0" />
       <ReactionPlume Default="true">
-        <VolumetricExhaust Id="EngineAVernier" />
+        <VolumetricExhaust Id="EngineAAuxiliary" />
       </ReactionPlume>
     </DeLavalNozzle>
   </SubPartGameData>

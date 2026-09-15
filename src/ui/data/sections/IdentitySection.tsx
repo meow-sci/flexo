@@ -100,8 +100,8 @@ export function IdentitySection({ part, meta }: { part: EditingPart; meta: Secti
             />
           </Field>
           <span className="text-xs text-fg-subtle">
-            Contact pressure that breaks the part. Off ⇒ KSA derives it from mass ÷ volume (0.1–20
-            MPa). Core engines author 3e6.
+            Contact pressure that breaks the part. With the override off, KSA uses inert mass and
+            collider volume, or 9 MPa when mass or volume is unavailable. Core engines author 3e6.
           </span>
         </>
       )}

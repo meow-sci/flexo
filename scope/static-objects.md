@@ -6,8 +6,8 @@ Full evidence with decomp citations: [analysis/icrp/KSA_STATIC_OBJECTS.md](../an
 and [analysis/icrp/STATIC_ASSET_INVENTORY.md](../analysis/icrp/STATIC_ASSET_INVENTORY.md);
 plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (facts F1–F14).
 
-**Baseline:** re-verified against KSA build **2026.9.7.5402** — schema classes byte-identical, one
-renderer-side shader split; see [What changed in 5402](#what-changed-in-5402).
+**Baseline:** re-verified against KSA build **2026.9.10.5438** — static schema, renderer and
+nearest-pad collider selection intact; see [What changed in 5438](#what-changed-in-5438).
 
 ## Contract facts ICRP bakes in
 
@@ -80,13 +80,29 @@ renderer-side shader split; see [What changed in 5402](#what-changed-in-5402).
 `StaticObjectGameDataReference.cs`, `StaticObject.cs`, `StaticObjectModel.cs`,
 `StaticObjectRenderer.cs`, `PartModelModule.cs`, `PbrMaterialReference.cs`,
 `TransformReference.cs`, `DistanceReference.cs`, `LocationReference.cs`,
-`Vehicle.cs` (`GetLaunchPadHeightAtDirCcf`), `ConstraintSim.cs` (`BeginStaticObjectPass` / `ResolveLaunchPads`, was `UpdateStaticObjectCollider` before 5402),
+`Vehicle.cs` (`GetLaunchPadHeightAtDirCcf`), `ConstraintSim.cs` (`BeginStaticObjectPass` / `ResolveLaunchPads` / `UpdateStaticObjectCollider`),
 `GroundClutterPlacementData.cs`, `MeshAtlasFileReference.cs`, `ModLibrary.cs` (static
 registries + `AttachGameData`). `D/KSA.GlbImport/`: `StaticObjectAssetBundler.cs`,
 `GlbColliders.cs`, `GlbTransforms.cs`, `PartInputSet.cs`, `ToolXml.cs`.
 `C/Core/`: `CoreLaunchPad{A,B,C}Assets.xml`, `CoreLaunchPadAGameData.xml` (vendored
 byte-identical in `src/ksa/__fixtures__/`, drift-tested), `Shaders/Mesh/StaticObject.{vert,frag}`,
 `DefaultAssets.xml` (the static-object shader rows, since 5402 including `StaticObjectPrePassIndirectFrag`).
+
+## What changed in 5438
+
+**INTACT, with a correction to the previous review.** `StaticObjectTemplate`,
+`StaticSubObjectTemplate`, `StaticSubObjectInstance`, `StaticObjectGameDataReference`,
+`StaticObject`, `StaticObjectModel`, `StaticObjectRenderer`, and `LocationReference` are
+byte-identical to 5402. `<SubObject InstanceOf>`, `<PartModel>`, `<Collider>`, the three distance
+fields, transform basis, scale limits, terrain/alpha buckets and shadow limitations are unchanged.
+The Core launch-pad XML and static-object shaders are unchanged. `PbrMaterialReference` adds an
+optional `DisplayName` label, with no effect on static render buckets or material id resolution.
+
+The 5402 note below previously inferred that every cached launch pad collides simultaneously.
+That was incorrect: `ConstraintSim.ResolveLaunchPads` caches all **candidates**, but
+`UpdateStaticObjectCollider` still picks the nearest within squared distance `90000` (300 m)
+and installs exactly one `handles.StaticObjectCollider`. Both snapshots contain this selection.
+The ICRP 300 m collider-range ring is therefore valid. No app or persisted-schema change is needed.
 
 ## What changed in 5402
 
@@ -97,9 +113,8 @@ and `PbrMaterialReference` are byte-identical; `StaticObject` / `StaticObjectMod
 `StaticObjectRenderer` now loads a dedicated pre-pass shader,
 `ModLibrary.Get<ShaderReference>("StaticObjectPrePassIndirectFrag")` → `DefaultAssets.xml`'s new
 `<Shader Id="StaticObjectPrePassIndirectFrag" Path="Shaders/Mesh/StaticObjectNormalIndirect.frag"/>`
-(was the shared `PrePassIndirectFrag`); and `ConstraintSim` replaced `UpdateStaticObjectCollider`'s
-nearest-pad-within-300 m search with `BeginStaticObjectPass` / `ResolveLaunchPads`, a per-celestial
-`LaunchPadPose` list (position + `LandmarkReference.GetAxesCcf` up/east/north) covering **every**
-launch-pad landmark with a collision shape — see
+(was the shared `PrePassIndirectFrag`); and `ConstraintSim` introduced `BeginStaticObjectPass` / `ResolveLaunchPads`, a per-celestial
+cache of candidate `LaunchPadPose` entries (position + `LandmarkReference.GetAxesCcf`
+up/east/north). `UpdateStaticObjectCollider` still selects only the nearest within 300 m — see
 [launch-sites.md](launch-sites.md#what-changed-in-5402). The four vendored `CoreLaunchPad*` fixtures
 are byte-identical to 5402.

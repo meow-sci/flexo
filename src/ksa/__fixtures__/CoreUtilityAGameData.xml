@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Assets>
+  <SubPartGameData Id="CoreUtilityA_Subpart_ParachuteBayABaseA">
+    <HollowOpenCylinderMass>
+      <Material Id="Aluminum.2014(s)"/>
+      <Length M="0.12"/>
+      <OuterRadius M="0.5"/>
+      <WallThickness Mm="6"/>
+    </HollowOpenCylinderMass>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_ParachuteBayAStructureA">
+    <HollowOpenCylinderMass>
+      <Material Id="Aluminum.2014(s)"/>
+      <Length M="0.912"/>
+      <OuterRadius M="0.3153"/>
+      <WallThickness Mm="4"/>
+    </HollowOpenCylinderMass>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_ParachuteBayADoorA">
+    <SolidCuboidMass>
+      <LocationAsmb X="0.0037" Y="0" Z="-0.0316"/>
+      <Material Id="Aluminum.2014(s)"/>
+      <LengthX M="0.7988"/>
+      <LengthY M="0.5484"/>
+      <LengthZ M="0.003"/>
+    </SolidCuboidMass>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_ParachuteBayRadialBaseA">
+    <CustomMass>
+      <Mass Kg="3" />
+      <MassSpecificInertia Ixx="0.015537" Iyy="0.050268" Izz="0.059903" />
+    </CustomMass>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_ParachuteBayRadialBaseB">
+    <CustomMass>
+      <Mass Kg="5" />
+      <MassSpecificInertia Ixx="0.026581" Iyy="0.079451" Izz="0.094002" />
+    </CustomMass>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_ParachuteBayRadialCoverAA">
+    <CustomMass>
+      <Mass Kg="2" />
+      <MassSpecificInertia Ixx="0.015181" Iyy="0.051211" Izz="0.064606" />
+    </CustomMass>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_ParachuteBayRadialCoverAB">
+    <CustomMass>
+      <Mass Kg="2" />
+      <MassSpecificInertia Ixx="0.015181" Iyy="0.051211" Izz="0.064606" />
+    </CustomMass>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_ParachuteBayRadialCoverBA">
+    <CustomMass>
+      <Mass Kg="3" />
+      <MassSpecificInertia Ixx="0.024289" Iyy="0.079095" Izz="0.099349" />
+    </CustomMass>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_ParachuteBayRadialCoverBB">
+    <CustomMass>
+      <Mass Kg="3" />
+      <MassSpecificInertia Ixx="0.024289" Iyy="0.079095" Izz="0.099349" />
+    </CustomMass>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_ParachuteBayRadialFrameAA">
+    <CustomMass>
+      <Mass Kg="2" />
+      <MassSpecificInertia Ixx="0.014773" Iyy="0.050804" Izz="0.064606" />
+    </CustomMass>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_ParachuteBayRadialFrameAB">
+    <CustomMass>
+      <Mass Kg="2" />
+      <MassSpecificInertia Ixx="0.014773" Iyy="0.050804" Izz="0.064606" />
+    </CustomMass>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_ParachuteBayRadialFrameBA">
+    <CustomMass>
+      <Mass Kg="3" />
+      <MassSpecificInertia Ixx="0.022757" Iyy="0.077563" Izz="0.099349" />
+    </CustomMass>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_ParachuteBayRadialFrameBB">
+    <CustomMass>
+      <Mass Kg="3" />
+      <MassSpecificInertia Ixx="0.022757" Iyy="0.077563" Izz="0.099349" />
+    </CustomMass>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_ParachuteBayRadialInternalA">
+    <CustomMass>
+      <Mass Kg="3" />
+      <MassSpecificInertia Ixx="0.023501" Iyy="0.059531" Izz="0.064606" />
+    </CustomMass>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_ParachuteBayRadialInternalB">
+    <CustomMass>
+      <Mass Kg="4" />
+      <MassSpecificInertia Ixx="0.035093" Iyy="0.089898" Izz="0.099349" />
+    </CustomMass>
+  </SubPartGameData>
+
+  <PartGameData Id="CoreUtilityA_Prefab_ParachuteBayB" DisplayName="Parachute Bay">
+    <EditorTag Value="Structural" />
+    <EditorTag Value="Landing"/>
+    <Diameter M="1"/>
+    <Diameter M="0.5"/>
+    <SubPart Id="CoreUtilityA_Subpart_StandaloneParachuteA1" InstanceOf="CoreUtilityA_Subpart_StandaloneParachuteA">
+      <Transform>
+        <Position X="0.5529" />
+        <Rotation X="-0.2618" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreUtilityA_Subpart_StandaloneParachuteB1" InstanceOf="CoreUtilityA_Subpart_StandaloneParachuteB">
+      <Transform>
+        <Position X="0.1746" />
+        <Rotation X="-0.2618" />
+      </Transform>
+    </SubPart>
+    <KeyframeAnimationModule Id="ParachuteBayDoorAnimation" ShowDeployRetract="true">
+      <KeyframeAnimation Path="Animations/CoreUtilityA_Prefab_ParachuteBayA_Anim.glb" Id="CoreUtilityA_Prefab_ParachuteBayA_Anim" />
+    </KeyframeAnimationModule>
+  </PartGameData>
+
+  <PartGameData Id="CoreUtilityA_Prefab_RadialParachuteSmallA" DisplayName="Drogue Radial A">
+    <EditorTag Value="Radial" />
+    <EditorTag Value="Landing"/>
+    <Connector Id="_connector11">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <Parachute Id="DrogueChute" DiameterM="5" Drogue="true" MinDiameterM="1" MaxDiameterM="15" ReefRatio="0.5" ReefDurationS="3" BurstPressurePa="15000" LineRatingN="100000">
+      <Attach X="0" Y="0" Z="-0.141" />
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerLongOrange"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerExtraLongOrange"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerLongRed"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_StripesRed"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_Tricolor"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_White"/>
+    </Parachute>
+  </PartGameData>
+
+  <PartGameData Id="CoreUtilityA_Prefab_RadialParachuteSmallB" DisplayName="Drogue Radial B">
+    <EditorTag Value="Radial" />
+    <EditorTag Value="Landing"/>
+    <Connector Id="_connector12">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <Parachute Id="DrogueChute" DiameterM="5" Drogue="true" MinDiameterM="1" MaxDiameterM="15" ReefRatio="0.5" ReefDurationS="3" BurstPressurePa="15000" LineRatingN="100000">
+      <Attach X="0" Y="0" Z="-0.141" />
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerLongOrange"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerExtraLongOrange"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerLongRed"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_StripesRed"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_Tricolor"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_White"/>
+    </Parachute>
+  </PartGameData>
+
+  <PartGameData Id="CoreUtilityA_Prefab_RadialParachuteMediumA" DisplayName="Parachute Radial A">
+    <EditorTag Value="Radial" />
+    <EditorTag Value="Landing"/>
+    <Connector Id="_connector14">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <Parachute Id="MainChute" DiameterM="30" MinDiameterM="20" MaxDiameterM="50" ReefRatio="0.4" BurstPressurePa="15000" LineRatingN="400000" CutInSequence="false">
+      <Attach X="0" Y="0" Z="-0.193" />
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerLongRed"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerLongOrange"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerExtraLongOrange"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_StripesRed"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_Tricolor"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_White"/>
+    </Parachute>
+  </PartGameData>
+
+  <PartGameData Id="CoreUtilityA_Prefab_RadialParachuteMediumB" DisplayName="Parachute Radial B">
+    <EditorTag Value="Radial" />
+    <EditorTag Value="Landing"/>
+    <Connector Id="_connector13">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <Parachute Id="MainChute" DiameterM="30" MinDiameterM="20" MaxDiameterM="50" ReefRatio="0.4" BurstPressurePa="15000" LineRatingN="400000" CutInSequence="false">
+      <Attach X="0" Y="0" Z="-0.193" />
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerLongRed"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerLongOrange"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerExtraLongOrange"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_StripesRed"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_Tricolor"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_White"/>
+    </Parachute>
+  </PartGameData>
+
+  <!-- The bay's packed chutes reuse the ParachutePacked meshes under their own subpart ids: the shared
+       ParachutePacked subparts are also instanced by the radial chutes, which carry their own Parachute. -->
+  <SubPart Id="CoreUtilityA_Subpart_StandaloneParachuteA">
+    <PartModel Id="CoreUtilityA_Subpart_StandaloneParachuteA_Model">
+      <Mesh Id="CoreUtilityA_Subpart_ParachutePackedA" />
+      <Material Id="CoreUtilityA_Material" />
+    </PartModel>
+    <MeshView>
+      <Mesh Id="CoreUtilityA_Subpart_ParachutePackedA_VM" />
+    </MeshView>
+    <Collider Id="Collider1">
+      <Cylinder Id="CylinderCollider1">
+        <LocationAsmb X="0.0043" Y="0" Z="0" />
+        <Collider2Asmb X="0" Y="0" Z="1.5708" />
+        <LengthY M="0.242" />
+        <Radius M="0.1639" />
+      </Cylinder>
+    </Collider>
+  </SubPart>
+
+  <SubPart Id="CoreUtilityA_Subpart_StandaloneParachuteB">
+    <PartModel Id="CoreUtilityA_Subpart_StandaloneParachuteB_Model">
+      <Mesh Id="CoreUtilityA_Subpart_ParachutePackedB" />
+      <Material Id="CoreUtilityA_Material" />
+    </PartModel>
+    <MeshView>
+      <Mesh Id="CoreUtilityA_Subpart_ParachutePackedB_VM" />
+    </MeshView>
+    <Collider Id="Collider1">
+      <Cylinder Id="CylinderCollider1">
+        <LocationAsmb X="0.0043" Y="0" Z="0" />
+        <Collider2Asmb X="0" Y="0" Z="1.5708" />
+        <LengthY M="0.3391" />
+        <Radius M="0.2256" />
+      </Cylinder>
+    </Collider>
+  </SubPart>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_StandaloneParachuteA" DisplayName="Drogue">
+    <Parachute Id="DrogueChute" DiameterM="5" Drogue="true" MinDiameterM="1" RiserLengthM="15" MaxDiameterM="15" ReefRatio="0.5" ReefDurationS="3" BurstPressurePa="15000" LineRatingN="100000" CanopyCount="2" MaxCanopyCount="3" CanopyRadiusM="0.18" CutInSequence="false">
+      <Attach X="0.162" Y="0" Z="0" />
+      <PbrMaterialRef Id="ParachuteCanopy_Material_White"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerLongOrange"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerExtraLongOrange"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerLongRed"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_StripesRed"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_Tricolor"/>
+    </Parachute>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CoreUtilityA_Subpart_StandaloneParachuteB" DisplayName="Main Parachutes">
+    <Parachute Id="MainChute" DeployAltitudeM="800" DiameterM="25" MinDiameterM="20" MaxDiameterM="40" ReefRatio="0.4" BurstPressurePa="15000" LineRatingN="200000" CanopyCount="3" MaxCanopyCount="4" CanopyRadiusM="0.243" CutInSequence="false" CutsDrogues="true">
+      <Attach X="0.221" Y="0" Z="0" />
+      <PbrMaterialRef Id="ParachuteCanopy_Material_StripesRed"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerLongOrange"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerExtraLongOrange"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_CheckerLongRed"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_Tricolor"/>
+      <PbrMaterialRef Id="ParachuteCanopy_Material_White"/>
+    </Parachute>
+  </SubPartGameData>
+
+  <PartGameData Id="CoreUtilityA_Prefab_HandrailA">
+    <EditorTag Value="Structural" />
+    <Connector Id="_connector2">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <Grab Id="end_left">
+      <Position X="0" Y="-0.18" Z="0.1341" />
+      <Normal X="0" Y="0" Z="-1" />
+    </Grab>
+    <Grab Id="end_right">
+      <Position X="0" Y="0.18" Z="0.1341" />
+      <Normal X="0" Y="0" Z="-1" />
+    </Grab>
+  </PartGameData>
+
+  <PartGameData Id="CoreUtilityA_Prefab_LadderA">
+    <EditorTag Value="Structural" />
+    <Connector Id="_connector1">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <Grab Id="end_bottom" Hidden="true">
+      <Position X="-0.65" Y="0" Z="0.1072" />
+      <Normal X="0" Y="0" Z="-1" />
+    </Grab>
+    <Grab Id="rung1">
+      <Position X="-0.25" Y="0" Z="0.1072" />
+      <Normal X="0" Y="0" Z="-1" />
+    </Grab>
+    <Grab Id="rung2">
+      <Position X="0" Y="0" Z="0.1072" />
+      <Normal X="0" Y="0" Z="-1" />
+    </Grab>
+    <Grab Id="rung3">
+      <Position X="0.25" Y="0" Z="0.1072" />
+      <Normal X="0" Y="0" Z="-1" />
+    </Grab>
+    <Grab Id="end_top" Hidden="true">
+      <Position X="0.65" Y="0" Z="0.1072" />
+      <Normal X="0" Y="0" Z="-1" />
+    </Grab>
+  </PartGameData>
+</Assets>

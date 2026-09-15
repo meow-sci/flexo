@@ -7,7 +7,7 @@
 > `<Internal>` flag) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
-**Baseline:** re-vetted against KSA build **2026.9.7.5402** (decomp @ 5402 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.9.10.5438** (decomp @ 5438 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — the coordinate calibration survived rev 5067's deletion of
 `Double3Ex.Up/Forward/Right` (the vectors moved to `Camera.ForwardView`/`RightView`/`UpView` with
 identical values), the connector/`<Internal>` contracts are byte-identical, and 5117's crew
@@ -321,6 +321,24 @@ follows the root part.
 8. **Interior geometry with no seat anywhere in the vehicle is invisible in EVERY camera mode** — `<Internal>` hides it outside IVA, and with no seat the IVA mode is never offered. This is the failure mode the deleted automatic rewrite used to mask.
 9. **`<IVASeat Id>` shares the feed-container id namespace** (`PartTemplate.AddResolvedFeed` scans every `Components[].Id`) **and, since 5117, is the target of `<EVADoor SeatId>`**. flexo models it as `IvaSeat.ksaId` and emits it only when the user authored one; ids minted by the "align this door to a seat" action (`setEvaDoorSeat`) are uniquified against that shared namespace — tank feed ids, solid grain-segment ids and the other seats' ids.
 10. **There is no in-game editor IVA preview.** The KSA vehicle editor has no IVA mode; the only in-game check is launch → **Shift+C** twice → **C** to cycle. This is why flexo ships its own seat preview (above) — and why that preview's honest limits matter.
+
+## What changed in 5438
+
+**INTACT.** `QuaternionEx.CreateFromXyzRadians`, connector `<Flags>`/`<Transform>`/`<Sibling>`,
+`IVASeat.IVASeatTemplate` (`Id`, `Position`, `ForwardAxis`, `UpAxis`), `EVADoorTemplate.SeatId`,
+`AttachedInternal`, and the empty `Control`/`ControlTemplate` markers retain their 5402 forms.
+`QuaternionEx.LookToRotation`, `Camera.LookAtRotation`, `IVAController.OnFrame`,
+`VehicleEditor` snap math and `FlightComputer.UpdateAttitudeTrackError` only rename local
+variables in the relevant hunks. The forward-hemisphere clamp and `abs(dot(up)) ≤ 0.9` clamp,
+seat order/cycling, 50° FOV and `'ZYX'` Euler calibration need no re-port.
+
+`PartModelModule.Template` is still the only declaration of `[XmlElement("Internal")]`;
+`<RayTracing>` and `<ShadowCaster>` are unchanged. New dent rendering in
+`PartModelModule.Draw` and buffer bindings in `PartModelGlass` do not alter the IVA gate.
+“Control From Here” still exists as the vehicle-state feature introduced in 5168: the
+selected Part/connector establishes the control frame, and default selection remains identity.
+The skill's older “no control-from-here” check must not replace this already-reviewed contract.
+No new authored control-point field, codec change or schema bump is needed.
 
 ## What changed in 5402
 

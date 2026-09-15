@@ -115,8 +115,8 @@ export function placementsFromPartElement(part: Element): SubPartPlacement[] {
 /**
  * Reads the geometry `<Part CrashTolerance="…">` root attribute (Pa) — see
  * {@link PartGameData.crashTolerancePa}. Absent / non-numeric / `NaN` / `≤ 0` ⇒ `null`: exactly
- * the inputs `PartStructuralLimits.ResolveCrashTolerance` treats as "derive it from mass ÷
- * volume", so flexo never stores a value the game would ignore.
+ * the inputs `PartStructuralLimits.ResolveCrashTolerance` treats as "derive it from subtree
+ * inert mass and collider volume", so flexo never stores a value the game would ignore.
  */
 export function crashToleranceFromPartElement(part: Element): number | null {
   const raw = part.getAttribute('CrashTolerance');

@@ -527,7 +527,11 @@ describe('geometry <Part><Collider> (gap E — vendored fixtures)', () => {
 
     const light = parts.find((p) => p.id === 'CoreElectricalA_Prefab_LightSmallB')!;
     expect(light.colliders.map((c) => c.shape)).toEqual(['Box']);
-    expect(light.unknownChildren.map((n) => n.tag)).toEqual([]);
+    // 5438 adds real mass geometry; it survives independently of the modeled collider.
+    expect(light.unknownChildren.map((n) => n.tag)).toEqual(['SolidCuboidMass']);
+    expect(light.unknownChildren[0].children.find((n) => n.tag === 'Mass')?.attrs).toEqual({
+      Kg: '6',
+    });
   });
 });
 

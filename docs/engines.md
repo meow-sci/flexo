@@ -37,6 +37,12 @@ An "engine" is a small graph of cooperating GameData modules (see `src/ksa/types
   (category + mixture + gas LUT). A combustor references any reaction via `<Reaction Id>`;
   Core's `<MixtureReaction>`s additionally require a `<MixtureRatio>` (O/F by mass).
 
+KSA 5438's Core exhaust catalog (`Content/Core/ExhaustAssets.xml`) uses
+`EngineALarge`, `EngineAMed`, `EngineACompact`, `EngineAAuxiliary`, `RCS`, and `MmuRcsVac`.
+`EngineAVernier` and `EngineATurbine` were merged into `EngineAAuxiliary`; flexo's picker and
+preflight use the current list. A custom or mod-provided id remains valid for export, but KSA
+cannot render it unless that mod defines the template.
+
 **Where they live (matches KSA's two containers):**
 
 | Module | flexo home |
@@ -95,7 +101,7 @@ modules. Fresh built-in imports expose the new controller editor. See the field-
 Portable tests use verbatim `CorePropulsion{A,B,C}{Assets,GameData}.xml` fixtures. The additional
 `engineImport.integration.test.ts` exercises the production catalog loaders and built-in Part
 import against the live private Core tree, validates all engine assemblies, and compares each
-rocket's performance before and after mod XML export/reimport. The 5402 census is 38 Parts,
+rocket's performance before and after mod XML export/reimport. The 5438 census is 38 Parts,
 35 liquid rocket definitions and 16 solid rocket definitions across their imported scopes.
 
 ## Physics — `src/ksa/enginePhysics.ts`
@@ -370,8 +376,10 @@ references, direct grain containers, and instance-specific or unscoped parent fe
 
 The numbers come from `src/ksa/solidMotorPhysics.ts`, a verbatim port of KSA's own
 `SolidMotor.TrySampleThrustCurve` on the same terms as the liquid physics: 256 depth steps to
-the grain's maximum regression, an 8-iteration pressure fixed point at each, and a time base
-of `Σ Δdepth / burnRate(p)`. It also ports `SolidMotor.ResizeNozzles`, because the throat a
+the grain's maximum regression, an 8-iteration pressure fixed point at each, and the 5438 time
+base that trapezoidally integrates reciprocal burn rate over each depth interval, ending at a
+linearly interpolated half-minimum-pressure quench depth. `RecomputeUnburnableGrain` uses that
+same quench cutoff to report the grain left behind. It also ports `SolidMotor.ResizeNozzles`, because the throat a
 solid nozzle actually runs at is **not** the `exitArea / 12` its XML implies — the game
 re-derives the area ratio from the peak burning area at load, and previewing at the seed value
 would misreport thrust across the board.

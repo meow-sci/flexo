@@ -252,6 +252,12 @@ the gizmo editing the wrong one:
   goes through the owner's full matrix (**scale included**); the DIRECTION through its
   rotation only — KSA transforms them by `MatrixAsmb2VehicleAsmb` and `Asmb2VehicleAsmb`
   respectively (`coords.ts` `exhaust*`). A part-level nozzle is already in Part space.
+  The numeric editor labels the direction as **SubPart local**, offers the six local cardinal
+  axes as exact unit-vector choices, and reads out the active or first placement's **Part-space**
+  arrow beside it. A second chooser aims that arrow along a Part axis by rotating the chosen
+  unit vector back into the placement's local frame before writing `<ExhaustDirection>`. For a
+  custom bell with its exit on local −Z, choose local −Z even though the stock game default is
+  −X; to make its arrow point along Part-space −X, choose −X in the Part-axis chooser.
 - **Magnitude.** Gizmo writes keep the PHYSICS direction unit-length, because KSA applies
   thrust as `TotalThrust * -ExhaustDirection` **unnormalized** — a non-unit vector is a
   silent thrust multiplier. Typed input is left verbatim (imports must round-trip) with an
@@ -267,7 +273,10 @@ and pushes one undo step on drag-start — the pose-pivot precedent in `EditorSc
 > same owner frame. Only `ExhaustDirection` expresses the bell's axis relative to its own
 > mesh. Every stock bell is modelled down **−X** in its own SubPart frame and says
 > `<ExhaustDirection X="-1"/>`; a bell authored along any other axis is fine — set the
-> direction to match (the Rotate handle is the ergonomic way).
+> direction to match with the local-axis chooser or Rotate handle. A visible downward arrow
+> with local `(-1, 0, 0)` can be correct when the placement rotates local −X into Part-space −Y;
+> the Part-space readout makes that transform explicit, and the Part-axis chooser can aim that
+> placement's arrow at Part-space −X without changing the game's local-frame contract.
 
 ## Plumbing — where the propellant actually comes from (KSA 2026.7.9)
 

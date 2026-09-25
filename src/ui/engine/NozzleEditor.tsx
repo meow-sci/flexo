@@ -26,10 +26,12 @@ import {
 } from '../../state/editorStore';
 import {
   activateEngine,
+  $resolvedNozzleTargets,
   setActiveNozzleRef,
   setExhaustPlacing,
   type NozzleKind,
 } from '../../state/engineStore';
+import { exhaustLocalDirection, exhaustWorldDirection } from '../../three/coords';
 import { setMode } from '../../state/modeStore';
 import { $allReactions } from '../../state/reactionStore';
 import { UNIT_EPSILON } from '../../ksa/engineValidation';
@@ -65,9 +67,29 @@ import {
  * - **The FX overrides inherit independently.** The master switch seeds or resets both;
  *   the location and direction switches can reset either override separately.
  *
- * **Undo enrollment**: field edits stream (push at interaction start); Normalize, the FX
- * override toggle and every plume-entry mutation are discrete pushes (§B11).
+ * **Undo enrollment**: field edits stream (push at interaction start); the axis choosers,
+ * Normalize, the FX override toggle and every plume-entry mutation are discrete pushes (§B11).
  */
+
+const AXIS_DIRECTIONS = [
+  { id: '-x', label: '−X', direction: { x: -1, y: 0, z: 0 } },
+  { id: '+x', label: '+X', direction: { x: 1, y: 0, z: 0 } },
+  { id: '-y', label: '−Y', direction: { x: 0, y: -1, z: 0 } },
+  { id: '+y', label: '+Y', direction: { x: 0, y: 1, z: 0 } },
+  { id: '-z', label: '−Z', direction: { x: 0, y: 0, z: -1 } },
+  { id: '+z', label: '+Z', direction: { x: 0, y: 0, z: 1 } },
+] as const;
+
+function directionComponent(value: number): string {
+  return Math.abs(value) < 0.0005 ? '0' : value.toFixed(3);
+}
+
+function exactAxisComponent(value: number): number {
+  if (Math.abs(value) < 1e-10) return 0;
+  if (Math.abs(value - 1) < 1e-10) return 1;
+  if (Math.abs(value + 1) < 1e-10) return -1;
+  return value;
+}
 
 export function NozzleEditor({ templateId, index }: { templateId: string | null; index: number }) {
   const part = useStore($part);
@@ -162,10 +184,45 @@ function NozzleBody({
   onUpdate: (patch: Partial<SolidMotorNozzle>) => void;
   throat: React.ReactNode;
 }) {
+  const targets = useStore($resolvedNozzleTargets);
   const begin = () => pushUndo('edit nozzle', nozzle.id);
   const fxOverride = nozzle.fxExhaustLocation !== null || nozzle.fxExhaustDirection !== null;
   const fxLocation = nozzle.fxExhaustLocation ?? nozzle.exhaustLocation;
   const fxDirection = nozzle.fxExhaustDirection ?? nozzle.exhaustDirection;
+  const matchingTargets = targets.filter(
+    (target) =>
+      target.ref.channel === 'physics' &&
+      target.ref.kind === kind &&
+      target.ref.index === index &&
+      (templateId === null
+        ? target.ref.scope === 'part'
+        : target.ref.scope === 'subpart' && target.ref.templateId === templateId),
+  );
+  const activeInstance = targets.find((target) => target.isActive)?.ref;
+  const directionTarget =
+    matchingTargets.find(
+      (target) =>
+        target.ref.scope === 'subpart' &&
+        activeInstance?.scope === 'subpart' &&
+        target.ref.instanceId === activeInstance.instanceId,
+    ) ?? matchingTargets[0];
+  const partDirection = directionTarget
+    ? exhaustWorldDirection(nozzle.exhaustDirection, directionTarget.frame)
+    : null;
+  const localAxis = AXIS_DIRECTIONS.find(
+    ({ direction }) =>
+      direction.x === nozzle.exhaustDirection.x &&
+      direction.y === nozzle.exhaustDirection.y &&
+      direction.z === nozzle.exhaustDirection.z,
+  );
+  const partAxis =
+    partDirection &&
+    AXIS_DIRECTIONS.find(
+      ({ direction }) =>
+        Math.abs(direction.x - partDirection.x) < 1e-6 &&
+        Math.abs(direction.y - partDirection.y) < 1e-6 &&
+        Math.abs(direction.z - partDirection.z) < 1e-6,
+    );
 
   return (
     <div className="flex flex-col gap-2">
@@ -226,7 +283,10 @@ function NozzleBody({
       </div>
 
       <FlashField fieldKey="exhaustDirection">
-        <VecLabel>Exhaust direction (unit; default −X)</VecLabel>
+        <VecLabel>
+          Exhaust direction (unit; {templateId === null ? 'Part space' : 'SubPart local'}; default
+          −X)
+        </VecLabel>
         <Vec3Field
           value={nozzle.exhaustDirection}
           onInteractionStart={begin}
@@ -234,11 +294,76 @@ function NozzleBody({
             onUpdate({ exhaustDirection: { ...nozzle.exhaustDirection, [axis]: v } })
           }
         />
+        <Field label={templateId === null ? 'Set a Part axis' : 'Set a local axis'}>
+          <Select
+            size="sm"
+            aria-label={`Set exhaust direction along a ${templateId === null ? 'Part' : 'SubPart local'} axis`}
+            selectedKey={localAxis?.id ?? null}
+            placeholder="Custom vector — choose an axis"
+            onSelectionChange={(key) => {
+              const preset = AXIS_DIRECTIONS.find(({ id }) => id === key);
+              if (!preset) return;
+              begin();
+              onUpdate({ exhaustDirection: { ...preset.direction } });
+            }}
+          >
+            {AXIS_DIRECTIONS.map(({ id, label }) => (
+              <ListBoxItem key={id} id={id}>
+                {label}
+              </ListBoxItem>
+            ))}
+          </Select>
+        </Field>
+        {directionTarget?.frame && (
+          <Field
+            label={
+              directionTarget.instanceCount > 1
+                ? `Aim placement #${directionTarget.instanceIndex + 1} along a Part axis`
+                : 'Aim 3D arrow along a Part axis'
+            }
+          >
+            <Select
+              size="sm"
+              aria-label="Aim exhaust along a Part-space axis"
+              selectedKey={partAxis?.id ?? null}
+              placeholder="Custom Part direction — choose an axis"
+              onSelectionChange={(key) => {
+                const preset = AXIS_DIRECTIONS.find(({ id }) => id === key);
+                if (!preset) return;
+                const local = exhaustLocalDirection(preset.direction, directionTarget.frame);
+                begin();
+                onUpdate({
+                  exhaustDirection: {
+                    x: exactAxisComponent(local.x),
+                    y: exactAxisComponent(local.y),
+                    z: exactAxisComponent(local.z),
+                  },
+                });
+              }}
+            >
+              {AXIS_DIRECTIONS.map(({ id, label }) => (
+                <ListBoxItem key={id} id={id}>
+                  {label}
+                </ListBoxItem>
+              ))}
+            </Select>
+          </Field>
+        )}
         <p className="text-[11px] leading-snug text-fg-subtle">
-          The direction gas LEAVES; thrust acts along −this. Stock bells point down −X in their own
-          SubPart frame. Rotating the SubPart rotates mesh and exhaust together, so only this vector
-          can fix a bell whose axis isn&rsquo;t −X.
+          The direction gas LEAVES; thrust acts along −this. These values use the nozzle
+          owner&rsquo;s axes. A SubPart placement rotates the orange 3D arrow into Part space. Set
+          the local vector to match the bell&rsquo;s exit axis, or aim the arrow in Part space to
+          write the corresponding local vector. KSA defaults to −X.
         </p>
+        {directionTarget && partDirection && (
+          <p className="text-[11px] leading-snug text-fg-subtle">
+            {directionTarget.instanceCount > 1
+              ? `Placement #${directionTarget.instanceIndex + 1} `
+              : ''}
+            Part-space arrow: ({directionComponent(partDirection.x)},
+            {directionComponent(partDirection.y)}, {directionComponent(partDirection.z)})
+          </p>
+        )}
         <DirectionLengthWarning
           direction={nozzle.exhaustDirection}
           onNormalize={(unit) => {

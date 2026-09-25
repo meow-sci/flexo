@@ -249,6 +249,13 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   DIRECTION by `Parent.Asmb2VehicleAsmb`, a bare **quaternion** (`Part.cs:644-656`). A
   non-uniform owner scale therefore skews the mesh but not the thrust axis. Also note
   `FxExhaustDirection` is transformed **un-negated** while `ThrustDirection` is negated.
+  For the Part-space axis chooser, flexo applies the inverse of that owner quaternion to the
+  chosen unit axis before writing owner-local `<ExhaustDirection X Y Z>` under
+  `<DeLavalNozzle>` or `<SolidMotorNozzle>` (`Content/Core/CorePropulsionAGameData.xml`;
+  `decomp/KSA/RocketNozzleTemplate.cs:10-20`, `RocketNozzle.cs:248-257`). This makes the
+  selected placement's arrow follow the chosen Part axis while a reused template's other
+  placements still follow their own rotations. The chooser does not change
+  `<ExhaustLocation X Y Z>` or the game's default of local −X.
 - **There is no rotation/quaternion/Euler field on a nozzle, and no roll.** Orientation is a
   direction vector, full stop; roll about the exhaust axis is undefined by design
   (`Vehicle.SpawnThrusterSparks`, `Vehicle.cs:4828-4830`, builds an arbitrary orthonormal

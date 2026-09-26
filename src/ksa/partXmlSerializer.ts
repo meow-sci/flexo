@@ -612,7 +612,7 @@ function buildSolarPanelElement(doc: XmlDocument, sp: SolarPanel): XmlElement {
 }
 
 /**
- * `<Tank [Id]><CylindricalTank|SphericalTank>…</Tank>`. The `Id` sits on the WRAPPER
+ * `<Tank [Id]><CylindricalTank|ConicalTank|SphericalTank>…</Tank>`. The `Id` sits on the WRAPPER
  * (it is the `Components` entry id an engine addresses with `<FeedsFrom Container>`);
  * the geometry and the assembly-frame offset sit on the shape element.
  */
@@ -623,16 +623,24 @@ function buildTankWrapperElement(doc: XmlDocument, tank: Tank): XmlElement {
   return wrapper;
 }
 
-/** <CylindricalTank>/<SphericalTank> with Material/Length/OuterRadius/WallThickness. */
+/**
+ * <CylindricalTank>/<SphericalTank> with Material/Length/OuterRadius/WallThickness, or
+ * <ConicalTank> with Material/Length/RadiusBase/RadiusTop/WallThickness.
+ */
 function buildTankShapeElement(doc: XmlDocument, tank: Tank): XmlElement {
-  const el = doc.createElement(tank.shape === 'Cylindrical' ? 'CylindricalTank' : 'SphericalTank');
+  const el = doc.createElement(`${tank.shape}Tank`);
   if (tank.wallMaterialId.trim()) {
     el.appendChild(elWithAttr(doc, 'Material', 'Id', tank.wallMaterialId));
   }
-  if (tank.shape === 'Cylindrical') {
+  if (tank.shape !== 'Spherical') {
     el.appendChild(elWithAttr(doc, 'Length', 'M', formatG6(tank.lengthM)));
   }
-  el.appendChild(elWithAttr(doc, 'OuterRadius', 'M', formatG6(tank.outerRadiusM)));
+  if (tank.shape === 'Conical') {
+    el.appendChild(elWithAttr(doc, 'RadiusBase', 'M', formatG6(tank.outerRadiusM)));
+    el.appendChild(elWithAttr(doc, 'RadiusTop', 'M', formatG6(tank.radiusTopM)));
+  } else {
+    el.appendChild(elWithAttr(doc, 'OuterRadius', 'M', formatG6(tank.outerRadiusM)));
+  }
   el.appendChild(elWithAttr(doc, 'WallThickness', 'Mm', formatG6(tank.wallThicknessMm)));
   // <RoleAffinity> — ConsumerRole flags text (KSA 2026.7.5); omitted at the Engine default.
   if (tank.roleAffinity !== 'Engine') {

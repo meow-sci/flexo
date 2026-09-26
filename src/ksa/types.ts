@@ -507,17 +507,18 @@ export const EDITOR_TAG_DEFS: readonly EditorTagDef[] = [
 export const KNOWN_EDITOR_TAGS: readonly string[] = EDITOR_TAG_DEFS.map((d) => d.id);
 
 /**
- * Tank cross-section shape. Cylindrical tanks have a length; spherical ones are
- * defined by radius alone. Mirrors space-tape's `TankShape`.
+ * Tank shape — one per `AsmbTankTemplate` subclass KSA accepts inside `<Tank>`
+ * (`Tank.TemplateData.Tank`). Cylindrical and conical tanks have a length; spherical ones
+ * are defined by radius alone. A conical tank (KSA 2026.9.22.5482, `ConicalTankTemplate`)
+ * tapers from a base radius at its −X end to a top radius at its +X end.
  */
-export type TankShape = 'Cylindrical' | 'Spherical';
+export type TankShape = 'Cylindrical' | 'Conical' | 'Spherical';
 
 /**
  * A fuel/oxidizer tank definition (a part may have several). Parametric — no 3D
  * workspace geometry; edited as numbers in the Part Data dialog. Serialized as
- * <Tank><CylindricalTank>/<SphericalTank> on <SubPartGameData>. (Since KSA 2026.7.6
- * Core authors its prefab tanks at the <PartGameData> level instead — flexo doesn't
- * model those; they survive round-trip via the GameData passthrough.) Mirrors `TankState`.
+ * <Tank><CylindricalTank>/<ConicalTank>/<SphericalTank> on <PartGameData> (where Core
+ * authors its prefab tanks) or <SubPartGameData>.
  */
 export interface Tank {
   /**
@@ -531,10 +532,18 @@ export interface Tank {
   shape: TankShape;
   /** Wall material id, e.g. "Aluminum.2014(s)". Blank omits <Material>. */
   wallMaterialId: string;
-  /** Cylinder length in meters (ignored/omitted for spherical tanks). */
+  /** Length in meters (ignored/omitted for spherical tanks). */
   lengthM: number;
-  /** Outer radius in meters. */
+  /**
+   * Outer radius in meters: `<OuterRadius>`, or a conical tank's `<RadiusBase>` (KSA builds
+   * a cylinder as a cone whose base and top radii are equal, `TankGeometry.ComputeCylindricalTank`).
+   */
   outerRadiusM: number;
+  /**
+   * A conical tank's `<RadiusTop>` in meters; ignored for the other shapes. KSA widens the
+   * base to at least this radius (`TankGeometry.ComputeConicalTank`).
+   */
+  radiusTopM: number;
   /** Wall thickness in millimeters. */
   wallThicknessMm: number;
   /**
@@ -1416,6 +1425,7 @@ export function createTank(): Tank {
     wallMaterialId: 'Aluminum.2014(s)',
     lengthM: 2.0,
     outerRadiusM: 0.5,
+    radiusTopM: 0.5,
     wallThicknessMm: 2.0,
     roleAffinity: 'Engine',
     locationAsmb: { x: 0, y: 0, z: 0 },

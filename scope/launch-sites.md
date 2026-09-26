@@ -6,8 +6,8 @@ Full evidence: [analysis/icrp/KSA_LAUNCH_SITES_AND_MODS.md](../analysis/icrp/KSA
 and [analysis/icrp/PEBKAC_SYSTEM_MODS.md](../analysis/icrp/PEBKAC_SYSTEM_MODS.md);
 plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (L1–L9) + §Phase 7.
 
-**Baseline:** re-verified against KSA build **2026.9.10.5438** — authored schema unchanged,
-CPU decal evaluation rejects distant points; see [What changed in 5438](#what-changed-in-5438).
+**Baseline:** re-verified against KSA build **2026.9.22.5482** — authored schema, `SolSystem.xml`
+and `Astronomicals.xml` unchanged; see [What changed in 5482](#what-changed-in-5482).
 
 ## Contract facts
 
@@ -37,7 +37,7 @@ CPU decal evaluation rejects distant points; see [What changed in 5438](#what-ch
    (`CelestialRenderData.cs:168-170`, `PrepareModifiers.comp:165`) — the site's local terrain
    height. Core's `circle.dds` height map is reusable by `Id="Circle"`. Builder:
    `apps/icrp/src/ksa/landmarkXml.ts`.
-7. **Spawn** (`Vehicle.cs:3898-3959`): altitude = mean radius + max terrain height under the
+7. **Spawn** (`Vehicle.GetInitialKinematicStateForLocation`, `Vehicle.cs:4130`, pad height `:4188-4212` @5482): altitude = mean radius + max terrain height under the
    4 bottom bbox corners (CPU terrain evaluation **includes decals**) + half-height +
    `GroundOffset + SurfaceHeight`; body frame X=up/Y=east/Z=north; co-rotating, Landed.
 8. **Texture references in a cloned body — IN-GAME VERIFIED (2026-08-24)**: a
@@ -77,6 +77,17 @@ CPU decal evaluation rejects distant points; see [What changed in 5438](#what-ch
 and re-clones on export; drift = re-export), `SolSystem.xml` (**mixed**: `LoadFromLibrary` rows AND ~45 inline bodies carrying 21 Id'd
 `Path=` attrs — the texture rules run over EVERY inline body in ICRP's output),
 `mod.toml`, `manifest.toml`, `Textures/Planets/_Decals/circle.dds`.
+
+## What changed in 5482
+
+**Verdict: INTACT.** `SystemTemplate`, `AssetBundle`, `ModLibrary`, `LocationReference`,
+`DecalModifierReference`, `SolSystem.xml` and `Astronomicals.xml` are unchanged. Two new save-side
+rules sit next to this surface without touching it: `CelestialSystemData.GroundClutter`
+(`ClutterEcotypeSaveData`) is `universe.xml` save state, not the asset `<System>`; and
+`GroundClutterRenderer.DeserializeSave` keys saved clutter by ecotype `Name`, so a system mod must
+keep a body's ecotype names unique and stable (ICRP's verbatim Earth clone does). Rev 5469
+corrected `GalacticPlane`'s basis math; ICRP copies the `<GalacticPlane>` element verbatim, so it
+gets the fix with Core. The spawn citation above was refreshed to 5482.
 
 ## What changed in 5438
 

@@ -312,8 +312,10 @@ what the `<Internal>` flag and the validation warnings below are for.
 
 ## Interior geometry and the `<Internal>` flag
 
-A seat puts the camera somewhere; what you *see* is decided by KSA's render gate
-(`PartModel.cs:387`): a model draws unless it is `<Internal>` and the camera is not in IVA.
+A seat puts the camera somewhere; what you *see* is decided by KSA's render gate, which since
+KSA 5482 exists in two places with the same condition (`PartTreeRenderData.cs:1300` on the normal
+path, `PartModel.cs:486` on the ray-traced path): a model draws unless it is `<Internal>` and the
+camera is not in IVA.
 Read that carefully — **IVA shows both** the interior models and everything else. So
 `<Internal>` means *"interior-only"*, not *"the interior layer"*.
 

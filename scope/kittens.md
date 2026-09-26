@@ -4,7 +4,10 @@
 > scale/placement aides (never exported) — a faithful three.js re-implementation of KSA's
 > Character rendering. The contract is a long list of asset/material/bone names + render quirks.
 
-**Baseline:** re-verified against KSA build **2026.9.10.5438** (decomp + shipped Core XML + private character binaries).
+**Baseline:** re-verified against KSA build **2026.9.22.5482** (decomp + shipped Core XML + private character binaries).
+5482 leaves `CharacterAssets.xml`, `CharacterRenderResources.cs`, `CharacterAvatar.cs`,
+`ModelTranslucent.frag` and every private character binary unchanged; `KittenRenderable.cs` changed
+only in draw plumbing (see [What changed in 5482](#what-changed-in-5482)).
 **Baseline status:** 📝 **INTACT, one stale asset** — 5402 added `<HeadMeshIndices>` to
 `CharacterCore` for a first-person head hide (`KittenRenderable.HideHead`), which the editor aide
 never needs (see [What changed in 5402](#what-changed-in-5402)); at 5348 `CharacterAssets.xml` re-pointed the
@@ -12,7 +15,7 @@ MMU to a new `SK_KSA_MMU.glb`; the legacy `.gltf` flexo names still ships, so th
 shows the retired model (gap **T4**, see [What changed in 5348](#what-changed-in-5348)).
 At 5261 `CharacterAssets.xml` gained five kitten **locomotion**
 clips and nothing else that flexo reads (see [What changed in 5261](#what-changed-in-5261));
-`KittenRenderable.cs` is identical, and the eye/glass shader merge (rev 4745) is a verbatim
+`KittenRenderable.cs` was identical then, and the eye/glass shader merge (rev 4745) is a verbatim
 refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code change needed.
 
 ---
@@ -27,14 +30,14 @@ refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code
 
 ## Game-side anchors
 
-| Concern                              | Source (NEW)                                                                                                                            |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Character asset manifest             | `Content/Core/CharacterAssets.xml` — gltf sources, textures, sockets, indices, per-kitten mapping. **5402: +`<HeadMeshIndices>` only.** |
-| Render setup                         | `decomp/KSA/CharacterRenderResources.cs` — `FurRenderer`/`GlassRenderer`/`EyeRenderer`. **Changed (shader merge).**                     |
-| Per-frame render                     | `decomp/KSA/KittenRenderable.cs` — body-root transform, socket-correction matrices, eye look-at, sclera override. **Identical.**        |
-| Visor wiring                         | `decomp/KSA/CharacterAvatar.cs` — `helmet.VisorMesh = StaticMeshRenderable(GlassRenderer,…)`.                                           |
-| Kitten visor/cornea shader (in-game) | `Content/Core/Shaders/Mesh/ModelTranslucent.frag` (**NEW**; merges removed `ModelGlass.frag`+`ModelEye.frag`).                          |
-| Export-path glass shader             | `Content/Core/Shaders/Mesh/MeshGlassIndirect.frag` — used by exported `<PartModelGlass>`. **Identical.**                                |
+| Concern                              | Source (NEW)                                                                                                                                                                |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Character asset manifest             | `Content/Core/CharacterAssets.xml` — gltf sources, textures, sockets, indices, per-kitten mapping. **5402: +`<HeadMeshIndices>` only.**                                     |
+| Render setup                         | `decomp/KSA/CharacterRenderResources.cs` — `FurRenderer`/`GlassRenderer`/`EyeRenderer`. **Changed (shader merge).**                                                         |
+| Per-frame render                     | `decomp/KSA/KittenRenderable.cs` — body-root transform, socket-correction matrices, eye look-at, sclera override. **Draw plumbing changed in 5482; socket math identical.** |
+| Visor wiring                         | `decomp/KSA/CharacterAvatar.cs` — `helmet.VisorMesh = StaticMeshRenderable(GlassRenderer,…)`.                                                                               |
+| Kitten visor/cornea shader (in-game) | `Content/Core/Shaders/Mesh/ModelTranslucent.frag` (**NEW**; merges removed `ModelGlass.frag`+`ModelEye.frag`).                                                              |
+| Export-path glass shader             | `Content/Core/Shaders/Mesh/MeshGlassIndirect.frag` — used by exported `<PartModelGlass>`. **Identical.**                                                                    |
 
 ## The contract — what flexo bakes in
 
@@ -73,6 +76,15 @@ refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code
 5. Don't `computeVertexNormals()` (faceted helmet dome from seam-split verts).
 6. Attachment correction is required & order-sensitive.
 7. `Characters/` atlases stay raw **BC7** (for verbatim mod bundle-export); without BPTC/RGTC they fall back to flat.
+
+## What changed in 5482
+
+**Verdict: INTACT.** `KittenRenderable` changed only in how it hands draws to the renderer (revs
+5456/5474 mesh-pass refactor); the socket correction `RotZ(−90°)·RotX(−90°)·bone` behind
+`ATTACHMENT_CORRECTION` and `AnimatedRenderable.GetBoneTransform` are unchanged.
+`CatFurRenderable` and `Fur.frag` changed only in draw plumbing and rev 5472's BRDF lookup fix in
+the ray-traced block; the aide skips fur shells. `Characters/`, `Textures/Characters/` and
+`Animations/` in the private mirror are identical to the 5438 mirror.
 
 ## What changed in 5438
 

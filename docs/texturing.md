@@ -76,6 +76,11 @@ KSA outputs linear HDR and tonemaps in a composite pass. Flexo approximates with
 PMREM environment (`scene.environment`) so metals reflect instead of rendering black.
 Tune `renderer.toneMappingExposure`.
 
+KSA's ambient specular samples its BRDF lookup at `(dotNV, roughness)` since build 2026.9.22.5482
+(rev 5472 fixed an inverted `1 − roughness` lookup in `Shaders/Common/Lighting.glsl`). three.js
+indexes its environment BRDF the same way, so the preview's roughness response now matches the
+game's convention; a comparison against older builds would show smooth metals too dull in game.
+
 ## Browser support
 
 **Universal.** Because the SubPart atlases are UASTC, `KTX2Loader` transcodes them to

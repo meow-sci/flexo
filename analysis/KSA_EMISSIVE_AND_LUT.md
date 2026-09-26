@@ -1,5 +1,7 @@
 # KSA Emissive Textures — why a glow can only be WHITE, and what the "LUT" actually is
 
+> **5482 note:** citations refreshed to KSA 2026.9.22.5482; part render state moved from `PartModelModule.UpdateRenderData` to `PartTreeRenderData.cs` with equivalent logic.
+
 **Purpose:** a complete, source-verified account of how KSA consumes an `<Emissive>` texture, why
 no mod can make one emit coloured light, and what the "greyscale map keyed to a 1-px gradient LUT"
 technique (as described by KSA's asset author) really is in the shipped engine. Written to settle
@@ -13,23 +15,24 @@ the question:
 > battery status light, or from the diffuse (which only survives where the surface is lit).
 
 **Sources (authoritative).** Decompiled C#: citations are `File.cs:line` relative to the decomp
-root (so `KSA/PartModelRenderer.cs:111`). Shaders / game XML: relative to `Content/Core/` (so
-`Shaders/Mesh/MeshIndirect.frag:276`). Baseline build **2026.7.9.5018**.
+root (so `KSA/PartModelRenderer.cs:136`). Shaders / game XML: relative to `Content/Core/` (so
+`Shaders/Mesh/MeshIndirect.frag:280`). Baseline build **2026.7.9.5018**; citations refreshed to
+**2026.9.22.5482**.
 
 ---
 
 ## 0. Executive summary
 
 1. **`<Emissive>` is a single-channel mask, and the emitted colour is a literal `vec3(mask)`.**
-   `MeshIndirect.frag:276-287` samples `.x` and adds `gammaToLinear(vec3(sampledEmissive) *
+   `MeshIndirect.frag:280-291` samples `.x` and adds `gammaToLinear(vec3(sampledEmissive) *
 EMISSIVE_MULTIPLIER)`. No tint, no LUT, no per-material colour (§1).
 2. **It is ADDED after all lighting.** In shadow it is the only term, so a glow always reads pure
    white there — exactly the reported symptom (§1.3).
 3. **The one coloured branch is not data-authorable.** `addEmissiveColor` (state bit 7) uses a
-   per-instance packed RGB that only `PartModelModule` sets, and only for
-   `Battery.HasStatusLight` — the green→yellow→red charge indicator. It also **ignores the mask
-   value**, so it has no falloff (§2).
-4. **The dev's LUT = the temperature system.** `MeshIndirect.frag:295-298` keys a greyscale map
+   per-instance packed RGB that only `PartTreeRenderData` sets (`PartModelModule` before 5482),
+   and only for `Battery.HasStatusLight` — the green→yellow→red charge indicator. It also
+   **ignores the mask value**, so it has no falloff (§2).
+4. **The dev's LUT = the temperature system.** `MeshIndirect.frag:299-302` keys a greyscale map
    (the `<ThinFilm>` texture's **G** channel) into `temperatureLut`, a 1×N gradient sampled at
    `vec2(key, 0.5)`. That is precisely "a 1px gradient that determines what the greyscale map is
    keyed to", and the reference image (black → dark red → red → orange → white) is a blackbody
@@ -51,7 +54,7 @@ EMISSIVE_MULTIPLIER)`. No tint, no LUT, no per-material colour (§1).
 
 ### 1.1 The schema — five texture slots, zero scalars
 
-`KSA/PbrMaterialReference.cs:8-22`:
+`KSA/PbrMaterialReference.cs:12-25`:
 
 ```csharp
 [XmlElement("Diffuse")]      public TextureReference? DiffuseReference;
@@ -61,43 +64,45 @@ EMISSIVE_MULTIPLIER)`. No tint, no LUT, no per-material colour (§1).
 [XmlElement("ThinFilm")]     public TextureReference? ThinFilmMap;
 ```
 
-`TextureReference` carries only `Path` + a `Category` attribute (`KSA/TextureReference.cs:41`).
+`TextureReference` carries only `Path` + a `Category` attribute (`KSA/TextureReference.cs:46-47`).
 **There is no emissive colour, intensity, or LUT field to author.**
 
 ### 1.2 The shader
 
-`Shaders/Mesh/MeshIndirect.frag:273-291`:
+`Shaders/Mesh/MeshIndirect.frag:277-295`:
 
 ```glsl
 #ifdef ENABLE_EMISSIVE
 if (emissive && drawData.emissiveTextureIndex >= 0)
 {
-    float sampledEmissive = texture(..., inUv).x;      // 276 — single channel, .x only
-    if (sampledEmissive.x != 0.0)                      // 277 — any non-zero emits
+    float sampledEmissive = texture(..., inUv).x;      // 280 — single channel, .x only
+    if (sampledEmissive.x != 0.0)                      // 281 — any non-zero emits
     {
-        if (addEmissiveColor) {                        // 279 — see §2
+        if (addEmissiveColor) {                        // 283 — see §2
             vec3 unpacked = unpackRGB(inEmissiveColor);
             unpacked = gammaToLinear(unpacked * EMISSIVE_MULTIPLIER);
-            lightColor += unpacked;                    // 282 — mask VALUE is discarded here
+            lightColor += unpacked;                    // 286 — mask VALUE is discarded here
         }
         else
         {
             vec3 emissive = gammaToLinear(vec3(sampledEmissive) * EMISSIVE_MULTIPLIER);
-            lightColor += emissive;                    // 287 — white, proportional to the mask
+            lightColor += emissive;                    // 291 — white, proportional to the mask
         }
     }
 }
 #endif
 ```
 
-- `EMISSIVE_MULTIPLIER = 1.25` — `Shaders/Common/Lighting.glsl:9`.
+- `EMISSIVE_MULTIPLIER = 1.25` — `Shaders/Common/Lighting.glsl:10`.
 - `gammaToLinear(x) = pow(x, 2.2)` — `Shaders/Common/Shared.glsl:203-206`.
 - `vec3(sampledEmissive)` is the whole story: **a greyscale mask broadcast to RGB.** A mask of
   1.0 adds `pow(1.25, 2.2) ≈ 1.63` linear white.
 - The gate `emissive` is state bit 6, cleared when a `PowerConsumer` light switch is off or
-  unpowered (`KSA/PartModelModule.cs:98-107`). See `analysis/HOW_LIGHT_PARTS_WORK.md`.
-- `ThumbnailMesh.frag:76-83` repeats the same white-only block for the part-picker thumbnail, and
-  `MeshIndirectRaytraced.frag:263-279` for the ray-traced variant. Every path agrees.
+  unpowered (`KSA/PartTreeRenderData.cs:628-631`, via `Part.IsLightSwitchedOff()`; moved there
+  from `PartModelModule.UpdateRenderData` in 5482, logic unchanged). See
+  `analysis/HOW_LIGHT_PARTS_WORK.md`.
+- `ThumbnailMesh.frag:87-95` repeats the same white-only block for the part-picker thumbnail, and
+  `MeshIndirectRaytraced.frag:264-282` for the ray-traced variant. Every path agrees.
 
 ### 1.3 Why it reads white in shadow
 
@@ -113,7 +118,7 @@ through; a mask of 1.0 adds ≈1.63 and swamps everything.
 
 ### 1.4 Glass never glows
 
-`PartModelGlass` compiles `ENABLE_EMISSIVE` (`KSA/PartModelGlass.cs:209`) so the vertex/fragment
+`PartModelGlass` compiles `ENABLE_EMISSIVE` (`KSA/PartModelGlass.cs:248`) so the vertex/fragment
 interfaces match, but `MeshGlassIndirect.frag:44` declares `inEmissiveColor` _"unused but must
 match vertex output"_ and the shader never samples `emissiveTextureIndex`. An `<Emissive>` on a
 `<PartModelGlass>` material is dead weight.
@@ -122,7 +127,10 @@ match vertex output"_ and the shader never samples `emissiveTextureIndex`. An `<
 
 ## 2. The one coloured branch: the battery status light
 
-`addEmissiveColor` is state bit 7. The only writer is `KSA/PartModelModule.cs:110-140`:
+`addEmissiveColor` is state bit 7. The only writer is `PartTreeRenderData.ComputeOwnerDynamicState`
+(`KSA/PartTreeRenderData.cs:632-639`, colour ramp `BatteryStatusColor` at `:1350-1363`, battery
+picked by `ResolveStatusLightBattery` at `:702-706`). It moved there from
+`PartModelModule.UpdateRenderData` in 5482 with the logic unchanged; paraphrased:
 
 ```csharp
 if (Parent.FullPart.Modules.TryGetTypeList(out Module<Battery>.List typeList)) {
@@ -154,7 +162,7 @@ data-only route to a coloured emissive today, with three hard caveats:
 
 ### 3.1 It is the temperature channel
 
-`Shaders/Mesh/MeshIndirect.frag:293-300`:
+`Shaders/Mesh/MeshIndirect.frag:297-304`:
 
 ```glsl
 #ifdef ENABLE_TEMPERATURE
@@ -178,15 +186,15 @@ if (inTemperature > 0) {
 
 The `vec2(key, 0.5)` sample is the giveaway: a **1-pixel-tall gradient**, indexed left→right by
 the greyscale value. Same idiom as the thin-film LUT
-(`Shaders/Common/SharedFrag.glsl:53`).
+(`Shaders/Common/SharedFrag.glsl:56`).
 
 ### 3.2 The LUT is a global asset a mod cannot replace
 
-- Declared once: `DefaultAssets.xml:327` — `<Texture Id="TemperatureLut" Path="Textures/TemperatureLut.png" />`
-  (its sibling at 326 is `ThinFilmInterferenceLut`).
-- Resolved by id and bound globally: `KSA/GlobalShaderBindings.cs:215` (`ModLibrary.Get<TextureReference>("TemperatureLut")`)
-  → set 0, binding 9 (`:257`, matching `MeshIndirect.frag:48`).
-- `ModLibrary` registration is `_collection.TryAdd(item.Hash, item)` — `KSA/SerializedCollection.cs:20-35`.
+- Declared once: `DefaultAssets.xml:334` — `<Texture Id="TemperatureLut" Path="Textures/TemperatureLut.png" />`
+  (its sibling at 333 is `ThinFilmInterferenceLut`).
+- Resolved by id and bound globally: `KSA/GlobalShaderBindings.cs:226` (`ModLibrary.Get<TextureReference>("TemperatureLut")`)
+  → set 0, binding 9 (`:317`, matching `MeshIndirect.frag:48`).
+- `ModLibrary` registration is `_collection.TryAdd(item.Hash, item)` — `KSA/SerializedCollection.cs:19-34`.
   **First registration wins**, and Core loads before mods, so re-declaring `TemperatureLut` in a
   mod is silently ignored.
 
@@ -195,8 +203,10 @@ So the LUT is one blackbody ramp shared by the whole game. There is no per-mater
 ### 3.3 …and it is gated on real thermal state
 
 `inTemperature` is the instance's `FxTemperature.EmissivityFraction`
-(`KSA/PartModelDynamicModule.cs:113-118`). `FxTemperature` is not authorable: it is auto-created
-for a Part **only if one of its SubParts has a `PartModelDynamicModule`**
+(`PartTreeRenderData.ReadFxTemperature`, `KSA/PartTreeRenderData.cs:1138-1150`, called from
+`WriteDynamicState` at `:1131`; moved there from `PartModelDynamicModule.UpdateRenderData` in
+5482, logic unchanged). `FxTemperature` is not authorable: it is auto-created for a Part **only
+if one of its SubParts has a `PartModelDynamicModule`**
 (`KSA/FxTemperature.cs:23-49`), and its value is driven by rocket-plume heat and cryogenic tank
 contents. A lamp cannot drive it.
 
@@ -208,12 +218,12 @@ contents. A lamp cannot drive it.
 
 `KSA/PartModelRenderer.ColorData` compiles `MeshIndirect.vert/frag` twice:
 
-| Pipeline                                 | Macros                                                                                | Built at                       |
-| ---------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------ |
-| `Pipeline` (static `<PartModel>`)        | `ENABLE_EMISSIVE`, `ENABLE_THIN_FILM` (+`ENABLE_WETNESS`/`ENABLE_FROST` per settings) | `PartModelRenderer.cs:111-112` |
-| `PipelineDynamic` (`<PartModelDynamic>`) | `ENABLE_TEMPERATURE`, `ENABLE_THIN_FILM` (+ same settings)                            | `PartModelRenderer.cs:200-201` |
+| Pipeline                                 | Macros                                                                                | Built at                                |
+| ---------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------- |
+| `Pipeline` (static `<PartModel>`)        | `ENABLE_EMISSIVE`, `ENABLE_THIN_FILM` (+`ENABLE_WETNESS`/`ENABLE_FROST` per settings) | `PartModelRenderer.cs:136-137, 152-153` |
+| `PipelineDynamic` (`<PartModelDynamic>`) | `ENABLE_TEMPERATURE`, `ENABLE_THIN_FILM` (+ same settings)                            | `PartModelRenderer.cs:227-228, 243-244` |
 
-and draws them back to back — `PartModelRenderer.cs:343-345`:
+and draws them back to back — `PartModelRenderer.cs:375-377`:
 
 ```csharp
 PartModel.Shared.WriteCommandsColor(inCommandBuffer, viewport, frameIndex);
@@ -221,14 +231,14 @@ inCommandBuffer.BindPipeline(VkPipelineBindPoint.Graphics, PipelineDynamic);
 PartModelDynamic.Shared.WriteCommandsColor(inCommandBuffer, viewport, frameIndex);
 ```
 
-`ENABLE_EMISSIVE` is absent from the dynamic variant, so `MeshIndirect.frag:324-326` takes the
-`#else` branch (`emissive = false`) and the whole block at 273-291 is preprocessed out.
+`ENABLE_EMISSIVE` is absent from the dynamic variant, so `MeshIndirect.frag:327-329` takes the
+`#else` branch (`emissive = false`) and the whole block at 277-295 is preprocessed out.
 
 > **Rule: an `<Emissive>` on a `<PartModelDynamic>` SubPart renders nothing, and a heat/frost
 > gradient on a `<PartModel>` SubPart renders nothing.** You pick one per SubPart.
 
-The pre-pass mirrors the split (`PartModelRenderer.cs:545`/`595`), and the ray-traced path enables
-emissive only (`KSA.Rendering.Raytracing/RaytracingRenderer.cs:229,657`).
+The pre-pass mirrors the split (`PartModelRenderer.cs:639`/`694`), and the ray-traced path enables
+emissive only (`KSA.Rendering.Raytracing/RaytracingRenderer.cs:229,652`).
 
 ### 4.2 The shipped data obeys it exactly
 
@@ -255,7 +265,7 @@ ship `*_TFI*` atlases instead of `*_Emissive` ones.
 
 ### 5.1 `<Light>` — the real answer for a coloured lamp
 
-`KSA/LightModule.cs:11-42` — `<Light>` under `<SubPartGameData>`:
+`KSA/LightModule.cs:11-56` — `<Light>` under `<SubPartGameData>`:
 
 ```xml
 <Light>
@@ -269,7 +279,7 @@ ship `*_TFI*` atlases instead of `*_Emissive` ones.
 </Light>
 ```
 
-This becomes a real clustered punctual light (`LightModule.cs:101`/`117`), which is folded into
+This becomes a real clustered punctual light (`LightModule.cs:119`/`135`), which is folded into
 every nearby fragment through `SampleLightPrePass` — including the emitting part's own surface.
 So the physically-correct read of a green LED — a **white-hot core** (the emissive mask) with
 **green spill** on the surrounding geometry — is exactly what KSA gives you when you pair a small
@@ -326,7 +336,7 @@ Concretely, what would unlock coloured mod emissives is one of:
 1. a per-material `<EmissiveLut>` slot on `PbrMaterialReference` sampled at
    `vec2(sampledEmissive, 0.5)` — the exact technique already implemented for temperature; or
 2. an authorable emissive tint feeding the existing `addEmissiveColor` branch (which would also
-   need the mask value re-applied at `MeshIndirect.frag:282` to keep the falloff); or
+   need the mask value re-applied at `MeshIndirect.frag:286` to keep the falloff); or
 3. `ENABLE_EMISSIVE` added to the dynamic pipeline so a SubPart can have both.
 
 Until one of those lands, §5.1 (`<Light>` + a modest white mask) is the supported way to make a
@@ -336,26 +346,27 @@ KSA part look like it emits coloured light.
 
 ## 8. Citation index
 
-| Reference                                | What it establishes                                                 |
-| ---------------------------------------- | ------------------------------------------------------------------- |
-| `Shaders/Mesh/MeshIndirect.frag:276-287` | emissive sampled `.x`, added as `vec3(mask) × 1.25`, gamma 2.2      |
-| `Shaders/Mesh/MeshIndirect.frag:279-282` | the `addEmissiveColor` branch discards the mask value               |
-| `Shaders/Mesh/MeshIndirect.frag:293-300` | the temperature LUT: greyscale G channel → 1-px gradient            |
-| `Shaders/Mesh/MeshIndirect.frag:135-138` | `<ThinFilm>`/TFI packing (R=thin film, G=heat, B=frost)             |
-| `Shaders/Mesh/MeshIndirect.frag:46-49`   | `temperatureLut` at set 0 / binding 9, `ENABLE_TEMPERATURE` only    |
-| `Shaders/Common/Lighting.glsl:9`         | `EMISSIVE_MULTIPLIER = 1.25`                                        |
-| `Shaders/Common/Shared.glsl:203-206`     | `gammaToLinear(x) = pow(x, 2.2)`                                    |
-| `Shaders/Mesh/MeshGlassIndirect.frag:44` | glass carries the emissive varying but never samples it             |
-| `DefaultAssets.xml:326-327`              | `ThinFilmInterferenceLut`, `TemperatureLut` texture ids             |
-| `KSA/PbrMaterialReference.cs:8-22`       | the five material slots; no colour/LUT field                        |
-| `KSA/PartModelRenderer.cs:111-112`       | `<PartModel>` = `ENABLE_EMISSIVE` + `ENABLE_THIN_FILM`              |
-| `KSA/PartModelRenderer.cs:200-201`       | `<PartModelDynamic>` = `ENABLE_TEMPERATURE` + `ENABLE_THIN_FILM`    |
-| `KSA/PartModelRenderer.cs:343-345`       | both pipelines bound + drawn in the colour pass                     |
-| `KSA/PartModelModule.cs:98-107`          | state bit 6 = "no emissive" (the light switch)                      |
-| `KSA/PartModelModule.cs:110-140`         | battery status light → bit 7 + packed `EmissiveColor`               |
-| `KSA/BatteryTemplate.cs:11`              | `HasStatusLight` is XML-authorable                                  |
-| `KSA/GlobalShaderBindings.cs:215,257`    | `TemperatureLut` resolved by id, bound globally                     |
-| `KSA/SerializedCollection.cs:20-35`      | `TryAdd` ⇒ first registration wins (Core is first)                  |
-| `KSA/FxTemperature.cs:23-49`             | auto-created only for Parts with a `PartModelDynamicModule` SubPart |
-| `KSA/PartModelDynamicModule.cs:113-118`  | `inTemperature` = `FxTemperature.EmissivityFraction`                |
-| `KSA/LightModule.cs:11-42`               | `<Light>` schema incl. `<Color>`                                    |
+| Reference                                      | What it establishes                                                 |
+| ---------------------------------------------- | ------------------------------------------------------------------- |
+| `Shaders/Mesh/MeshIndirect.frag:280-291`       | emissive sampled `.x`, added as `vec3(mask) × 1.25`, gamma 2.2      |
+| `Shaders/Mesh/MeshIndirect.frag:283-286`       | the `addEmissiveColor` branch discards the mask value               |
+| `Shaders/Mesh/MeshIndirect.frag:297-304`       | the temperature LUT: greyscale G channel → 1-px gradient            |
+| `Shaders/Mesh/MeshIndirect.frag:135-138`       | `<ThinFilm>`/TFI packing (R=thin film, G=heat, B=frost)             |
+| `Shaders/Mesh/MeshIndirect.frag:46-49`         | `temperatureLut` at set 0 / binding 9, `ENABLE_TEMPERATURE` only    |
+| `Shaders/Common/Lighting.glsl:10`              | `EMISSIVE_MULTIPLIER = 1.25`                                        |
+| `Shaders/Common/Shared.glsl:203-206`           | `gammaToLinear(x) = pow(x, 2.2)`                                    |
+| `Shaders/Mesh/MeshGlassIndirect.frag:44`       | glass carries the emissive varying but never samples it             |
+| `DefaultAssets.xml:333-334`                    | `ThinFilmInterferenceLut`, `TemperatureLut` texture ids             |
+| `KSA/PbrMaterialReference.cs:12-25`            | the five material slots; no colour/LUT field                        |
+| `KSA/PartModelRenderer.cs:136-137, 152-153`    | `<PartModel>` = `ENABLE_EMISSIVE` + `ENABLE_THIN_FILM`              |
+| `KSA/PartModelRenderer.cs:227-228, 243-244`    | `<PartModelDynamic>` = `ENABLE_TEMPERATURE` + `ENABLE_THIN_FILM`    |
+| `KSA/PartModelRenderer.cs:375-377`             | both pipelines bound + drawn in the colour pass                     |
+| `KSA/PartTreeRenderData.cs:628-631`            | state bit 6 = "no emissive" (the light switch)                      |
+| `KSA/PartTreeRenderData.cs:632-639, 1350-1363` | battery status light → bit 7 + packed `EmissiveColor`               |
+| `KSA/PartTreeRenderData.cs:1210-1256`          | `WriteState` copies the full part's bits into each static instance  |
+| `KSA/BatteryTemplate.cs:11`                    | `HasStatusLight` is XML-authorable                                  |
+| `KSA/GlobalShaderBindings.cs:226,317`          | `TemperatureLut` resolved by id, bound globally                     |
+| `KSA/SerializedCollection.cs:19-34`            | `TryAdd` ⇒ first registration wins (Core is first)                  |
+| `KSA/FxTemperature.cs:23-49`                   | auto-created only for Parts with a `PartModelDynamicModule` SubPart |
+| `KSA/PartTreeRenderData.cs:1138-1150`          | `inTemperature` = `FxTemperature.EmissivityFraction`                |
+| `KSA/LightModule.cs:11-56`                     | `<Light>` schema incl. `<Color>`                                    |

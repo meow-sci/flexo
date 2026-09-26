@@ -112,6 +112,10 @@ sea-level/vacuum thrust + Isp the in-game `EngineDesigner` previews. Pure numeri
 react/three/DOM) → runs identically in the browser and vitest. Thrust is real De Laval
 physics: `F = ṁ·Vₑ + (Pₑ − P∞)·Aₑ`, `Isp = V_eff / 9.80665`, with choked mass flow,
 area-ratio→Mach Newton solve, and over-expansion flow-separation clamping.
+Since KSA 2026.9.22.5482 the game's vehicle-editor part inspector shows the same full-throttle
+design point (sea-level and vacuum thrust and Isp, vacuum mass flow, chamber and exit
+conditions — `RocketNozzle.DrawDesignInfo`), so an exported engine can be checked against
+flexo's readout directly in the game.
 
 Headline API: `predictPerformance({ lut, maxPressurePa, exitDiameterM, areaRatio, …effs })`
 → `{ thrustSLN, thrustVacN, ispSL, ispVac, massFlowRate, throatDiameterM,

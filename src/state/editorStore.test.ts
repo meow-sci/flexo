@@ -1048,6 +1048,20 @@ describe('editorStore', () => {
     expect(spd()?.tanks.length).toBe(1);
   });
 
+  it('turns a tank conical with an unchanged top radius, as one undo step', () => {
+    addTank(null);
+    pushUndo('edit tank');
+    updateTank(null, 0, { outerRadiusM: 1.25 });
+    setTankShape(null, 0, 'Conical');
+    expect($part.get().gameData.tanks[0]).toMatchObject({
+      shape: 'Conical',
+      outerRadiusM: 1.25,
+      radiusTopM: 1.25,
+    });
+    undo();
+    expect($part.get().gameData.tanks[0]).toMatchObject({ shape: 'Cylindrical', radiusTopM: 0.5 });
+  });
+
   it('adds a light (part-level or SubPart-owned), seeded or default, as one discrete undo step', () => {
     const tmpl = 'CoreElectricalA_Subpart_SpotlightA';
     const lights = () => $part.get().lights;
@@ -2412,17 +2426,22 @@ describe('scaleEverything', () => {
     const base = createEmptyPart();
     const cyl = { ...createTank(), id: 'fuel' };
     const sph = { ...createTank(), id: 'rcs', shape: 'Spherical' as const };
-    $part.set({ ...base, gameData: { ...base.gameData, tanks: [cyl, sph] } });
-    // Cylinder volume ∝ r²·L, sphere volume ∝ r³ — both must land on x·y·z = 12.
+    const cone = { ...createTank(), id: 'nose', shape: 'Conical' as const, radiusTopM: 0.25 };
+    $part.set({ ...base, gameData: { ...base.gameData, tanks: [cyl, sph, cone] } });
+    // Cylinder volume ∝ r²·L, sphere ∝ r³, truncated cone ∝ L·(R² + R·r + r²) — all must
+    // land on x·y·z = 12.
     const cylVol = (t: { outerRadiusM: number; lengthM: number }) =>
       t.outerRadiusM ** 2 * t.lengthM;
     const sphVol = (t: { outerRadiusM: number }) => t.outerRadiusM ** 3;
+    const coneVol = (t: { outerRadiusM: number; radiusTopM: number; lengthM: number }) =>
+      t.lengthM * (t.outerRadiusM ** 2 + t.outerRadiusM * t.radiusTopM + t.radiusTopM ** 2);
 
     scaleEverything({ x: 2, y: 3, z: 2 });
 
-    const [a, b] = $part.get().gameData.tanks;
+    const [a, b, c] = $part.get().gameData.tanks;
     expect(cylVol(a) / cylVol(cyl)).toBeCloseTo(12, 6);
     expect(sphVol(b) / sphVol(sph)).toBeCloseTo(12, 6);
+    expect(coneVol(c) / coneVol(cone)).toBeCloseTo(12, 6);
   });
 
   it('never negates a radius when an axis is mirrored', () => {

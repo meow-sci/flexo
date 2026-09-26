@@ -1,0 +1,670 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Assets>
+  <PartGameData Id="CoreFairingA_Prefab_AeroshroudAA">
+    <EditorTag Value="Structural" />
+    <EditorTag Value="Radial" />
+    <Diameter M="0.25"/>
+    <Connector Id="_connector75">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.2253" Y="0" Z="0" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="0.451" />
+        <RadiusBase M="0.159" />
+        <RadiusTop M="0.100" />
+        <Sweep Degrees="180" />
+        <WallThickness Mm="6" />
+    </HollowOpenTruncatedConeMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_AeroshroudAB">
+    <EditorTag Value="Structural" />
+    <EditorTag Value="Radial" />
+    <Diameter M="0.25"/>
+    <Connector Id="_connector74">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.3533" Y="0" Z="0" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="0.707" />
+        <RadiusBase M="0.159" />
+        <RadiusTop M="0.100" />
+        <Sweep Degrees="180" />
+        <WallThickness Mm="6" />
+    </HollowOpenTruncatedConeMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_AeroshroudBA">
+    <EditorTag Value="Structural" />
+    <EditorTag Value="Radial" />
+    <Diameter M="0.5"/>
+    <Connector Id="_connector76">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.5433" Y="0" Z="0" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="1.087" />
+        <RadiusBase M="0.320" />
+        <RadiusTop M="0.150" />
+        <Sweep Degrees="180" />
+        <WallThickness Mm="6" />
+    </HollowOpenTruncatedConeMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_AeroshroudBB">
+    <EditorTag Value="Structural" />
+    <EditorTag Value="Radial" />
+    <Diameter M="0.5"/>
+    <Connector Id="_connector86">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.6947" Y="0" Z="0" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="1.389" />
+        <RadiusBase M="0.320" />
+        <RadiusTop M="0.150" />
+        <Sweep Degrees="180" />
+        <WallThickness Mm="6" />
+    </HollowOpenTruncatedConeMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_AeroshroudCA">
+    <EditorTag Value="Structural" />
+    <EditorTag Value="Radial" />
+    <Diameter M="1"/>
+    <Connector Id="_connector78">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.9173" Y="0" Z="0" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="1.835" />
+        <RadiusBase M="0.492" />
+        <RadiusTop M="0.100" />
+        <Sweep Degrees="180" />
+        <WallThickness Mm="6" />
+    </HollowOpenTruncatedConeMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_AeroshroudCB">
+    <EditorTag Value="Structural" />
+    <EditorTag Value="Radial" />
+    <Diameter M="1"/>
+    <Connector Id="_connector79">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-1.3550" Y="0" Z="0" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="2.710" />
+        <RadiusBase M="0.492" />
+        <RadiusTop M="0.200" />
+        <Sweep Degrees="180" />
+        <WallThickness Mm="6" />
+    </HollowOpenTruncatedConeMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_AeroshroudCC">
+    <EditorTag Value="Structural" />
+    <EditorTag Value="Radial" />
+    <Diameter M="1"/>
+    <Connector Id="_connector80">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-2.3130" Y="0" Z="0" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="4.626" />
+        <RadiusBase M="0.492" />
+        <RadiusTop M="0.200" />
+        <Sweep Degrees="180" />
+        <WallThickness Mm="6" />
+    </HollowOpenTruncatedConeMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_Interstage1W1HA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="1"/>
+    <Decoupler ConnectorId="_connector31" Force="300" />
+    <Connector Id="_connector31">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <HollowOpenCylinderMass>
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="1" />
+        <OuterRadius M="0.5" />
+        <WallThickness Mm="6" />
+    </HollowOpenCylinderMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_Interstage1WHalfHA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="1"/>
+    <Connector Id="_connector32">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector32" Force="300" />
+    <HollowOpenCylinderMass>
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="0.5" />
+        <OuterRadius M="0.5" />
+        <WallThickness Mm="6" />
+    </HollowOpenCylinderMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_Interstage1WQuarterHA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="1"/>
+    <Connector Id="_connector34">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector34" Force="300" />
+    <HollowOpenCylinderMass>
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="0.25" />
+        <OuterRadius M="0.5" />
+        <WallThickness Mm="6" />
+    </HollowOpenCylinderMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_Interstage2W1HA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="2"/>
+    <Connector Id="_connector37">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector37" Force="2000" />
+    <HollowOpenCylinderMass>
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="1" />
+        <OuterRadius M="1" />
+        <WallThickness Mm="6" />
+    </HollowOpenCylinderMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_Interstage2W2HA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="2"/>
+    <Connector Id="_connector39">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector39" Force="2000" />
+    <HollowOpenCylinderMass>
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="2" />
+        <OuterRadius M="1" />
+        <WallThickness Mm="6" />
+    </HollowOpenCylinderMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_Interstage2WHalfHA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="2"/>
+    <Connector Id="_connector41">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector41" Force="2000" />
+    <HollowOpenCylinderMass>
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="0.5" />
+        <OuterRadius M="1" />
+        <WallThickness Mm="6" />
+    </HollowOpenCylinderMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_Interstage3W1HA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="3"/>
+    <Connector Id="_connector43">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector43" Force="7000" />
+    <HollowOpenCylinderMass>
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="1" />
+        <OuterRadius M="1.5" />
+        <WallThickness Mm="6" />
+    </HollowOpenCylinderMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_Interstage3W2HA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="3"/>
+    <Connector Id="_connector45">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector45" Force="7000" />
+    <HollowOpenCylinderMass>
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="2" />
+        <OuterRadius M="1.5" />
+        <WallThickness Mm="6" />
+    </HollowOpenCylinderMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_Interstage3W3HA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="3"/>
+    <Connector Id="_connector47">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector47" Force="7000" />
+    <HollowOpenCylinderMass>
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="3" />
+        <OuterRadius M="1.5" />
+        <WallThickness Mm="6" />
+    </HollowOpenCylinderMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_Interstage3W3HB">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="3"/>
+    <Connector Id="_connector49">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector49" Force="7000" />
+    <HollowOpenCylinderMass>
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="3" />
+        <OuterRadius M="1.5" />
+        <WallThickness Mm="6" />
+    </HollowOpenCylinderMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_Interstage3WHalfHA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="3"/>
+    <Connector Id="_connector51">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector51" Force="7000" />
+    <HollowOpenCylinderMass>
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="0.5" />
+        <OuterRadius M="1.5" />
+        <WallThickness Mm="6" />
+    </HollowOpenCylinderMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_InterstageBridge1WHalfWA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="1"/>
+    <Diameter M="0.5"/>
+    <Connector Id="_connector53">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector53" Force="300" />
+    <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.25" Y="0" Z="0" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="0.5" />
+        <RadiusBase M="0.5" />
+        <RadiusTop M="0.25" />
+        <WallThickness Mm="6" />
+    </HollowOpenTruncatedConeMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_InterstageBridge2W1WA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="2"/>
+    <Diameter M="1"/>
+    <Connector Id="_connector55">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector55" Force="2000" />
+    <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.5" Y="0" Z="0" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="1" />
+        <RadiusBase M="1" />
+        <RadiusTop M="0.5" />
+        <WallThickness Mm="6" />
+    </HollowOpenTruncatedConeMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_InterstageBridge2W1WB">
+    <EditorTag Value="Fuel Tanks" />
+    <Diameter M="2"/>
+    <Diameter M="1"/>
+    <Connector Id="_connector56">
+      <Capabilities>BulkFluid</Capabilities>
+    </Connector>
+    <Connector Id="_connector57">
+      <Capabilities>BulkFluid</Capabilities>
+    </Connector>
+    <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.5" Y="0" Z="0" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="1" />
+        <RadiusBase M="1" />
+        <RadiusTop M="0.5" />
+        <WallThickness Mm="6" />
+    </HollowOpenTruncatedConeMass>
+    <Tank>
+        <CylindricalTank>
+            <Material Id="Aluminum.2014(s)" />
+            <Length M="1" />
+            <!-- true geometric radius: <OuterRadius M="0.5" /> -->
+            <OuterRadius M="1" />
+            <WallThickness Mm="4" />
+        </CylindricalTank>
+    </Tank>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_InterstageBridge3W2WA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="3"/>
+    <Diameter M="2"/>
+    <Connector Id="_connector58">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector58" Force="7000" />
+    <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.8983" Y="0" Z="0" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="1.8" />
+        <RadiusBase M="1.5" />
+        <RadiusTop M="1" />
+        <WallThickness Mm="6" />
+    </HollowOpenTruncatedConeMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_InterstageBridge3W2WB">
+    <EditorTag Value="Fuel Tanks" />
+    <Diameter M="3"/>
+    <Diameter M="2"/>
+    <Connector Id="_connector60">
+      <Capabilities>BulkFluid</Capabilities>
+    </Connector>
+    <Connector Id="_connector61">
+      <Capabilities>BulkFluid</Capabilities>
+    </Connector>
+    <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.8983" Y="0" Z="0" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="1.8" />
+        <RadiusBase M="1.5" />
+        <RadiusTop M="1" />
+        <WallThickness Mm="6" />
+    </HollowOpenTruncatedConeMass>
+    <Tank>
+        <CylindricalTank>
+            <Material Id="Aluminum.2014(s)" />
+            <Length M="1.8" />
+            <!-- true geometric radius: <OuterRadius M="1" /> -->
+            <OuterRadius M="2" />
+            <WallThickness Mm="4" />
+        </CylindricalTank>
+    </Tank>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_InterstageBridgePetal1WHalfWA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="1"/>
+    <Diameter M="0.5"/>
+    <Connector Id="_connector28">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector28" Force="300" />
+    <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.0279" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="1" />
+        <RadiusBase M="0.5" />
+        <RadiusTop M="0.25" />
+        <WallThickness Mm="6" />
+    </HollowOpenTruncatedConeMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_InterstageBridgePetal2W1WA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="2"/>
+    <Diameter M="1"/>
+    <Connector Id="_connector26">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector26" Force="2000" />
+    <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.0557" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="2" />
+        <RadiusBase M="1" />
+        <RadiusTop M="0.5" />
+        <WallThickness Mm="6" />
+    </HollowOpenTruncatedConeMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_InterstageHalfW1HA1">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Coupling" />
+    <Diameter M="0.5"/>
+    <Connector Id="_connector81">
+      <Capabilities>DecouplerJoint</Capabilities>
+    </Connector>
+    <Decoupler ConnectorId="_connector81" Force="35" />
+    <HollowOpenCylinderMass>
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="0.5" />
+        <OuterRadius M="0.25" />
+        <WallThickness Mm="6" />
+    </HollowOpenCylinderMass>
+  </PartGameData>
+
+  <!-- Nosecones A-C are blunt caps, too short for a tangent ogive to close (the arc only reaches
+       the axis once the nose is at least as long as its radius), so they use a semi-ellipsoid. That
+       runs ~7-11% heavy against the meshes, which is a few kg on the family's lightest parts. D-H
+       are ogives, where length and base radius fully determine the shape. -->
+  <PartGameData Id="CoreFairingA_Prefab_NoseconeA">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Structural" />
+    <Diameter M="0.5"/>
+    <HollowOpenSemiEllipsoidMass>
+        <LocationAsmb X="-0.0995" />
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="0.199" />
+        <Radius M="0.2498" />
+        <WallThickness Mm="6" />
+    </HollowOpenSemiEllipsoidMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_NoseconeB">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Structural" />
+    <Diameter M="1"/>
+    <HollowOpenSemiEllipsoidMass>
+        <LocationAsmb X="-0.199" />
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="0.398" />
+        <Radius M="0.4997" />
+        <WallThickness Mm="6" />
+    </HollowOpenSemiEllipsoidMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_NoseconeC">
+    <EditorTag Value="Fuel Tanks" />
+    <Diameter M="2"/>
+    <Connector Id="_connector64">
+      <Capabilities>BulkFluid</Capabilities>
+    </Connector>
+    <HollowOpenSemiEllipsoidMass>
+        <LocationAsmb X="-0.4438" />
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="0.9024" />
+        <Radius M="0.9983" />
+        <WallThickness Mm="6" />
+    </HollowOpenSemiEllipsoidMass>
+    <Tank>
+        <CylindricalTank>
+            <LocationAsmb X="-0.0249" />
+            <Material Id="Aluminum.2014(s)" />
+            <Length M="1.4314" />
+            <!-- true geometric radius: <OuterRadius M="0.5" /> -->
+            <OuterRadius M="1" />
+            <WallThickness Mm="4" />
+        </CylindricalTank>
+    </Tank>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_NoseconeD">
+    <EditorTag Value="Interstage" />
+    <EditorTag Value="Structural" />
+    <Diameter M="0.5"/>
+    <HollowOpenOgiveMass>
+        <LocationAsmb X="-0.7044" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="1.4088" />
+        <Radius M="0.2498" />
+        <WallThickness Mm="6" />
+    </HollowOpenOgiveMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_NoseconeE">
+    <EditorTag Value="Fuel Tanks" />
+    <Diameter M="1"/>
+    <Connector Id="_connector66">
+      <Capabilities>BulkFluid</Capabilities>
+    </Connector>
+    <HollowOpenOgiveMass>
+        <LocationAsmb X="-0.8024" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="1.6048" />
+        <Radius M="0.5" />
+        <WallThickness Mm="6" />
+    </HollowOpenOgiveMass>
+    <Tank>
+        <ConicalTank>
+            <LocationAsmb X="-0.3661" />
+            <Material Id="Aluminum.2014(s)" />
+            <Length M="1.4735" />
+            <!-- true geometric radii: base 0.5, top 0.3422 -->
+            <RadiusBase M="1" />
+            <RadiusTop M="0.6843" />
+            <WallThickness Mm="4" />
+        </ConicalTank>
+    </Tank>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_NoseconeF">
+    <EditorTag Value="Fuel Tanks" />
+    <Diameter M="2"/>
+    <Connector Id="_connector67">
+      <Capabilities>BulkFluid</Capabilities>
+    </Connector>
+    <HollowOpenOgiveMass>
+        <LocationAsmb X="-1.6051" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="3.2102" />
+        <Radius M="1.0001" />
+        <WallThickness Mm="6" />
+    </HollowOpenOgiveMass>
+    <Tank>
+        <CylindricalTank>
+            <LocationAsmb X="-0.4150" />
+            <Material Id="Aluminum.2014(s)" />
+            <Length M="2.9759" />
+            <!-- true geometric radius: <OuterRadius M="0.5" /> -->
+            <OuterRadius M="1" />
+            <WallThickness Mm="4" />
+        </CylindricalTank>
+    </Tank>
+  </PartGameData>
+
+  <!-- G and H are canted: the tip is displaced laterally, so an axisymmetric ogive drops a CoM
+       offset of 23% of the base radius and a ~15 degree principal-axis tilt. Mass is within ~3.5%.
+       If the lateral bias ever matters, LocationAsmb takes Y/Z and Paf2Asmb a rotation. -->
+  <PartGameData Id="CoreFairingA_Prefab_NoseconeG">
+    <EditorTag Value="Fuel Tanks" />
+    <Diameter M="1"/>
+    <Connector Id="_connector68">
+      <Capabilities>BulkFluid</Capabilities>
+    </Connector>
+    <HollowOpenOgiveMass>
+        <LocationAsmb X="-0.826" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="1.6521" />
+        <Radius M="0.5019" />
+        <WallThickness Mm="6" />
+    </HollowOpenOgiveMass>
+    <Tank>
+        <ConicalTank>
+            <LocationAsmb X="-0.3752" />
+            <Material Id="Aluminum.2014(s)" />
+            <Length M="1.5023" />
+            <!-- true geometric radii: base 0.5, top 0.3426 -->
+            <RadiusBase M="1" />
+            <RadiusTop M="0.6852" />
+            <WallThickness Mm="4" />
+        </ConicalTank>
+    </Tank>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_NoseconeH">
+    <EditorTag Value="Fuel Tanks" />
+    <Diameter M="2"/>
+    <Connector Id="_connector69">
+      <Capabilities>BulkFluid</Capabilities>
+    </Connector>
+    <HollowOpenOgiveMass>
+        <LocationAsmb X="-1.6521" />
+        <Material Id="Aluminum.2014(s)" />
+        <Height M="3.3042" />
+        <Radius M="1.0038" />
+        <WallThickness Mm="6" />
+    </HollowOpenOgiveMass>
+    <Tank>
+        <CylindricalTank>
+            <LocationAsmb X="-0.4274" />
+            <Material Id="Aluminum.2014(s)" />
+            <Length M="3.0456" />
+            <!-- true geometric radius: <OuterRadius M="0.5" /> -->
+            <OuterRadius M="1" />
+            <WallThickness Mm="4" />
+        </CylindricalTank>
+    </Tank>
+  </PartGameData>
+
+  <!-- Forward skirts close out the top of an SRB stack, so they follow the SRB segments' convention:
+       Booster tag, no decoupler. Both are plain cylindrical shells. -->
+  <PartGameData Id="CoreFairingA_Prefab_SRBForwardSkirtA">
+    <EditorTag Value="Booster" />
+    <Diameter M="1"/>
+    <HollowOpenCylinderMass>
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="0.516" />
+        <OuterRadius M="0.5" />
+        <WallThickness Mm="6" />
+    </HollowOpenCylinderMass>
+  </PartGameData>
+
+  <PartGameData Id="CoreFairingA_Prefab_SRBForwardSkirtB">
+    <EditorTag Value="Booster" />
+    <Diameter M="2"/>
+    <HollowOpenCylinderMass>
+        <Material Id="Aluminum.2014(s)" />
+        <Length M="1.5009" />
+        <OuterRadius M="1" />
+        <WallThickness Mm="6" />
+    </HollowOpenCylinderMass>
+  </PartGameData>
+</Assets>

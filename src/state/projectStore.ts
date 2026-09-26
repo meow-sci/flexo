@@ -25,6 +25,7 @@ import {
   createCustomReaction,
   createGimbal,
   createSubPartGameData,
+  createTank,
   DEFAULT_LAYER_ID,
 } from '../ksa/types';
 import type { EditingPart, Rocket } from '../ksa/types';
@@ -231,6 +232,8 @@ function normalizePart(part: EditingPart): EditingPart {
       // does not carry that dead key back into memory — a snapshot is still LOADED, never
       // converted (nothing reads the key either way; this just stops it being re-persisted).
       evaDoor: gameData.evaDoor ? { seatId: gameData.evaDoor.seatId ?? null } : null,
+      // `<ConicalTank><RadiusTop>` (KSA 2026.9.22.5482) — additive, below the spread level.
+      tanks: gameData.tanks.map((tank) => ({ ...createTank(), ...tank })),
       rockets: normalizeRockets(gameData.rockets),
       solidGrainSegments: gameData.solidGrainSegments.map((grain) => ({
         ...createSolidGrainSegment(grain.id),
@@ -252,6 +255,7 @@ function normalizePart(part: EditingPart): EditingPart {
     subPartGameData: (filled.subPartGameData ?? []).map((spd) => ({
       ...createSubPartGameData(spd.subPartTemplateId ?? ''),
       ...spd,
+      tanks: (spd.tanks ?? []).map((tank) => ({ ...createTank(), ...tank })),
       rockets: normalizeRockets(spd.rockets),
       solidGrainSegments: (spd.solidGrainSegments ?? []).map((grain) => ({
         ...createSolidGrainSegment(grain.id),

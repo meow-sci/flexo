@@ -1425,6 +1425,51 @@ describe('<Tank Id> round-trip at both levels', () => {
   });
 });
 
+describe('<ConicalTank> (KSA 2026.9.22.5482)', () => {
+  // Core's CoreFairingA_Prefab_NoseconeE tank, verbatim (comment dropped).
+  const GAMEDATA = `<Assets>
+  <PartGameData Id="CoreFairingA_Prefab_NoseconeE">
+    <Tank>
+        <ConicalTank>
+            <LocationAsmb X="-0.3661" />
+            <Material Id="Aluminum.2014(s)" />
+            <Length M="1.4735" />
+            <RadiusBase M="1" />
+            <RadiusTop M="0.6843" />
+            <WallThickness Mm="4" />
+        </ConicalTank>
+    </Tank>
+  </PartGameData>
+</Assets>`;
+  const parsed = gameDataFromAssets(GAMEDATA, 'CoreFairingA_Prefab_NoseconeE', new DOMParser())!;
+
+  it('parses RadiusBase into outerRadiusM and RadiusTop into radiusTopM', () => {
+    expect(parsed.gameData.tanks).toEqual([
+      {
+        ...createTank(),
+        shape: 'Conical',
+        wallMaterialId: 'Aluminum.2014(s)',
+        lengthM: 1.4735,
+        outerRadiusM: 1,
+        radiusTopM: 0.6843,
+        wallThicknessMm: 4,
+        locationAsmb: { x: -0.3661, y: 0, z: 0 },
+      },
+    ]);
+  });
+
+  it('emits <ConicalTank> with Length/RadiusBase/RadiusTop and no <OuterRadius>', () => {
+    const source = editingPart({ partId: 'CONE', gameData: parsed.gameData });
+    const xml = serializeGameData(source);
+    expect(xml).toContain('<ConicalTank>');
+    expect(xml).toContain('<Length M="1.4735"/>');
+    expect(xml).toContain('<RadiusBase M="1"/>');
+    expect(xml).toContain('<RadiusTop M="0.6843"/>');
+    expect(xml).not.toContain('OuterRadius');
+    expect(roundTrip(source).gameData.tanks).toEqual(parsed.gameData.tanks);
+  });
+});
+
 describe('solid rocket motors round-trip', () => {
   // Modeled on Core's CorePropulsionC_Prefab_SRBDThrustAssemblyA (@ 2026.7.9.5018).
   const SEG_TMPL = 'CorePropulsionC_Subpart_SRBSizeDThrustAssemblyA';

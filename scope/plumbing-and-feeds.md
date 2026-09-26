@@ -11,9 +11,17 @@
 > alongside [engines.md](engines.md), [connectors-coordinates-iva.md](connectors-coordinates-iva.md)
 > and [gamedata-modules.md](gamedata-modules.md).
 
-**Baseline:** re-verified against KSA build **2026.9.10.5438** (decomp @ 5438 + shipped Core XML);
+**Baseline:** re-verified against KSA build **2026.9.22.5482** (decomp @ 5482 + shipped Core XML);
 surface introduced at **2026.7.9.5018**.
-**Baseline status:** ✅ **CURRENT** — rev 5433 changed runtime resource-flow scheduling but left
+**Baseline status:** ✅ **CURRENT** — at 5482 every plumbing class is byte-identical
+(`ConnectorCapabilityFlags`, `ConnectorCapability`, `ConnectorCapabilityExtensions`,
+`FeedsFromReference`, `ConsumerFeedWiring`, `RocketCoreTemplate`, `PlumbingClass`, `PartTemplate`,
+`Decoupler`, `ResourceManagerBase`, `PartFlowTopology`). Rev 5475 turned seven CoreFairingA
+nosecones and interstage adapters into fuel tanks (`CoreFairingAGameData.xml`: `Fuel Tanks` tag,
+new `<Connector><Capabilities>BulkFluid</Capabilities>`, `DecouplerJoint` → `BulkFluid`, two
+`<Decoupler>` removed, id-less `<Tank>`s, two of them the new `<ConicalTank>` shape — see
+[gamedata-modules.md](gamedata-modules.md#what-changed-in-5482)); every token involved was
+already modeled. Rev 5478's refill flag in `ResourceManager` is runtime. At 5438, rev 5433 changed runtime resource-flow scheduling but left
 the authored feed contract unchanged. It remains modeled end-to-end (parse, serialize, import/paste
 remapping, project codec v4, authoring UI, export pre-flight) by the 5018 upgrade.
 
@@ -302,6 +310,6 @@ once. `<Rocket><Core Id SubPartId>` and `<Nozzle Id SubPartId>` resolve relative
 rocket's owner, including Part rockets binding modules on different child instances.
 
 Any `<FeedsFrom Connector>` means the full grain stack depends on vehicle assembly
-(`PartTree.ResolveSolidMotorStacks`), so the single-Part curve reports that it is unavailable
+(`PartTree.RecomputeSolidMotorStacks`), so the single-Part curve reports that it is unavailable
 rather than integrating only the local fraction. This affects preview only; authored feed
 references still round-trip and export.

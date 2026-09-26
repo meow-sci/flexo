@@ -2556,7 +2556,9 @@ export function scaleEverything(factor: Vec3): void {
   const cylRadial = Math.sqrt(Math.abs(y * z));
   const sphRadial = Math.cbrt(Math.abs(x * y * z));
   const scaleTank = (t: Tank): void => {
-    scaleContainerGeometry(t, axial, t.shape === 'Spherical' ? sphRadial : cylRadial, scalePos);
+    const radial = t.shape === 'Spherical' ? sphRadial : cylRadial;
+    scaleContainerGeometry(t, axial, radial, scalePos);
+    t.radiusTopM *= radial;
   };
   const scaleGrain = (g: SolidGrainSegment): void => {
     scaleContainerGeometry(g, axial, cylRadial, scalePos);
@@ -2609,9 +2611,9 @@ function snapDiameterClass(diameterM: number): number {
  * that skipped them would leave a 2×-sized part holding its original propellant.
  *
  * AXES: both are modeled in KSA's part-axis frame with the cylinder axis on X
- * (`TankGeometry.ComputeCylindricalTank` offsets its domes along `CentroidPaf.X`), so a
- * `lengthM` rides the X factor and a cylinder's radius rides the CROSS-SECTION factor
- * √(y·z) — the choice that makes the enclosed volume scale by exactly x·y·z. A sphere has
+ * (`TankGeometry.ComputeConicalTank` offsets its domes along `CentroidPaf.X`), so a
+ * `lengthM` rides the X factor and a cylinder's radius (a cone's two radii) rides the
+ * CROSS-SECTION factor √(y·z) — the choice that makes the enclosed volume scale by exactly x·y·z. A sphere has
  * no axis, so its radius rides ∛(x·y·z), the same volume rule. (`lengthM` is scaled even
  * for a spherical tank, where KSA ignores it, so flipping the shape back later isn't stale.)
  *
@@ -2913,12 +2915,16 @@ export function removeTank(owner: TankOwner, index: number): void {
   mutateTanks(owner, (t) => t.splice(index, 1));
 }
 
-/** Discrete: change a tank's shape (cylindrical/spherical). */
+/** Discrete: change a tank's shape (cylindrical/conical/spherical). */
 export function setTankShape(owner: TankOwner, index: number, shape: TankShape): void {
   const tanks = tanksOf(owner);
   if (!tanks || index < 0 || index >= tanks.length) return;
   pushUndo('tank shape', shape);
   mutateTanks(owner, (t) => {
+    // KSA's cylinder is a cone with equal radii, so a tank turned conical starts unchanged.
+    if (shape === 'Conical' && t[index].shape !== 'Conical') {
+      t[index].radiusTopM = t[index].outerRadiusM;
+    }
     t[index].shape = shape;
   });
 }

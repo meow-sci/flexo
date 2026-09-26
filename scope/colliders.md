@@ -6,11 +6,27 @@
 > [part-and-subpart-xml.md](part-and-subpart-xml.md) (which owns the surrounding `<Part>` /
 > `<PartGameData>` document structure).
 
-**Baseline:** re-verified against KSA build **2026.9.10.5438** (`decomp/` + shipped `Content/Core`)
+**Baseline:** re-verified against KSA build **2026.9.22.5482** (`decomp/` + shipped `Content/Core`)
 and the real GLB meshes in `flexo-private-assets/assets/Meshes`.
 **Baseline status:** 🟡 **MODELED, one primitive short.** The four analytic shapes are fully modeled
 (closing the 4939 geometry-template `<Collider>` gap **E**), but 5261 added a **fifth**,
 `<ConvexHull>` — gap **S1**, see [What changed in 5261](#what-changed-in-5261).
+
+## What changed in 5482
+
+**Shape XML intact; a convex hull now has a real volume.** `ColliderModule`, `ColliderTemplate`,
+the four analytic templates and `MeshColliderTemplate` are byte-identical, and `<Collider>` still
+accepts exactly `<Box>`, `<Capsule>`, `<Cylinder>`, `<Sphere>` and `<ConvexHull>`. Rev 5447
+changed only `ConvexHullColliderTemplate`: it now overrides `VolumeCubicMetres` with the hull's
+real volume (so a Part carrying `<ConvexHull>` feeds a non-zero volume into
+`Part.CrashTolerancePascals`), and it re-centres the hull points on their bounding-box centre
+before building the Bepu hull, compensating the offset so placement is unchanged.
+`MeshColliderTemplate` still has no override (volume 0). The bundler's new
+`KSA.GlbImport/GlbHullValidation` only prints console warnings about overlapping or near-duplicate
+hull vertices. The vehicle collider compound, the zero-collider fallback, docking by collider
+contact and the contact filter are text-identical. flexo computes neither volume nor crash
+pressure, so nothing changes in flexo; gap **S1** (no `<ConvexHull>` authoring) is unchanged in
+shape and severity.
 
 ## What changed in 5438
 
@@ -176,13 +192,18 @@ already models.
 
 ---
 
-## 1. KSA has no collider _meshes_
+## 1. KSA has no triangle-mesh colliders for parts
 
-KSA's part collision volume is a list of **analytic Bepu primitives** — and nothing else.
-There is no convex hull, no triangle-soup collider, no "collision mesh" asset for parts.
+> **Superseded in part since 5261:** `<Collider>` also accepts `<ConvexHull>` (a hull built from a
+> GLB mesh, gap **S1**, not modeled by flexo); Core authors it only on ground clutter
+> (`GroundClutter/GenericRockAssets.xml`). The four analytic shapes below remain the whole of what
+> flexo models, and there is still no triangle-soup collider.
 
-`ColliderModule.Template` (`decomp/KSA/ColliderModule.cs:11-27`) accepts exactly four child
-element types, each mapping 1:1 onto a Bepu shape:
+KSA's part collision volume is a list of **analytic Bepu primitives** (plus, since 5261, convex
+hulls). There is no triangle-soup collider and no "collision mesh" asset for parts.
+
+`ColliderModule.Template` (`decomp/KSA/ColliderModule.cs:11-27`) accepts these analytic child
+element types (plus `<ConvexHull>`), each mapping 1:1 onto a Bepu shape:
 
 | XML          | C# template                   | Bepu shape                    |
 | ------------ | ----------------------------- | ----------------------------- |
@@ -191,7 +212,8 @@ element types, each mapping 1:1 onto a Bepu shape:
 | `<Cylinder>` | `CylinderColliderTemplate.cs` | `Cylinder`                    |
 | `<Capsule>`  | `CapsuleColliderTemplate.cs`  | `Capsule`                     |
 
-A grep of the whole shipped `Content/` tree finds **zero** mesh/hull colliders. Triangle-mesh
+When this section was written (before 5261) a grep of the whole shipped `Content/` tree found **zero** mesh/hull colliders (5482: 55
+`<ConvexHull>`s, all on clutter rocks). Triangle-mesh
 collision exists only for _terrain_ (`BepuHandles.CreateTerrainPatch` builds a `BigCompound` of
 `Triangle`s) — engine-internal, not authorable part data.
 
@@ -247,15 +269,16 @@ Bepu isn't in the decomp, so the constructor semantics were confirmed against sh
 data vs. the actual GLB mesh bounds (POSITION accessor min/max in
 `flexo-private-assets/assets/Meshes/*.glb`):
 
-| Shape                            | Semantics                                                                                                                                   | Evidence                                                                                                                                                                                                                     |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Box(LengthX, LengthY, LengthZ)` | **FULL extents** on local X/Y/Z                                                                                                             | `CoreElectricalA_Subpart_SolarPanelA_CellA`: mesh AABB `0.80000 × 0.60000 × 0.02500`; collider Box `0.79467 × 0.59602 × 0.02531`. A half-extent reading would make it a 5 cm-thick, 1.6 m panel.                             |
-| `Cylinder(Radius, LengthY)`      | **Y-axis aligned**, FULL length                                                                                                             | `CoreLandingA_Subpart_MediumFootA`: mesh AABB `0.33671 × …`; collider `<LengthY M="0.34">`. And `CoreCommandA` sets `Collider2Asmb Z="1.57"` purely to lay a cylinder along **X** — only necessary if the default axis is Y. |
-| `Capsule(Radius, LengthY)`       | **Y-axis aligned**; `LengthY` is the _cylindrical segment_, hemispherical caps add `Radius` at each end ⇒ tip-to-tip = `LengthY + 2·Radius` | Bepu v2 convention. ⚠️ **No Core part uses `<Capsule>`** (0 occurrences) — the one semantic unverified in shipped data. Flagged for in-game A/B before capsules are advertised.                                              |
-| `Sphere(Radius)`                 | radius                                                                                                                                      | —                                                                                                                                                                                                                            |
+| Shape                            | Semantics                                                                                                                                   | Evidence                                                                                                                                                                                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Box(LengthX, LengthY, LengthZ)` | **FULL extents** on local X/Y/Z                                                                                                             | `CoreElectricalA_Subpart_SolarPanelA_CellA`: mesh AABB `0.80000 × 0.60000 × 0.02500`; collider Box `0.79467 × 0.59602 × 0.02531`. A half-extent reading would make it a 5 cm-thick, 1.6 m panel.                                          |
+| `Cylinder(Radius, LengthY)`      | **Y-axis aligned**, FULL length                                                                                                             | `CoreLandingA_Subpart_MediumFootA`: mesh AABB `0.33671 × …`; collider `<LengthY M="0.34">`. And `CoreCommandA` sets `Collider2Asmb Z="1.57"` purely to lay a cylinder along **X** — only necessary if the default axis is Y.              |
+| `Capsule(Radius, LengthY)`       | **Y-axis aligned**; `LengthY` is the _cylindrical segment_, hemispherical caps add `Radius` at each end ⇒ tip-to-tip = `LengthY + 2·Radius` | Bepu v2 convention. Core parts author five (`CoreLandingAAssets.xml` ×2, `CorePropulsionAAssets.xml` ×2, the `KittenBackPackPart` in `PartGameData.xml`); the segment-plus-caps reading is still the one semantic not A/B-tested in game. |
+| `Sphere(Radius)`                 | radius                                                                                                                                      | —                                                                                                                                                                                                                                         |
 
-Shape usage across all of `Content/`: **Cylinder 66 · Box 29 · Sphere 21 · Capsule 0** (89
-`<Collider>` components total). Cylinder is the workhorse and flexo's default shape.
+Shape usage across all of `Content/` when this section was written: **Cylinder 66 · Box 29 · Sphere 21 · Capsule 0** (89
+`<Collider>` components total); by 5482 Core parts also author five capsules, and ground clutter
+authors many more capsules plus convex hulls. Cylinder is the workhorse and flexo's default shape.
 
 ---
 
@@ -331,17 +354,17 @@ placement of that template**, in the **template's local frame**.
 
 ## 5. Runtime behaviour
 
-| Behaviour                                                                                                                                                                       | Source                                                           | Consequence for authoring                                                                                                                                                                                       |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A vehicle's collision body is a Bepu `BigCompound` of **every** `ColliderModule` in the vehicle, positioned relative to the centre of mass                                      | `Vehicle.cs:1508-1521`, `CreateColliderCompound` `:1633`         | A part with no collider contributes **nothing**: it passes through terrain and other vehicles.                                                                                                                  |
-| **Fallback when a vehicle has zero colliders**: one `Box` from the _render_ bounds                                                                                              | `Vehicle.cs:1523-1556`, `BepuHandles.Create`                     | A single collider-less part still collides via a crude box; add one collider anywhere in the vehicle and every collider-less part becomes non-collidable.                                                       |
-| `_props.BoundingBoxAsmb` / `GeometricCenterAsmb` / `BoundingSphereRadiusBody` derive **from the collider compound** when colliders exist                                        | `Vehicle.cs:1514-1520`                                           | An oversized collider inflates the vehicle bounding box (and the physics-radius bounding sphere). Bloat costs more than "invisible wall".                                                                       |
-| A collider is positioned as `PositionPartAsmb.Transform(Parent.Asmb2VehicleAsmb) + Parent.PositionVehicleAsmb`                                                                  | `ColliderModule.cs:38-42`                                        | Rotation of the owning subpart applies; **scale never does** (gotcha 1).                                                                                                                                        |
-| **Animated subparts refresh their colliders**: `KeyframeAnimationModule.ApplyAnimationTransforms` sets `NeedsColliderUpdate`; `ConstraintSim.UpdateShape` rebuilds the compound | `KeyframeAnimationModule.cs:359-364`, `ConstraintSim.cs:226-253` | **A SubPart-owned collider follows joint animation** — unlike connectors, which cannot ([connectors-coordinates-iva.md](connectors-coordinates-iva.md)). This is how landing legs get a deployed foot collider. |
-| A contact's sub-shape index maps back to the owning `Part`                                                                                                                      | `VehicleUpdateState.TryGetContactPart:438`                       | Contact attribution (damage, sound, docking) depends on _which_ part owns the touching collider.                                                                                                                |
-| **Docking requires collider contact**: `TryGetContactDockingPort` resolves the contacted collider → its `Part` → a `DockingPort` module                                         | `ConstraintSim.cs:762, 861-878`                                  | ⚠️ **A docking-port part with no collider never docks.** Core's `CoreCouplingA` port carries a `<Cylinder LengthY 0.4 Radius 0.5>` puck at the docking face for exactly this reason.                            |
-| Each vehicle is ONE dynamic body; a Bepu compound never self-collides. Kinematic/static pairs are filtered out                                                                  | `NarrowPhaseCallbacks.cs:22-47`                                  | **Overlapping colliders within a part are free.** Overlap is the _normal_ way to build a composite shape — no need to seam them.                                                                                |
-| Colliders contribute **zero mass** (`PartTemplate.CalculateMass` sums only `InertMasses` + tanks + grain)                                                                       | `PartTemplate.cs:622-648`                                        | Collider size never affects mass or inertia. Mass stays a `<CustomMass>` / mass-primitive concern.                                                                                                              |
+| Behaviour                                                                                                                                                                       | Source                                                                                        | Consequence for authoring                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A vehicle's collision body is a Bepu `BigCompound` of **every** `ColliderModule` in the vehicle, positioned relative to the centre of mass                                      | `Vehicle.UpdateCollisionGeometry` (`Vehicle.cs:1944` @5482), `CreateColliderCompound` `:2075` | A part with no collider contributes **nothing**: it passes through terrain and other vehicles.                                                                                                                  |
+| **Fallback when a vehicle has zero colliders**: one `Box` from the _render_ bounds                                                                                              | `Vehicle.UpdateCollisionGeometry` (else branch), `BepuHandles.Create`                         | A single collider-less part still collides via a crude box; add one collider anywhere in the vehicle and every collider-less part becomes non-collidable.                                                       |
+| `_props.BoundingBoxAsmb` / `GeometricCenterAsmb` / `BoundingSphereRadiusBody` derive **from the collider compound** when colliders exist                                        | `Vehicle.UpdateCollisionGeometry` (`:1959-1971` @5482)                                        | An oversized collider inflates the vehicle bounding box (and the physics-radius bounding sphere). Bloat costs more than "invisible wall".                                                                       |
+| A collider is positioned as `PositionPartAsmb.Transform(Parent.Asmb2VehicleAsmb) + Parent.PositionVehicleAsmb`                                                                  | `ColliderModule.cs:38-42`                                                                     | Rotation of the owning subpart applies; **scale never does** (gotcha 1).                                                                                                                                        |
+| **Animated subparts refresh their colliders**: `KeyframeAnimationModule.ApplyAnimationTransforms` sets `NeedsColliderUpdate`; `ConstraintSim.UpdateShape` rebuilds the compound | `KeyframeAnimationModule.cs:359-364`, `ConstraintSim.cs:226-253`                              | **A SubPart-owned collider follows joint animation** — unlike connectors, which cannot ([connectors-coordinates-iva.md](connectors-coordinates-iva.md)). This is how landing legs get a deployed foot collider. |
+| A contact's sub-shape index maps back to the owning `Part`                                                                                                                      | `VehicleUpdateState.TryGetContactPart` (`:647` @5482)                                         | Contact attribution (damage, sound, docking) depends on _which_ part owns the touching collider.                                                                                                                |
+| **Docking requires collider contact**: `TryGetContactDockingPort` resolves the contacted collider → its `Part` → a `DockingPort` module                                         | `ConstraintSim.TryGetContactDockingPort` (`:1393`, called at `:1273` @5482)                   | ⚠️ **A docking-port part with no collider never docks.** Core's `CoreCouplingA` port carries a `<Cylinder LengthY 0.4 Radius 0.5>` puck at the docking face for exactly this reason.                            |
+| Each vehicle is ONE dynamic body; a Bepu compound never self-collides. Kinematic/static pairs are filtered out                                                                  | `NarrowPhaseCallbacks.cs:22-57` @5482                                                         | **Overlapping colliders within a part are free.** Overlap is the _normal_ way to build a composite shape — no need to seam them.                                                                                |
+| Colliders contribute **zero mass** (`PartTemplate.CalculateMass` sums only `InertMasses` + tanks + grain)                                                                       | `PartTemplate.cs:622-648`                                                                     | Collider size never affects mass or inertia. Mass stays a `<CustomMass>` / mass-primitive concern.                                                                                                              |
 
 ---
 

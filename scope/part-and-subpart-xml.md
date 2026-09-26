@@ -5,9 +5,12 @@
 > other feature hangs off. Read alongside [docs/xml-io.md](../docs/xml-io.md) and
 > [docs/subpart-catalog.md](../docs/subpart-catalog.md) (the flexo-internal view).
 
-**Baseline:** KSA build **2026.9.10.5438** — geometry/XML schema unchanged from 5402;
-crash-tolerance derivation now uses subtree inert mass and summed collider volume. See
-[What changed in 5438](#what-changed-in-5438).
+**Baseline:** KSA build **2026.9.22.5482** — `PartTemplate`, `SubPartTemplate` and the editor-tag
+registry are byte-identical; the one XML content change is `CoreFairingAGameData.xml` turning seven
+nosecones/adapters into fuel tanks, two of them with the new `<ConicalTank>` shape (modeled, see
+[gamedata-modules.md](gamedata-modules.md#what-changed-in-5482) and
+[What changed in 5482](#what-changed-in-5482)). At 5438 the crash-tolerance derivation moved to
+subtree inert mass and summed collider volume ([What changed in 5438](#what-changed-in-5438)).
 
 At **2026.9.7.5402**, `PartTemplate` gained the geometry-root attribute
 `CrashTolerance` (gap **U1**, modeled) and `<SubPartGroup>` (gap **U3**, no consumer yet), and Core
@@ -162,7 +165,7 @@ redeclaration described in
 `<SubPartGameData Id="T">` ONCE GLOBALLY per template id** — `PartGameDataReference.OnDataLoad`
 (which `SubPartGameDataReference` inherits verbatim) tries `ModLibrary.Register(this)` and, on
 the duplicate, MERGES itself into the already-registered one via `ApplyGameData`; the `Part`
-ctor's `ModuleList.CreateModules` (`decomp/KSA/Part.cs:1220`) then instantiates every module
+ctor's `ModuleList.CreateModules` (`decomp/KSA/Part.cs:1538` @5482) then instantiates every module
 the merged template holds at EVERY placement of `T` (the rationale comment lives at
 `src/state/editorStore.ts:834-852`, key sentence at `:839-840`; it is the same fact behind the
 multi-light-import fix). Without the token, two parts placing the same built-in template would
@@ -176,7 +179,7 @@ emits each `Id` **once** across all parts (first entry wins). Position does not 
 reaction references resolve AFTER all mod data has loaded: `CombustorTemplate.Create(Part)`
 calls `SubstanceLibrary.GetReactionOrThrow(Reaction.Hash, Reaction.Id)`
 (`decomp/KSA/CombustorTemplate.cs:65-67`), and `SubstanceLibrary.LoadAll()` runs in the
-`Loading.Task("Substances")` block (`decomp/KSA/Program.cs:956-960`) — so a
+`Loading.Task("Substances")` block (`decomp/KSA/Program.cs:1057-1061` @5482) — so a
 `<Combustor><Reaction Id>` may legally precede the `<FixedReaction>` it names. Registration is
 itself first-wins (`SerializedCollection.Register` → `ConcurrentDictionary.TryAdd`,
 `decomp/KSA/SerializedCollection.cs:20-34` — a second declaration under a live id is silently
@@ -207,6 +210,23 @@ registration ship the wrong mesh.
 - Connector `<Flags>` live on `<PartGameData>`, **not** on the geometry `<Part>` — without the GameData merge, `ToSurface`/etc. are lost.
 - A `<Part>` with no matching `<PartGameData>` has no tags/modules → invisible in the part picker.
 - `DockingPort` parses only the current child-element form (`<ConnectorId Value>`, `<LatchingKineticEnergy J>`, `<PushoffImpulse Ns>`) — no legacy fallback; see [gamedata-modules.md](gamedata-modules.md).
+
+## What changed in 5482
+
+**Verdict: INTACT.** `PartTemplate`, `SubPartTemplate`, `PartInstance`, `PartGameDataReference`,
+`SubPartGameDataReference`, `ModuleList`, `EditorTagDefinition`, `EditorTag`,
+`CoreEditorTagsGameData.xml` and `PartStructuralLimits` are byte-identical, so `ApplyGameData`,
+`ApplyOrAddSubPartInstance`, module-id uniqueness, `<Part CrashTolerance>` and the static
+`EDITOR_TAG_DEFS` snapshot all stand. `Part.cs` changed at runtime only: the constructor attaches
+SubParts through `TryAttachSubPart` (same module folding) and no longer builds a part tree, and
+`RayCastEgo` gained a whole-part bounding-sphere early-out. `PartArchetypes.cs` is the editor
+part-list tooltip builder, not tags or categories. `SerializedCollection` gained `Deregister`
+for runtime-generated distant glints only; first-wins `Register` is unchanged.
+
+Content: rev 5475 rewrote seven `CoreFairingAGameData.xml` blocks (tags `Interstage` +
+`Coupling`/`Structural` → `Fuel Tanks`, new `BulkFluid` connectors, two `<Decoupler>`s removed,
+new id-less `<Tank>`s). Tags are freeform and every element was already modeled except
+`<ConicalTank>`, the one fix this build needed (gap **W1**). The file is now a vendored fixture.
 
 ## What changed in 5438
 

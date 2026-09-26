@@ -62,6 +62,7 @@ import {
   createDefaultMaterial,
   createEmptyGameData,
   createSubPartGameData,
+  createTank,
   meshKind,
 } from '../ksa/types';
 import { normalizeSegmentEasing } from '../ksa/easing';
@@ -539,10 +540,12 @@ function decRawNodes(v: unknown): RawXmlNode[] {
 
 interface CTank {
   l: number; // lengthM
-  r: number; // outerRadiusM
+  r: number; // outerRadiusM (a conical tank's base radius)
   w: number; // wallThicknessMm
   m?: string; // wallMaterialId (omitted when the default aluminium)
   sph?: 1; // shape: present ⇒ Spherical (Cylindrical is the default)
+  con?: 1; // shape: present ⇒ Conical
+  rt?: number; // radiusTopM (conical tanks only)
   ra?: string; // roleAffinity (omitted at the Engine default)
   id?: string; // <Tank Id> feed-container id (omitted when unnamed)
   lo?: Triple; // locationAsmb (omitted at 0,0,0)
@@ -552,6 +555,10 @@ function encTank(t: Tank): CTank {
   const o: CTank = { l: round(t.lengthM), r: round(t.outerRadiusM), w: round(t.wallThicknessMm) };
   if (t.wallMaterialId && t.wallMaterialId !== DEFAULT_TANK_MATERIAL) o.m = t.wallMaterialId;
   if (t.shape === 'Spherical') o.sph = 1;
+  if (t.shape === 'Conical') {
+    o.con = 1;
+    o.rt = round(t.radiusTopM);
+  }
   if (t.roleAffinity !== 'Engine') o.ra = t.roleAffinity;
   if (t.id.trim()) o.id = t.id;
   if (!isZeroVec(t.locationAsmb)) o.lo = encVec(t.locationAsmb);
@@ -569,10 +576,11 @@ function decTank(c: CTank): Tank {
   return {
     id: str(c.id),
     locationAsmb: decVec(c.lo, 0),
-    shape: c.sph ? 'Spherical' : 'Cylindrical',
+    shape: c.sph ? 'Spherical' : c.con ? 'Conical' : 'Cylindrical',
     wallMaterialId: c.m != null ? str(c.m) : DEFAULT_TANK_MATERIAL,
     lengthM: num(c.l),
     outerRadiusM: num(c.r),
+    radiusTopM: c.rt != null ? num(c.rt) : createTank().radiusTopM,
     wallThicknessMm: num(c.w),
     roleAffinity:
       c.ra != null && TANK_ROLE_AFFINITIES.has(str(c.ra))

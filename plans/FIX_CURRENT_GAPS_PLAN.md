@@ -1,15 +1,36 @@
 # Plan — Fix flexo gaps from KSA updates (running)
 
-> **Latest review: `2026.9.7.5402` → `2026.9.10.5438`.** The upgrade re-ports the
-> solid-motor preview, refreshes Core exhaust ids, updates crash-tolerance guidance, and
-> refreshes the real-data fixtures. Full evidence and validation are in
-> [KSA_5438_REVIEW.md](KSA_5438_REVIEW.md); every changed/added/removed file is routed in
-> [KSA_5438_FILE_AUDIT.md](KSA_5438_FILE_AUDIT.md). Changes remain uncommitted.
+> **Latest review: `2026.9.10.5438` → `2026.9.22.5482`.** One real gap: Core's new
+> `<Tank><ConicalTank>` shape, which flexo dropped whole; it is now modeled end-to-end. Everything
+> else is intact or documentation. Full evidence and validation are in
+> [KSA_5482_REVIEW.md](KSA_5482_REVIEW.md); every changed/added/removed file is routed in
+> [KSA_5482_FILE_AUDIT.md](KSA_5482_FILE_AUDIT.md). Changes remain uncommitted.
 >
 > Historical authoring gaps remain separate: U2 parachute editing, U3 unused SubPart groups,
 > T1 alpha materials on Part rendering, T2 Terrain on Part models, T3 geometry-side primary
 > sequencing, T4 current kitten MMU, S1 convex-hull colliders, S2 geometry-side grab anchors,
 > and R1 the old cartoon-moon scaffold. A clean new-build contract review does not close them.
+
+## 5482 review — `2026.9.10.5438` → `2026.9.22.5482`
+
+| ID | Severity | Outcome / current implementation |
+| --- | --- | --- |
+| W1 | MISSING-CAPABILITY (silent data loss) | **FIXED.** `Tank.TemplateData` gained `[XmlElement("ConicalTank", typeof(ConicalTankTemplate))]` (`<Length>`, `<DomeHeightFraction>`, `<RadiusBase>`, `<RadiusTop>`, `<WallThickness>` + the inherited volumetric-mass fields), and Core authors it on `CoreFairingA_Prefab_NoseconeE`/`NoseconeG`. `'Tank'` is a modeled child, so the passthrough never saw it and `tanksFromElement` matched only the two old shapes: the tank vanished on import → export. `TankShape` gained `'Conical'` and `Tank` gained `radiusTopM` (`src/ksa/types.ts:515,546,1428`); parse `src/ksa/partXmlParser.ts:489-527`; emit `src/ksa/partXmlSerializer.ts:630`; codec `con`/`rt` `src/state/projectCodec.ts:547-590`; Scale Everything `src/state/editorStore.ts:2558`; shape switch seeds equal radii `:2919`; default fill `src/state/projectStore.ts:236,258`; Tanks section `src/ui/data/sections/TanksSection.tsx:113`. Regressions: `partXmlParser.test.ts:1428`, `partCatalog.test.ts:395` (new vendored `CoreFairingAGameData.xml`), `projectCodec.test.ts:590`, `editorStore.test.ts:1051`, `projectStore.test.ts:780`. |
+| W2 | NONE (tank field coverage, pre-existing) | `<DomeHeightFraction>` (cylinder and cone, default 1/√2) and a tank's `<Paf2Asmb>` remain unmodeled for every shape; Core authors neither on a tank. Model them only when a Core or user part needs them. |
+| W3 | SCHEMA-DRIFT (additive, scaffold only) | `<ClutterObject AngularDamping>` (float, default 0; `ApplyGameData` always overwrites it from `<ClutterObjectGameData>`) and `<GroundClutterMaterial><KeepBackfaceNormals>` (default false). Both inert for the scaffold; documented in `scope/ground-clutter.md`. Code only when R1 is rebuilt. |
+| W4 | SCHEMA-DRIFT (docs only) | The ecotype `Name` is now the save key for destroyed and displaced clutter (`GroundClutterRenderer.DeserializeSave`): duplicate names on one body, or renaming/removing an ecotype, make save loads throw. A rebuilt scaffold must keep names unique and stable; ICRP's verbatim Earth clone is fine. |
+| W5 | COSMETIC (in-game look) | Rev 5472 fixed the ambient BRDF lookup (`Shaders/Common/Lighting.glsl`, `(dotNV, roughness)`); exported materials and ICRP statics shade differently from 5482 on. Documented in `docs/texturing.md`, `docs/custom-assets.md`, `scope/custom-assets-and-mod-export.md`, `scope/static-objects.md` (fact 12), `apps/icrp/VERIFICATION.md` ([V1]/[V1b] re-run). |
+| W6 | COSMETIC (stale citations) | Part render state moved from `PartModelModule.UpdateRenderData` to `PartTreeRenderData.cs`; several older line citations had drifted. Refreshed across `scope/`, `docs/`, `analysis/` and `src/ksa/colliderValidation.ts` comments; the upgrade-ksa skill's engine row no longer lists `CombustionTable`/`RocketControllerData` as ported. |
+
+**Persistence:** `radiusTopM` is additive with a constructor default that is inert for the
+existing cylindrical and spherical tanks, so `PROJECT_SCHEMA_VERSION = 4` and
+`PROJECT_EXPORT_VERSION = 11` stay unchanged; `normalizePart` fills it. Projects that imported
+the seven changed CoreFairingA parts before 5482 keep their old (still valid) decoupler data; no
+purge or conversion.
+
+**Validation:** see the gate results in [KSA_5482_REVIEW.md](KSA_5482_REVIEW.md).
+
+---
 
 ## 5438 review — `2026.9.7.5402` → `2026.9.10.5438`
 

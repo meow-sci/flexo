@@ -105,13 +105,13 @@ Three game facts force that shape, and none of them is a preference:
 
 - **One `<PartModel>` = one `<Mesh>` + one `<Material>`, and only primitive 0 is drawn.**
   `PartModelModule.Template` carries a single `Mesh` + `Material`
-  (`decomp/KSA/PartModelModule.cs:17-35`); `MeshReference` loads every primitive but the part path
+  (`decomp/KSA/PartModelModule.cs:17-43`); `MeshReference` loads every primitive but the part path
   renders `DeviceMeshesInterleaved[0]` with one bound material
-  (`decomp/KSA/MeshReference.cs:58,76-118`, `decomp/KSA/PartModel.cs:400-418`). A multi-material
-  object therefore **must** split at import.
+  (`decomp/KSA/MeshReference.cs:64,82-135`, `decomp/KSA/PartModel.cs:493-531` `WriteInstancesToGpu`,
+  texture binds at `:518-522`). A multi-material object therefore **must** split at import.
 - **glTF node transforms are ignored.** KSA's atlas loader iterates `GltfJson.Meshes[]` and never
   walks the node graph — a mesh registers purely by `meshes[i].name`
-  (`decomp/KSA/MeshAtlasFileReference.cs:22-49`). A node's world matrix has to become either baked
+  (`decomp/KSA/MeshAtlasFileReference.cs:26-50`). A node's world matrix has to become either baked
   geometry or a flexo placement; it can never ride along in the GLB.
 - **Mesh names are a global namespace.** `MeshAtlasFileReference.DoLoad` registers every mesh into
   `ModLibrary` by name, so every emitted SubPart id is `flexo_<Sanitized(name)>_<hash8>` — the
@@ -151,7 +151,7 @@ is also the identity a **replace** matches on, that distinction is load-bearing,
   three's `decompose` folds a mirror into `scale.x`, the geometry is transformed and its triangle
   winding reversed, and the placement keeps the positive-scale remainder. A negative placement
   scale would reverse winding in-game and back-face-cull the whole piece invisible
-  (`CullMode = BackBit` is unconditional, `decomp/KSA/PartModelRenderer.cs:165`).
+  (`CullMode = BackBit` is unconditional, `decomp/KSA/PartModelRenderer.cs:196`).
   **Handedness is therefore part of the group identity** (`importPlan.ts`): a bake is a single
   matrix, so a group holding both handednesses could only fix one of them and would leave the
   others negative-scaled. Mirroring one of four copies of a strut yields 2 SubParts (3
@@ -297,9 +297,9 @@ An imported mesh is just another `meshKind()` case in the export bundle builder
   only `if (prim.Indices.HasValue)` (`decomp/RenderCore.Gltf/GltfUtils.cs:484-488`), so a
   de-indexed mesh draws and picks nothing, silently and with no load error.
 - **A `<subPartId>_VM` picking mesh beside it, decimated.** In-game hover runs
-  `Part.RayCastEgoSubPart` (`decomp/KSA/Part.cs:1854-1887`) → `Ray.RaycastWatertight`
-  (`decomp/KSA/Ray.cs:194-213`), a plain triangle loop over the view mesh **de-indexed at load**
-  into one `double3` (24 B) per index (`decomp/KSA/MeshReference.cs:87-95`) — per SubPart, per
+  `Part.RayCastEgoSubPart` (`decomp/KSA/Part.cs:2574-2609`) → `Ray.RaycastWatertight`
+  (`decomp/KSA/Ray.cs:207-278`), a plain triangle loop over the view mesh **de-indexed at load**
+  into one `double3` (24 B) per index (`decomp/KSA/MeshReference.cs:96-104`) — per SubPart, per
   hover frame. So the bundle builder passes `viewMeshBudget: 2000` and `exportGlb` replaces the
   `_VM` index buffer with a meshopt-simplified one over the **same vertex arrays**: POSITION /
   NORMAL / TEXCOORD_0 ride along untouched, the mesh stays indexed, and the render mesh is never
@@ -330,7 +330,9 @@ An imported mesh is just another `meshKind()` case in the export bundle builder
 
 Several Core SubParts — the `CoreIVASpaceA_*` / `CoreIVAPropA_*` cockpit fittings — carry
 `<Internal>true</Internal>`, KSA's *interior-only* flag: the mesh renders in the IVA camera and
-nowhere else (`PartModel.cs`'s `!Template.Internal || viewport.Mode == IVA` gate). Placing one
+nowhere else (the `!Template.Internal || viewport.Mode == IVA` gate, which since 5482 exists in two
+places with the same condition: `PartTreeRenderData.cs:1300` on the normal path and
+`PartModel.cs:486` on the ray-traced path). Placing one
 in flexo and exporting used to run **the old automatic interior-prop rewrite**: every such
 placement was re-homed onto a redeclared SubPart variant that dropped `<Internal>` (and, as a
 latent bug, `<RayTracing>`), so the prop rendered in the exterior view. That was right for
@@ -430,7 +432,7 @@ is collected; an asset created and never assigned is never a candidate.
 - **No alpha cutout.** `alphaMode: MASK` has no equivalent in KSA's part shader — bake the cutout
   into the geometry.
 - **Single-sided only.** `CullMode = BackBit` is unconditional
-  (`decomp/KSA/PartModelRenderer.cs:165`) and there is **no double-sided flag anywhere in the
+  (`decomp/KSA/PartModelRenderer.cs:196`) and there is **no double-sided flag anywhere in the
   XML**, so "make double-sided" has to duplicate + flip the geometry — twice the triangles, twice
   the picking cost.
 - **Translucency is one fixed shader.** `alphaMode: BLEND` can only become `<PartModelGlass>`:

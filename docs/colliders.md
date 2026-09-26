@@ -260,13 +260,15 @@ KSA XML.
 
 ## Deliberate limits
 
-- **No convex-hull / mesh colliders** — KSA cannot represent them.
+- **No convex-hull colliders** — KSA accepts `<ConvexHull>` since 5261, but flexo does not model
+  it (gap S1; see the note at the top of this page).
 - **No per-placement colliders** — KSA cannot represent them. A SubPart-owned collider
   applies to every instance of that template.
 - **Placement scale is not honoured**, matching the game. flexo warns instead of silently
   compensating.
-- **Capsule semantics are unverified in shipped data** — Core uses zero capsules. The
-  implementation follows the Bepu v2 convention; confirm in-game before relying on it.
+- **Capsule semantics are not A/B-tested in game** — Core parts do author a few capsules (landing
+  gear, two propulsion parts, the kitten backpack), and the implementation follows the Bepu v2
+  convention; confirm in-game before relying on exact tip-to-tip lengths.
 - **Automatic decomposition** (feed it a mesh, get N optimal primitives) is out of scope.
 - **Mass is untouched.** Colliders contribute none; mass stays a `<CustomMass>` concern.
 

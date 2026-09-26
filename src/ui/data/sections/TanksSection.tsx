@@ -110,6 +110,7 @@ function TankCard({ owner, tank, index }: { owner: TankOwner; tank: Tank; index:
             onChange={(k) => setTankShape(owner, index, k as TankShape)}
           >
             <ListBoxItem id="Cylindrical">Cylindrical</ListBoxItem>
+            <ListBoxItem id="Conical">Conical</ListBoxItem>
             <ListBoxItem id="Spherical">Spherical</ListBoxItem>
           </Select>
         </Field>
@@ -123,7 +124,7 @@ function TankCard({ owner, tank, index }: { owner: TankOwner; tank: Tank; index:
             onChange={(v) => patch({ wallMaterialId: v })}
           />
         </Field>
-        {tank.shape === 'Cylindrical' && (
+        {tank.shape !== 'Spherical' && (
           <Field label="Length (m)">
             <PreciseNumberInput
               aria-label="Tank length in meters"
@@ -134,15 +135,30 @@ function TankCard({ owner, tank, index }: { owner: TankOwner; tank: Tank; index:
             />
           </Field>
         )}
-        <Field label="Outer Radius (m)">
+        <Field label={tank.shape === 'Conical' ? 'Base Radius (m, −X end)' : 'Outer Radius (m)'}>
           <PreciseNumberInput
-            aria-label="Tank outer radius in meters"
+            aria-label={
+              tank.shape === 'Conical'
+                ? 'Tank base radius in meters'
+                : 'Tank outer radius in meters'
+            }
             value={tank.outerRadiusM}
             min={0}
             onInteractionStart={push}
             onCommit={(n) => patch({ outerRadiusM: n })}
           />
         </Field>
+        {tank.shape === 'Conical' && (
+          <Field label="Top Radius (m, +X end — KSA widens the base to at least this)">
+            <PreciseNumberInput
+              aria-label="Tank top radius in meters"
+              value={tank.radiusTopM}
+              min={0}
+              onInteractionStart={push}
+              onCommit={(n) => patch({ radiusTopM: n })}
+            />
+          </Field>
+        )}
         <Field label="Wall Thickness (mm)">
           <PreciseNumberInput
             aria-label="Tank wall thickness in millimeters"

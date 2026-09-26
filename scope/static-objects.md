@@ -6,8 +6,9 @@ Full evidence with decomp citations: [analysis/icrp/KSA_STATIC_OBJECTS.md](../an
 and [analysis/icrp/STATIC_ASSET_INVENTORY.md](../analysis/icrp/STATIC_ASSET_INVENTORY.md);
 plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (facts F1–F14).
 
-**Baseline:** re-verified against KSA build **2026.9.10.5438** — static schema, renderer and
-nearest-pad collider selection intact; see [What changed in 5438](#what-changed-in-5438).
+**Baseline:** re-verified against KSA build **2026.9.22.5482** — static schema, renderer and
+nearest-pad collider selection intact; the shared PBR ambient lookup was fixed (fact 12); see
+[What changed in 5482](#what-changed-in-5482).
 
 ## Contract facts ICRP bakes in
 
@@ -25,7 +26,7 @@ nearest-pad collider selection intact; see [What changed in 5438](#what-changed-
    NOT colliders** (`StaticObject.cs:195-196, 234`). `<Scale>` must always carry X/Y/Z
    (Vector3Reference missing-attr = 0) — inherited from flexo's serializer.
 4. **Assembly frame: +X = up (surface normal), +Y = east, +Z = north**
-   (`LocationReference.cs:148-177`, `ConstraintSim.cs:519-527`). The ONE mapping to three
+   (`LocationReference.cs:148-177`, `ConstraintSim.cs:550-647` @5482). The ONE mapping to three
    lives in `apps/icrp/src/three/basis.ts`. Vessel parts stack along +X, so vessel meshes
    stand upright unmodified.
 5. **`<PartModel>`/`<Collider>` are the vessel classes.** Static-only: `<Terrain>true</Terrain>`
@@ -40,10 +41,10 @@ nearest-pad collider selection intact; see [What changed in 5438](#what-changed-
    first-wins).
 7. **The three metres** — only consumers: `GroundOffset` lifts the whole frame
    (`LocationReference.cs:175`); `SurfaceHeight` only feeds spawn height
-   (`Vehicle.GetLaunchPadHeightAtDirCcf:3935-3959`: `GroundOffset+SurfaceHeight` within
+   (`Vehicle.GetLaunchPadHeightAtDirCcf`, `Vehicle.cs:4188-4212` @5482: `GroundOffset+SurfaceHeight` within
    `FootprintRadius`); `FootprintRadius` also drives clutter exclusion `+50 m` for at most
-   **4** launch-pad landmarks per body (`GroundClutterPlacementData.cs:126-155`).
-8. **Physics** (`StaticObject.cs:175-201`, `ConstraintSim.cs:479-537`): one kinematic
+   **4** launch-pad landmarks per body (`GroundClutterPlacementData.cs:348-376` @5482).
+8. **Physics** (`StaticObject.cs:175-201`, `ConstraintSim.cs:545-647` @5482): one kinematic
    compound per static; per vehicle only the **nearest** launch-pad landmark within
    **300 m**; zero colliders ⇒ vessels fall through (ICRP preflight I4).
 9. **Bundler conventions** (`KSA.GlbImport/StaticObjectAssetBundler.cs`, `GlbColliders.cs`,
@@ -73,6 +74,10 @@ nearest-pad collider selection intact; see [What changed in 5438](#what-changed-
     until the RoomEnvironment IBL was added (`catalogThumbs.ts` v2). Whether KSA renders
     the SAME piece brighter on a vessel in the same scene is an open in-game A/B ([V1b]).
     Practical guidance: prefer low-metal pieces for statics, or expect dark steel.
+    ⚠️ **Observed before KSA 5482's rev 5472**, which fixed `Shaders/Common/Lighting.glsl`
+    sampling the BRDF lookup with `1 − roughness` instead of `roughness` in
+    `getPBREnvironmentLightingPresampled` — the ambient path `StaticObject.frag` uses. Re-run
+    [V1]/[V1b] before relying on this fact.
 
 ## Break-surface (re-check on a game update)
 
@@ -87,6 +92,20 @@ registries + `AttachGameData`). `D/KSA.GlbImport/`: `StaticObjectAssetBundler.cs
 `C/Core/`: `CoreLaunchPad{A,B,C}Assets.xml`, `CoreLaunchPadAGameData.xml` (vendored
 byte-identical in `src/ksa/__fixtures__/`, drift-tested), `Shaders/Mesh/StaticObject.{vert,frag}`,
 `DefaultAssets.xml` (the static-object shader rows, since 5402 including `StaticObjectPrePassIndirectFrag`).
+
+## What changed in 5482
+
+**Verdict: INTACT; one in-game re-check.** Every static schema class (`StaticObjectTemplate`,
+`StaticSubObjectTemplate`, `StaticSubObjectInstance`, `StaticObjectGameDataReference`),
+`StaticObjectModel` (including `Bucket`), `StaticObjectRenderer`, `StaticObject.frag/.vert`,
+`GlbTransforms` and the Core launch-pad XML are byte-identical. `StaticObjectAssetBundler` only
+threads a `GltfLoader` through, and `GlbColliders` renames locals and calls the new
+`GlbHullValidation` (console warnings only), so the bundler output the golden tests mirror is
+unchanged. `ConstraintSim` pad selection (nearest within 300 m), `Vehicle.GetLaunchPadHeightAtDirCcf`
+and the at-most-four clutter exclusion zones (footprint + 50 m) are text-identical; rev 5465 only
+makes sleeping bodies skip the per-step terrain and pad refresh. Rev 5472's BRDF lookup fix in
+`Shaders/Common/Lighting.glsl` changes the ambient term statics use, so fact 12 needs the [V1]/[V1b]
+re-run. Line citations above were refreshed to 5482.
 
 ## What changed in 5438
 

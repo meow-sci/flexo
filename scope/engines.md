@@ -5,8 +5,10 @@
 > **BREAKING** for the live thrust/Isp readout. Read alongside [docs/engines.md](../docs/engines.md)
 > and [analysis/KSA_ENGINE_DETAILS.md](../analysis/KSA_ENGINE_DETAILS.md).
 
-**Baseline:** re-vetted against KSA build **2026.9.10.5438** (decomp @ 5438 + shipped Core XML).
-**Baseline status:** ✅ **CURRENT** — rev 5414 changed the solid-motor preview contract and
+**Baseline:** re-vetted against KSA build **2026.9.22.5482** (decomp @ 5482 + shipped Core XML).
+**Baseline status:** ✅ **CURRENT** — 5482 leaves every ported class and every engine data file
+byte-identical; rev 5464's `RocketControllerData.ComputeFromCores` refactor (not ported) gives the
+same numbers — see [What changed in 5482](#what-changed-in-5482). At 5438, rev 5414 changed the solid-motor preview contract and
 `solidMotorPhysics.ts` now follows the consolidated burn grid, trapezoidal reciprocal burn-time
 integration, interpolated quench endpoint, and unburnable-grain calculation. The current Core
 exhaust catalog also merges `EngineAVernier`/`EngineATurbine` into `EngineAAuxiliary`; the static
@@ -76,6 +78,42 @@ The follow-up field/UI audit is catalogued in
 manual ControlMap editing; grain inherited mass/density/orientation; reaction description;
 nozzle SoundEvent fields and ordered plume editing; and selected-rocket solid preview
 resolution. Additive constructor defaults preserve compatible saved projects.
+
+## What changed in 5482
+
+**Verdict: NONE.** No flexo engine code changes.
+
+- **Ported math is byte-identical.** `cmp` of the 5438 and 5482 decomp shows no change to
+  `DeLavalNozzleConfig`, `CombustorConfig`, `GasProperties`, `NozzlePerformance`, `RocketDesign`,
+  `EngineDesigner`, the nozzle/rocket/combustor templates, the reaction family, or the solid-motor
+  and grain-geometry set. The data files `Reactions.xml`, `GrainGeometries.xml`,
+  `SolidPropellants.xml`, `ExhaustAssets.xml`, `PlumeTrailAssets.xml` and
+  `CorePropulsion{A,B,C}GameData.xml` are byte-identical too. The constants still hold:
+  `Constants.cs` `STANDARD_GRAVITY = 9.80665` and `UNIVERSAL_GAS_CONSTANT = 8.31446261815324`,
+  and `101325f` for sea level. `RocketCoreConditions.cs`, also in the port's source list, only
+  gained the ImGui `DrawDesignInfo` method described below; its fields and math are unchanged, and
+  `GasConditions.cs`, `NozzleConditions.cs` and `RocketPerformance.cs` are byte-identical.
+- **Rev 5464 `RocketControllerData.ComputeFromCores` is a numerically identical refactor, and
+  flexo does not port it.** The centre-of-mass parameter is gone; the code it fed built a lever
+  arm and cross products that nothing read. A new overload evaluates two ambient pressures
+  against one shared `ComputeConditions` call; `PartTree.RecomputeRocketControls` passes 0 Pa
+  (vacuum) and 101325 Pa (sea level). The per-nozzle accumulation is unchanged.
+- **Rev 5440's in-game design-point readout matches flexo's preview.** `RocketNozzle.DrawDesignInfo`
+  evaluates the core's full-throttle design conditions (`Combustor.cs`, `Config.ComputeConditions(1f)`)
+  at 101325 Pa and 0 Pa and shows thrust, Isp (effective exhaust velocity ÷ 9.80665) and vacuum
+  mass flow; `RocketCoreConditions.DrawDesignInfo` shows chamber and exit pressure and
+  temperature. That is exactly `predictPerformance` in `enginePhysics.ts`, so the game's
+  part inspector and flexo's Engine panel now show the same numbers for the same data.
+- **Nozzle frames are unchanged.** `RocketNozzle.ResetState` (now `RocketNozzle.cs:278-288`) still
+  moves the location by `Parent.MatrixAsmb2VehicleAsmb` and the direction by the
+  `Parent.Asmb2VehicleAsmb` quaternion.
+- **Everything else in the engine area is runtime.** Lazy derived-data recomputation
+  (`DerivedData`, `PartTree.EnsureDerived`), the refill flag in `ResourceManager` (rev 5478),
+  exhaust deep compositing (rev 5458), and explosion retuning (`ExplosionAssets.xml`,
+  `ParticleEmitterAssets.xml`, rev 5454) do not reach any authored engine field.
+- **Correction to older entries.** The 5402 list below names `CombustionTable` (deleted at 4892)
+  and `RocketControllerData` as verbatim-ported; flexo ports neither. The solid-stack resolver is
+  `PartTree.RecomputeSolidMotorStacks` → `ResolveSolidMotorStack`, not `ResolveSolidMotorStacks`.
 
 ## What changed in 5438
 
@@ -244,15 +282,15 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   so flexo must NOT normalize them.
 - **The two exhaust vectors use DIFFERENT owner frames** — the trap that
   `Vector3.transformDirection` walks straight into. `RocketNozzle.ResetState`
-  (`decomp/KSA/RocketNozzle.cs:103-108`) transforms the LOCATION by
-  `Parent.MatrixAsmb2VehicleAsmb` (= `Scale · Rotation · Translation`, `Part.cs:217`) but the
-  DIRECTION by `Parent.Asmb2VehicleAsmb`, a bare **quaternion** (`Part.cs:644-656`). A
+  (`decomp/KSA/RocketNozzle.cs:278-288` @5482) transforms the LOCATION by
+  `Parent.MatrixAsmb2VehicleAsmb` (= `Scale · Rotation · Translation`, `Part.cs:740`) but the
+  DIRECTION by `Parent.Asmb2VehicleAsmb`, a bare **quaternion** (`Part.cs:724`). A
   non-uniform owner scale therefore skews the mesh but not the thrust axis. Also note
   `FxExhaustDirection` is transformed **un-negated** while `ThrustDirection` is negated.
   For the Part-space axis chooser, flexo applies the inverse of that owner quaternion to the
   chosen unit axis before writing owner-local `<ExhaustDirection X Y Z>` under
   `<DeLavalNozzle>` or `<SolidMotorNozzle>` (`Content/Core/CorePropulsionAGameData.xml`;
-  `decomp/KSA/RocketNozzleTemplate.cs:10-20`, `RocketNozzle.cs:248-257`). This makes the
+  `decomp/KSA/RocketNozzleTemplate.cs:10-20`, `RocketNozzle.cs:278-288`). This makes the
   selected placement's arrow follow the chosen Part axis while a reused template's other
   placements still follow their own rotations. The chooser does not change
   `<ExhaustLocation X Y Z>` or the game's default of local −X.
@@ -664,7 +702,7 @@ field and the two nozzle builders/parsers share one body so they cannot drift.
 `AsmbVolumetricMassTemplate.GetMassFromVolume` prefers Material, then Density, then Mass;
 these determine casing mass, not the propellant storage density used by the burn solve.
 
-⚠️ **`exitArea / 12` is only the SEED.** `PartTree.ResolveSolidMotorStacks` calls
+⚠️ **`exitArea / 12` is only the SEED.** `PartTree.RecomputeSolidMotorStacks` (via `ResolveSolidMotorStack`) calls
 `SolidMotor.ResizeNozzles()` whenever a motor's grain stack resolves, and that RE-DERIVES the
 area ratio from the peak burning area, clamped between bounds set by the reaction's
 `(MinimumBurnPressure·1.02 … MaxStablePressure)` window and floored at
@@ -720,7 +758,7 @@ differ between instances. The curve exposes the current `SolidMotor.ThrustCurveS
 `ThrustNewtons`, `IspSeconds`, and `ChamberPressurePascals` channels.
 
 **Deliberate scope limit:** a connector-fed stack can include other Parts
-(`PartTree.ResolveSolidMotorStacks`). Such a preview is unavailable in this single-Part
+(`PartTree.RecomputeSolidMotorStacks`). Such a preview is unavailable in this single-Part
 editor, rather than silently integrating only the local fraction of the stack.
 
 ### Solid reactions REQUIRE burn-rate data — BREAKING (crash-class)

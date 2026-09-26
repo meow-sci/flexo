@@ -1,7 +1,13 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { DOMParser } from '@xmldom/xmldom';
-import { mergeGameData, parseGameDataFile, parsePartsFile, type CatalogPart } from './partCatalog';
+import {
+  mergeGameData,
+  parseGameDataFile,
+  parsePartsFile,
+  type CatalogPart,
+  type PartGameData,
+} from './partCatalog';
 import { DEFAULT_LAYER_ID, createTank, IVA_SEAT_LAYER_ID } from './types';
 import {
   hasKsaAssets,
@@ -388,6 +394,35 @@ describe('parseGameDataFile + mergeGameData', () => {
     // Core 5018 declares BulkFluid on both of this prefab's connectors — without it no
     // main-engine propellant can cross, so it must survive the merge.
     expect(part.connectors.map((c) => c.capabilities)).toEqual([['BulkFluid'], ['BulkFluid']]);
+  });
+
+  // KSA 2026.9.22.5482 (rev 5475) turned Core's nosecones and adapters into fuel tanks, two of
+  // them with the new <ConicalTank> shape — which flexo's allow-list dropped whole before.
+  it('models the real CoreFairingA <ConicalTank> nosecones (vendored fixture)', () => {
+    const gameData = emptyGameData();
+    parseGameDataFile(parse(readVendoredAsset('CoreFairingAGameData.xml')), gameData);
+    const noseconeE = gameData.parts.get('CoreFairingA_Prefab_NoseconeE')!;
+    expect(noseconeE.editorTags).toEqual(['Fuel Tanks']);
+    expect(noseconeE.connectorCapabilities.get('_connector66')).toEqual(['BulkFluid']);
+    expect(noseconeE.tanks).toEqual([
+      {
+        ...createTank(),
+        shape: 'Conical',
+        wallMaterialId: 'Aluminum.2014(s)',
+        lengthM: 1.4735,
+        outerRadiusM: 1,
+        radiusTopM: 0.6843,
+        wallThicknessMm: 4,
+        locationAsmb: { x: -0.3661, y: 0, z: 0 },
+      },
+    ]);
+    // No <Tank> is left behind as an unmodeled child anywhere in the file.
+    const entries: PartGameData[] = [...gameData.parts.values()];
+    const shapes = entries.flatMap((p) => p.tanks.map((t) => t.shape));
+    expect(shapes.filter((s) => s === 'Conical')).toHaveLength(2);
+    for (const p of entries) {
+      expect(p.unknownChildren.map((n) => n.tag)).not.toContain('Tank');
+    }
   });
 
   // The electrical solar panel exercises the typed SubPart-module path: the SubPart's

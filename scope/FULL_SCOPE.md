@@ -33,10 +33,22 @@ update, this is the checklist you diff against to find what breaks flexo.**
 
 |                      | Build            | Snapshot                                                                                             |
 | -------------------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
-| **Verified against** | `2026.9.10.5438` | `ksa-game-assemblies/current` (git `93eb864`) + `flexo-private-assets/assets` (git `ed08bd5`, UASTC) |
-| Previous baseline    | `2026.9.7.5402`  | `ksa-game-assemblies_prev/current`; assemblies git `57e6040`                                         |
-| Baseline before that | `2026.8.22.5348` | assemblies git `c465abb`                                                                             |
+| **Verified against** | `2026.9.22.5482` | `ksa-game-assemblies/current` (git `a2f724f`) + `flexo-private-assets/assets` (git `dd8149a`, UASTC) |
+| Previous baseline    | `2026.9.10.5438` | `ksa-game-assemblies_prev/current`; assemblies git `93eb864`                                         |
+| Baseline before that | `2026.9.7.5402`  | assemblies git `57e6040`                                                                             |
 
+> **5482 review:** the supplied previous snapshot matches the verified 5438 baseline. The
+> comparison covers 150 changed, 35 added and 6 removed decompiled files (no path fell in the
+> Brutal/System/MIConvexHull/Planet namespaces), plus 33 changed and 3 added Content files. The
+> schema delta is five declarations: `<Tank><ConicalTank>` (Core authors it on two nosecones and
+> flexo dropped the whole tank — gap **W1**, fixed), two optional ground-clutter knobs
+> (`<ClutterObject AngularDamping>`, `<GroundClutterMaterial><KeepBackfaceNormals>`) and two
+> save-state classes. Every ported engine class and engine data file is byte-identical. Rev
+> 5472 fixed the game's ambient BRDF lookup, which changes how exported materials look in game
+> but no export requirement. See [the upgrade report](../plans/KSA_5482_REVIEW.md) and
+> [the per-file audit](../plans/KSA_5482_FILE_AUDIT.md). The private mirror was already at 5482
+> with all 70 non-character atlases UASTC; `CoreFairingAGameData.xml` joins the vendored fixtures.
+>
 > **5438 review:** the supplied previous snapshot matches the verified 5402 baseline.
 > The complete comparison covers 198 changed, 54 added and 5 removed C# files after the
 > namespace filter, plus 25 changed and 4 added Content files. Renames count as an addition
@@ -525,8 +537,12 @@ detail: [part-and-subpart-xml.md](part-and-subpart-xml.md#-master-invariant--fle
 
 ## Integration map (at a glance)
 
-Status reflects the `5402 → 5438` review. 🔴 breaking · 🟡 missing/drift · 📝 docs · ✅ intact.
-Existing authoring limitations remain explicit; they are not newly introduced by 5438.
+Status reflects the `5438 → 5482` review. 🔴 breaking · 🟡 missing/drift · 📝 docs · ✅ intact.
+Existing authoring limitations remain explicit; they are not newly introduced by 5482.
+
+**Superseded 5438 deltas:** _Engines_ → 🔴 **fixed in that review** (the solid burn-profile port);
+_Nozzle exhaust_ → 🟡 **fixed** (Core exhaust ids merged into `EngineAAuxiliary`); _Part/SubPart
+XML_ → 📝 (crash-tolerance guidance corrected). Every other row was intact at 5438.
 
 **Superseded 5402 deltas:** _Part/SubPart XML_ → 🟡 **fixed in this review** twice over
 (`<Part CrashTolerance>`, a geometry-root attribute `ApplyGameData` never merges — gap **U1**; and
@@ -582,22 +598,22 @@ the choice persists on `VehicleData`, so no flexo schema change — but connecto
 load-bearing for flight control; gap **R2**). Every other row re-verified ✅ against 5168, with all
 verbatim-ported physics classes confirmed byte-identical.
 
-| Area                                | Detail doc                                                         | Primary game anchors                                                                                                  | 5438 status                                                                                                                      |
-| ----------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Part / SubPart XML and catalog      | [part-and-subpart-xml.md](part-and-subpart-xml.md)                 | `PartTemplate`, `SubPartTemplate`, `PartStructuralLimits`, Core XML                                                   | Schema intact; crash-tolerance explanation updated to collider-volume density. Existing U3/T2/T3/S2 limits retained.             |
-| GameData modules                    | [gamedata-modules.md](gamedata-modules.md)                         | `Parachute.TemplateData`, mass templates, unit references                                                             | New `<PbrMaterialRef>` choices and stock mass geometry survive passthrough. U2 remains opaque to authoring.                      |
-| Engine physics and reactions        | [engines.md](engines.md)                                           | `SolidMotor`, `SolidGrainSegment`, `RocketControllerData`, reaction family                                            | Solid burn-profile port updated to 5438; liquid-engine equations and reaction data intact.                                       |
-| Nozzle exhaust                      | [engines.md](engines.md)                                           | `RocketNozzleTemplate`, `RocketNozzle`, `VolumetricExhaustTemplate`, `ExhaustAssets.xml`                              | Core exhaust identifiers refreshed; plume merging is runtime rendering.                                                          |
-| Animation                           | [animation.md](animation.md)                                       | `KeyframeAnimationData`, `KeyframeAnimationModule`, private GLBs                                                      | Intact; loaders and all ten animation GLBs unchanged.                                                                            |
-| Kittens                             | [kittens.md](kittens.md)                                           | `CharacterAssets.xml`, `KittenRenderable`, private Characters                                                         | Unchanged geometry and sockets; MMU label texture refreshed upstream. Historical T4 remains.                                     |
-| Custom assets and multi-part export | [custom-assets-and-mod-export.md](custom-assets-and-mod-export.md) | `PbrMaterialReference`, `MeshReference`, `PartModelRenderer`, `ThumbnailRenderResources`, `AssetBundle`, `ModLibrary` | Existing formats intact; material display names and runtime dent buffers add no Part export requirement. Historical T1 retained. |
-| Connectors, coordinates and IVA     | [connectors-coordinates-iva.md](connectors-coordinates-iva.md)     | `Part.Connector`, `QuaternionEx`, `IVAController`, `Control`                                                          | Intact; variable-name churn does not change basis or view clamps.                                                                |
-| Colliders                           | [colliders.md](colliders.md)                                       | `ColliderModule`, analytic collider templates, `Part`                                                                 | Existing geometry schema intact; new volume calculations feed crash tolerance. Historical ConvexHull gap S1 remains.             |
-| Static objects / ICRP               | [static-objects.md](static-objects.md)                             | `StaticObjectTemplate`, `StaticObjectRenderer`, `ConstraintSim`                                                       | Intact; nearest-within-300-metre collision selection re-verified.                                                                |
-| Launch sites / system mods          | [launch-sites.md](launch-sites.md)                                 | `LocationReference`, `DecalModifierReference`, `SystemTemplate`                                                       | XML intact; decal evaluation adds a distance guard. ICRP clones the current stock System/body data.                              |
-| Ground clutter                      | [ground-clutter.md](ground-clutter.md)                             | clutter schema / asset bundler                                                                                        | No new contract change; historical scaffold incompatibility R1 remains open.                                                     |
-| Plumbing and feeds                  | [plumbing-and-feeds.md](plumbing-and-feeds.md)                     | `ConsumerFeedWiring`, `PartFlowTopology`, `ResourceManager`, `FlowOrder`                                              | Authoring schema intact; game runtime drain/planner fixes require no editor solver port.                                         |
-| Light falloff and aim               | [gamedata-modules.md](gamedata-modules.md)                         | `LightModule`, `Lighting/Light`, `LightPrePass.comp`, `LightData.glsl`                                                | Ported formulas, units and pose rules intact.                                                                                    |
+| Area                                | Detail doc                                                         | Primary game anchors                                                                                                  | 5482 status                                                                                                                                            |
+| ----------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Part / SubPart XML and catalog      | [part-and-subpart-xml.md](part-and-subpart-xml.md)                 | `PartTemplate`, `SubPartTemplate`, `PartStructuralLimits`, Core XML                                                   | Schema intact; Core turned seven CoreFairingA nosecones/adapters into fuel tanks (tags, `BulkFluid` connectors). Existing U3/T2/T3/S2 limits retained. |
+| GameData modules                    | [gamedata-modules.md](gamedata-modules.md)                         | `Parachute.TemplateData`, mass templates, unit references                                                             | 🟡 **fixed:** new `<Tank><ConicalTank>` shape (gap W1) now modeled end-to-end. U2 remains opaque to authoring.                                         |
+| Engine physics and reactions        | [engines.md](engines.md)                                           | `SolidMotor`, `SolidGrainSegment`, `RocketControllerData`, reaction family                                            | Intact; every ported class and engine data file byte-identical. `ComputeFromCores` refactor (not ported) is numerically identical.                     |
+| Nozzle exhaust                      | [engines.md](engines.md)                                           | `RocketNozzleTemplate`, `RocketNozzle`, `VolumetricExhaustTemplate`, `ExhaustAssets.xml`                              | Intact; exhaust and plume-trail catalogs unchanged. Deep compositing and explosion changes are runtime rendering.                                      |
+| Animation                           | [animation.md](animation.md)                                       | `KeyframeAnimationData`, `KeyframeAnimationModule`, private GLBs                                                      | Intact; loader, module and all private animation GLBs unchanged.                                                                                       |
+| Kittens                             | [kittens.md](kittens.md)                                           | `CharacterAssets.xml`, `KittenRenderable`, private Characters                                                         | Intact; `KittenRenderable` draw plumbing only, socket math and character assets unchanged. Historical T4 remains.                                      |
+| Custom assets and multi-part export | [custom-assets-and-mod-export.md](custom-assets-and-mod-export.md) | `PbrMaterialReference`, `MeshReference`, `PartModelRenderer`, `ThumbnailRenderResources`, `AssetBundle`, `ModLibrary` | Export contract intact; 📝 rev 5472 BRDF fix changes in-game look of exported materials. Render state moved to `PartTreeRenderData`. T1 retained.      |
+| Connectors, coordinates and IVA     | [connectors-coordinates-iva.md](connectors-coordinates-iva.md)     | `Part.Connector`, `QuaternionEx`, `IVAController`, `Control`                                                          | Intact; seat keys survive the input refactor; `<Internal>` gate moved without changing its condition.                                                  |
+| Colliders                           | [colliders.md](colliders.md)                                       | `ColliderModule`, analytic collider templates, `Part`                                                                 | Schema intact; `<ConvexHull>` now reports a real volume. Historical ConvexHull gap S1 remains.                                                         |
+| Static objects / ICRP               | [static-objects.md](static-objects.md)                             | `StaticObjectTemplate`, `StaticObjectRenderer`, `ConstraintSim`                                                       | Intact; 📝 fact 12 (dark metal statics) needs an in-game re-run after the BRDF fix.                                                                    |
+| Launch sites / system mods          | [launch-sites.md](launch-sites.md)                                 | `LocationReference`, `DecalModifierReference`, `SystemTemplate`                                                       | Intact; `SolSystem.xml`/`Astronomicals.xml` unchanged; ecotype names are now save keys.                                                                |
+| Ground clutter                      | [ground-clutter.md](ground-clutter.md)                             | clutter schema / asset bundler                                                                                        | 📝 two optional knobs + ecotype-`Name` save rule documented; historical scaffold incompatibility R1 remains open.                                      |
+| Plumbing and feeds                  | [plumbing-and-feeds.md](plumbing-and-feeds.md)                     | `ConsumerFeedWiring`, `PartFlowTopology`, `ResourceManager`, `FlowOrder`                                              | Intact; every plumbing class byte-identical; Core's new `BulkFluid` fairing connectors use modeled tokens.                                             |
+| Light falloff and aim               | [gamedata-modules.md](gamedata-modules.md)                         | `LightModule`, `Lighting/Light`, `LightPrePass.comp`, `LightData.glsl`                                                | Intact; light classes and shaders byte-identical.                                                                                                      |
 
 > **The glTF contract is bidirectional and lives in one place.** flexo now both WRITES GLB
 > (mesh atlases) and READS it (the Blender model importer,
@@ -688,6 +704,8 @@ peakThroat, MinAreaRatioBound)`. The **low bound wins** where they cross, and th
   at load if the mesh has no volume. Only the ground-clutter rocks author it today, but it is
   schema-legal on a part, and flexo's `ColliderShape` union
   (`src/ksa/types.ts:127`) has exactly four members — so a part authoring one round-trips lossy.
+  (Since 5482 the hull reports its real volume, which feeds `Part.CrashTolerancePascals`; the
+  schema is unchanged.)
   Note `MeshColliderTemplate` itself is **not** authorable: `CreateShapeInto` throws
   `"cannot be registered with Bepu yet"` and `ColliderModule` declares no `<Mesh>` element.
 - **S2 — `<Grab>` anchors are opaque to the editor (🟡 MISSING-CAPABILITY) — 📋 OPEN.**

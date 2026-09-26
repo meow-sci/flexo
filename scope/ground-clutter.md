@@ -4,9 +4,12 @@
 > data-only KSA mod that adds a celestial body with `<GroundClutter>` (cards/meshes scattered
 > on the terrain), using **no custom game code**. Reference scaffold for clutter modding.
 
-**Baseline:** re-verified against KSA build **2026.9.10.5438** (decomp + shipped Core XML).
+**Baseline:** re-verified against KSA build **2026.9.22.5482** (decomp + shipped Core XML).
 **Baseline status:** 🔴 **HISTORICAL BREAKING GAP R1 — scaffold still uses pre-5168 XML.**
-The current clutter schema is unchanged from 5402, but `scripts/build-cartoon-moon.ts`
+5482 adds two optional clutter knobs (`<ClutterObject AngularDamping>`,
+`<GroundClutterMaterial><KeepBackfaceNormals>`) and makes the ecotype `Name` a save key — see
+[What changed in 5482](#what-changed-in-5482); the loader classes are otherwise byte-identical.
+`scripts/build-cartoon-moon.ts`
 still emits inline `<ClutterObject Name>` definitions and ecotype-level `<Material>` entries.
 The current loader requires top-level asset definitions and id references; see the current
 contract below and [What changed in 5168](#what-changed-in-5168). This is a pre-existing
@@ -20,12 +23,12 @@ scaffold limitation, not a new 5438 regression, and it does not affect the part 
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `scripts/build-cartoon-moon.ts` (Bun) | Packs PNGs → one shared KTX2 atlas + per-face GLB cards, then regenerates `ksa-mods/cartoon-moon/`: a Luna-clone `<PlanetaryBody Id="Looney">` whose `<GroundClutter>` has one `<Ecotype>` with one `<ClutterObject>` per face. Key fns: `groundClutterXml`, `clutterObjectXml`, `lodsXml`, `buildBodyXml`, `buildMod`. |
 
-## Game-side anchors (`decomp/KSA/`, `decomp/KSA.Terrain.Physics/`)
+## Game-side anchors (`decomp/KSA/`)
 
 | Concern                                 | Class                                                                                                                                                                                                                              | Schema                                                                                                                                                           |
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Clutter schema (authored)               | `ClutterEcotypeReference.cs`, `GroundClutterReference.cs`, `GroundClutterMaterialReference.cs`, `GroundClutterPlacementReference.cs`, `GroundClutterLodReference.cs`, `ClutterObjectTemplate.cs`, `ClutterOrientationReference.cs` | Top-level `<ClutterObject Id Atlas>` / `<GroundClutterMaterial Id>` assets; `<GroundClutter><Ecotype><Placement/><ClutterObject Id/>…</Ecotype></GroundClutter>` |
-| Render / physics (runtime, no `[Xml*]`) | `GroundClutterRenderer.cs`, `KSA.Terrain.Physics/ClutterEcotypePhysicalData.cs`                                                                                                                                                    | —                                                                                                                                                                |
+| Render / physics (runtime, no `[Xml*]`) | `GroundClutterRenderer.cs`, `ClutterEcotypePhysicalData.cs`                                                                                                                                                                        | —                                                                                                                                                                |
 
 ## The contract — what flexo bakes in
 
@@ -35,14 +38,18 @@ The current loader uses the asset bundler (`decomp/KSA/AssetBundle.cs`):
   exactly five `<LOD MinScreenSize CastShadows>` entries, optional `<Colliders>` containing
   `Box`/`Capsule`/`Cylinder`/`Sphere`/`ConvexHull`, and repeated
   `<Substance Id><Volume M3/></Substance>`. `<ClutterObjectGameData Id>` replaces its substance
-  list when nonempty. Collider mass is density × substance volume, scaled cubically at runtime.
-- Top-level `<GroundClutterMaterial Id>` assets carry the material definitions. A LOD contains
+  list when nonempty, and ALWAYS overwrites the optional `AngularDamping` attribute (5482; float,
+  default 0), so author that on the GameData element. Collider mass is density × substance volume, scaled cubically at runtime.
+- Top-level `<GroundClutterMaterial Id>` assets carry the material definitions (5482 adds an
+  optional `<KeepBackfaceNormals Value>`, default false, meaningful only with `<DoubleSided>`). A LOD contains
   one or more `<Mesh Id/>` references and ordered `<Material Id/>` references; `Path` is not
   part of the LOD mesh contract. `GroundClutterLodReference.BuildMaterialIndirection` requires
   the material count to match the **distinct atlas material indices used by its meshes**,
   ordered by increasing atlas index. Missing materials, concrete definitions in a LOD, and
   mismatched counts throw. Materials must be defined as assets, not inside the ecotype.
 - A body's `<GroundClutter><Ecotype Name>` references those assets with `<ClutterObject Id/>`.
+  Since 5482 the `Name` is the save key for destroyed and displaced clutter: it must be unique per
+  body and stable across mod versions (see [What changed in 5482](#what-changed-in-5482)).
   Its material list is derived by `ClutterEcotypeReference.PopulateMaterialReferences`, not
   authored. Optional `<CollisionType Value="None|PrimitiveList|Mesh">` defaults to None.
   `<Placement Biomes>` retains `ObjectSeparation M`, `GenerationRange M`, `MinScale/MaxScale`,
@@ -58,6 +65,39 @@ The scaffold's current old-form XML and spare-object workaround are historical i
 facts, **not valid current contract rules**. R1 requires replacing that generated form wholesale;
 no migration or dual-schema output. Current material-count and id rules supersede the 4892
 historical sections below.
+
+## What changed in 5482
+
+**Verdict: R1 unchanged; two optional knobs and one save rule, all documented, no code change.**
+The loader classes (`GroundClutterLodReference`, `ClutterEcotypeReference` schema,
+`AssetBundle`, `MeshAtlasFileReference`) are byte-identical; exactly five LODs, the LOD
+material-count rule, first-wins mesh names and the Opacity cutout all still hold.
+
+- **`<ClutterObject AngularDamping>`** (rev 5447, `ClutterObjectTemplate.cs`,
+  `[XmlAttribute("AngularDamping")] float`, default 0). `PoseIntegratorCallbacks` decays the spin
+  of clutter knocked loose from a collideable ecotype by `ω·exp(−rate·dt)`. Because
+  `ClutterObjectTemplate.ApplyGameData` assigns it unconditionally, a
+  `<ClutterObjectGameData>` entry always wins, even with 0; Core authors `0.5` on its tree
+  GameData entries while the bundler writes `AngularDamping="0"` on the asset. Inert for the
+  scaffold (no `<CollisionType>`).
+- **`<GroundClutterMaterial><KeepBackfaceNormals Value>`** (rev 5473,
+  `GroundClutterMaterialReference.cs`, `BoolReference`, default false). Sets the
+  `KEEP_BACKFACE_NORMALS` macro; `Shaders/Planet/GroundClutter/Solid.frag` then skips the
+  back-face normal flip and view bend on `DoubleSided` materials. Flat double-sided cards like the
+  scaffold's want the default.
+- **The ecotype `Name` is now a save key** (rev 5447/5459). Destroyed and displaced clutter is
+  saved per body under `universe.xml` (`CelestialSystemData.GroundClutter`,
+  `ClutterEcotypeSaveData` — save state, not asset schema). `GroundClutterRenderer.DeserializeSave`
+  builds a name → index map with `Dictionary.Add` and looks names up with no fallback: two
+  ecotypes with the same `Name` on one body (the default is `DefaultEcotype`) make every save load
+  throw, and renaming or removing an ecotype, or a body's whole `<GroundClutter>`, throws when an
+  older save loads. The scaffold's single `CartoonCrowd` ecotype and ICRP's verbatim Earth clone
+  are fine; a rebuilt scaffold must keep ecotype names unique and stable.
+- **Runtime only.** Impacts now displace clutter (75.5 J/kg) instead of destroying it (the destroy
+  threshold is now 1.5e13 J/kg, `BubbleClutterStatics.cs`); convex-hull volumes now feed clutter
+  inertia; baked ambient occlusion now applies to clutter (the scaffold's neutral ORM has AO 255).
+  `EarthTreesAssets.xml` gained root `<Capsule>` colliders and reuses its LOD 3 mesh at LOD 4, with
+  every id unchanged.
 
 ## What changed in 5438
 

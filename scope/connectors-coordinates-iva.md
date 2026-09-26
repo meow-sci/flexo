@@ -7,8 +7,10 @@
 > `<Internal>` flag) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
-**Baseline:** re-vetted against KSA build **2026.9.10.5438** (decomp @ 5438 + shipped Core XML).
-**Baseline status:** ✅ **INTACT** — the coordinate calibration survived rev 5067's deletion of
+**Baseline:** re-vetted against KSA build **2026.9.22.5482** (decomp @ 5482 + shipped Core XML).
+**Baseline status:** ✅ **INTACT** — 5482 changed no connector, seat, coordinate or `<Internal>`
+schema; the seat keys survived the input-binding refactor and the render gate moved without
+changing its condition (see [What changed in 5482](#what-changed-in-5482)). Earlier, the coordinate calibration survived rev 5067's deletion of
 `Double3Ex.Up/Forward/Right` (the vectors moved to `Camera.ForwardView`/`RightView`/`UpView` with
 identical values), the connector/`<Internal>` contracts are byte-identical, and 5117's crew
 feature — `<EVADoor SeatId>` + a load-bearing `<IVASeat Id>` — is now modeled at both ends (gaps
@@ -67,8 +69,8 @@ with its `<ConnectorRef>` ids remapped through the regenerated connector ids on 
 | Face-snapping / placement | `VehicleEditor.cs`, `EditorTag.cs`, `EditorTagDefinition.cs`                                                                                                                                                                                                                                                                                                                                                     | `<EditorTag Value>`, `<EditorTagDef …>`                                                       |
 | Decoupler                 | `DecouplerTemplate.cs`                                                                                                                                                                                                                                                                                                                                                                                           | `<Decoupler ConnectorId Force>`                                                               |
 | Docking port              | `DockingPortTemplate.cs`, `DockingPort.cs`                                                                                                                                                                                                                                                                                                                                                                       | `<DockingPort>` — **CHANGED, see gamedata-modules.md**                                        |
-| IVA render gate           | `PartModelModule.cs:35` (`<Internal>` bool — the ONLY `[XmlElement("Internal")]` in the decomp), `PartModel.cs:387` (the gate), `<RayTracing>` enum `{Disabled, Enabled, ShadowProxy}`, `<ShadowCaster>` bool                                                                                                                                                                                                    | `<PartModel><Internal>true</Internal><RayTracing>…</RayTracing></PartModel>`                  |
-| IVA seats                 | `IVASeat.cs` (`IVASeatTemplate : TemplateDataBase`; three `Vector3Reference` fields + `CreateComponents`), `IVAController.cs` (fixed-position free-look camera, the two view clamps, seat cycling), `Camera.cs:190-196` (`LookAtRotation` — orthonormalises), `Input.cs:337-339` (`C` = `IVASwitchToNextSeat`, `Shift+C` = `CameraMode`), `AttachedInternal.cs` (Core's interior-prefab indirection flexo skips) | `<IVASeat><Position X Y Z/><ForwardAxis X Y Z/><UpAxis X Y Z/></IVASeat>` on `<PartGameData>` |
+| IVA render gate           | `PartModelModule.cs:37` (`<Internal>` bool — the ONLY `[XmlElement("Internal")]` in the decomp), `PartModel.cs:486` + `PartTreeRenderData.cs:1300` (the gate, @5482), `<RayTracing>` enum `{Disabled, Enabled, ShadowProxy}`, `<ShadowCaster>` bool                                                                                                                                                              | `<PartModel><Internal>true</Internal><RayTracing>…</RayTracing></PartModel>`                  |
+| IVA seats                 | `IVASeat.cs` (`IVASeatTemplate : TemplateDataBase`; three `Vector3Reference` fields + `CreateComponents`), `IVAController.cs` (fixed-position free-look camera, the two view clamps, seat cycling), `Camera.cs:190-196` (`LookAtRotation` — orthonormalises), `Input.cs:214-215` (`C` = `IVASwitchToNextSeat`, `Shift+C` = `CameraMode`), `AttachedInternal.cs` (Core's interior-prefab indirection flexo skips) | `<IVASeat><Position X Y Z/><ForwardAxis X Y Z/><UpAxis X Y Z/></IVASeat>` on `<PartGameData>` |
 | Coordinate basis          | `Double3Ex.cs` (`Up=(0,1,0)`, `Right=(1,0,0)`, `Forward=(0,0,-1)`), `QuaternionEx.cs` (`CreateFromXyzRadians`)                                                                                                                                                                                                                                                                                                   | —                                                                                             |
 
 ## The contract — what flexo bakes in
@@ -155,8 +157,8 @@ child of `<PartGameData>`. Its ENTIRE authored schema is three vectors:
   one part in it carries at least one seat**; with zero seats `OnSwitchOn` calls
   `NextCameraMode()` and the mode is silently skipped (`IVAController.cs:164-169`). The seat list is
   **vehicle-wide** — seats from several parts concatenate. **Shift+C** cycles camera modes
-  `Orbit → Free → IVA → Orbit` (`Viewport.NextCameraMode`, `Input.cs:339`) and **C** cycles seats
-  (`InputAction.IVASwitchToNextSeat`, `Input.cs:337`). No `<Control/>`, `<EVADoor>`, tank, collider
+  `Orbit → Free → IVA → Orbit` (`Viewport.NextCameraMode`, `Input.cs:215` @5482) and **C** cycles seats
+  (`InputAction.IVASwitchToNextSeat`, `Input.cs:214`). No `<Control/>`, `<EVADoor>`, tank, collider
   or crew model is required — a bare part with one `<IVASeat>` is a valid IVA part.
 - **Four schema-legal authoring sites, two of them modeled.** `XmlHelper.cs:33-44` registers every
   `TemplateDataBase` element name against `PartTemplate.Components`, and
@@ -229,12 +231,12 @@ ported, and what is deliberately not:
 
 **`<Internal>` — interior-only geometry and export variants**
 
-- KSA render gate — `PartModel.cs:387`:
+- KSA render gate — `PartModel.cs:486`, and since 5482 also `PartTreeRenderData.cs:1300` (the normal draw path), with the same condition:
   `Template.RayTracing != ShadowProxy && (!Template.Internal || viewport.Mode == IVA)`.
   Read it carefully — IVA shows **both** the Internal models and everything else; outside IVA the
   Internal ones drop out. So `<Internal>` means **"interior-only"**, not "the interior layer".
 - ⚠️ **`<Internal>` exists ONLY on `<PartModel>`** — exactly one `[XmlElement("Internal")]` in the
-  whole decomp, `PartModelModule.cs:35`. `<PartModelGlass>` (`PartModelGlassModule`) has only
+  whole decomp, `PartModelModule.cs:37`. `<PartModelGlass>` (`PartModelGlassModule`) has only
   `<Mesh>`/`<Material>`/`<RayTracing>` (a **bool** there, not the enum)/`<ShadowCaster>`, and
   `<PartModelDynamic>` has none either ⇒ **KSA glass and dynamic models can never be interior-only.**
 - **flexo models it as user data, per SubPart TEMPLATE.** `EditingPart.internalFlags` (keyed by
@@ -321,6 +323,20 @@ follows the root part.
 8. **Interior geometry with no seat anywhere in the vehicle is invisible in EVERY camera mode** — `<Internal>` hides it outside IVA, and with no seat the IVA mode is never offered. This is the failure mode the deleted automatic rewrite used to mask.
 9. **`<IVASeat Id>` shares the feed-container id namespace** (`PartTemplate.AddResolvedFeed` scans every `Components[].Id`) **and, since 5117, is the target of `<EVADoor SeatId>`**. flexo models it as `IvaSeat.ksaId` and emits it only when the user authored one; ids minted by the "align this door to a seat" action (`setEvaDoorSeat`) are uniquified against that shared namespace — tank feed ids, solid grain-segment ids and the other seats' ids.
 10. **There is no in-game editor IVA preview.** The KSA vehicle editor has no IVA mode; the only in-game check is launch → **Shift+C** twice → **C** to cycle. This is why flexo ships its own seat preview (above) — and why that preview's honest limits matter.
+
+## What changed in 5482
+
+**Verdict: INTACT.** `IVASeat`, `EVADoorTemplate`, `DockingPortTemplate`, `QuaternionEx`,
+`Double3Ex`, `Control`, `ControlTemplate`, `FlightComputer` and `Ray` are byte-identical.
+`IVAController.cs` changed by one `in` keyword with no line shift, so `ivaLook.ts`'s port and its
+citations stand; `Camera.LookAtRotation` is unchanged. Rev 5449's input refactor (new
+`Binding`/`BindingValue`/`KeySource`/`MouseButtonSource`) keeps **C** on
+`IVASwitchToNextSeat` and **Shift+C** on the camera-mode cycle with exact-modifier matching
+(`Input.cs:214-215`). `VehicleEditor` still pins the root part to identity
+(`PartTree.NormalizeRootRotation`), and a grep for `controlpoint` / `control from here` /
+`referencetransform` finds only Vulkan's `PatchControlPoints`. The `<Internal>` render gate now
+exists in two places with the same condition (`PartModel.cs:486`, `PartTreeRenderData.cs:1300`),
+and the EVA door's `SeatId` → `IVASeat` link is unchanged (now resolved lazily).
 
 ## What changed in 5438
 
@@ -458,7 +474,7 @@ matches the supplied one.
 1. **No new authored schema.** `Control.cs` and `ControlTemplate.cs` are **byte-identical** — still
    empty markers with no transform or control-point field. The chosen control point is persisted
    **per vehicle**, not per part: `VehicleData` gained `[XmlElement("ControlPartId")] uint` and
-   `[XmlElement("ControlConnectorId")] string`, written in `Vehicle.cs:1154-1155` and resolved in
+   `[XmlElement("ControlConnectorId")] string`, written in `Vehicle.cs` (the save path, `:1240-1241` @5482) and resolved in
    `CelestialSystem.DeserializeSave`. flexo authors part templates, never `vehicle.xml`, so it has
    nothing to emit. The earlier grep-for-`controlpoint`/`referencetransform` guidance has now
    fired — this is the feature it was watching for, and it landed on the vehicle save, not the part.

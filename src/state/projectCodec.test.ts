@@ -587,6 +587,21 @@ describe('projectCodec round-trip', () => {
     expect(encodeProject(oneEnv(createEmptyPart())).v).toBe(11);
   });
 
+  it('round-trips a conical tank, carrying its top radius only for that shape', () => {
+    const p = createEmptyPart();
+    const cone = {
+      ...createTank(),
+      shape: 'Conical' as const,
+      outerRadiusM: 1,
+      radiusTopM: 0.6843,
+    };
+    p.gameData.tanks.push(cone, createTank());
+    const tk = encodeOne(p).g?.tk;
+    expect(tk?.[0]).toMatchObject({ con: 1, r: 1, rt: 0.6843 });
+    expect(tk?.[1]).toEqual({ l: 2, r: 0.5, w: 2 });
+    expect(roundTripOne(p).gameData.tanks).toEqual([cone, createTank()]);
+  });
+
   it('round-trips internalFlags and omits them when empty', () => {
     expect(encodeOne(createEmptyPart())).not.toHaveProperty('ifl');
     const p = createEmptyPart();

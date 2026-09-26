@@ -117,7 +117,7 @@ export function validateColliders(part: EditingPart): ColliderIssue[] {
   }
 
   // A vehicle with ZERO colliders falls back to one Box from the render bounds
-  // (Vehicle.cs:1523) — so a lone collider-less part still collides. Add ONE collider
+  // (Vehicle.UpdateCollisionGeometry) — so a lone collider-less part still collides. Add ONE collider
   // anywhere in the vehicle and every collider-less part becomes non-collidable.
   if (part.colliders.length === 0 && part.placements.length > 0) {
     warn(
@@ -128,7 +128,7 @@ export function validateColliders(part: EditingPart): ColliderIssue[] {
   }
 
   // Docking resolves the CONTACTED COLLIDER back to its Part, then looks for a DockingPort
-  // module on it (ConstraintSim.cs:861-878). No collider ⇒ no contact ⇒ it never docks.
+  // module on it (ConstraintSim.TryGetContactDockingPort). No collider ⇒ no contact ⇒ it never docks.
   if (part.gameData.dockingPort && part.colliders.length === 0) {
     warn(
       'collider-docking-port',

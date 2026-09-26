@@ -3,6 +3,7 @@ import {
   CONNECTOR_CAPABILITIES,
   createEmptyGameData,
   createSubPartGameData,
+  createTank,
   DEFAULT_LAYER_ID,
   isSubPartGameDataEmpty,
   IVA_SEAT_LAYER_ID,
@@ -481,32 +482,47 @@ function parseSolarPanel(el: Element): SolarPanel {
 }
 
 /**
- * Parses one `<Tank Id><CylindricalTank|SphericalTank>…</Tank>`. The container `Id`
- * lives on the WRAPPING `<Tank>` (it is a `Components` entry id, addressable by
+ * Parses one `<Tank Id><CylindricalTank|ConicalTank|SphericalTank>…</Tank>`. The container
+ * `Id` lives on the WRAPPING `<Tank>` (it is a `Components` entry id, addressable by
  * `<FeedsFrom Container>`); the geometry + `<LocationAsmb>` live on the shape element.
  */
 function tankFromElement(wrapper: Element, shapeEl: Element, shape: TankShape): Tank {
+  const conical = shape === 'Conical';
   return {
     id: wrapper.getAttribute('Id') ?? '',
     locationAsmb: readVec3Attrs(directChildren(shapeEl, 'LocationAsmb')[0], { x: 0, y: 0, z: 0 }),
     shape,
     wallMaterialId: directChildren(shapeEl, 'Material')[0]?.getAttribute('Id') ?? '',
     lengthM: readNum(directChildren(shapeEl, 'Length')[0], 'M') ?? 0,
-    outerRadiusM: readNum(directChildren(shapeEl, 'OuterRadius')[0], 'M') ?? 0,
+    outerRadiusM:
+      readNum(directChildren(shapeEl, conical ? 'RadiusBase' : 'OuterRadius')[0], 'M') ?? 0,
+    radiusTopM: conical
+      ? (readNum(directChildren(shapeEl, 'RadiusTop')[0], 'M') ?? 0)
+      : createTank().radiusTopM,
     wallThicknessMm: readNum(directChildren(shapeEl, 'WallThickness')[0], 'Mm') ?? 0,
     // <RoleAffinity> — which consumer kind the tank feeds (KSA 2026.7.5); absent ⇒ Engine.
     roleAffinity: readRoleAffinity(directChildren(shapeEl, 'RoleAffinity')[0]),
   };
 }
 
+/** `<Tank>` shape element → {@link TankShape}, in `Tank.TemplateData`'s declaration order. */
+const TANK_SHAPE_ELEMENTS: readonly (readonly [string, TankShape])[] = [
+  ['CylindricalTank', 'Cylindrical'],
+  ['ConicalTank', 'Conical'],
+  ['SphericalTank', 'Spherical'],
+];
+
 /** Parses every `<Tank>` child of a `<PartGameData>`/`<SubPartGameData>` element. */
 function tanksFromElement(parent: Element): Tank[] {
   const out: Tank[] = [];
   for (const tankEl of directChildren(parent, 'Tank')) {
-    const cylEl = directChildren(tankEl, 'CylindricalTank')[0];
-    const sphEl = directChildren(tankEl, 'SphericalTank')[0];
-    if (cylEl) out.push(tankFromElement(tankEl, cylEl, 'Cylindrical'));
-    else if (sphEl) out.push(tankFromElement(tankEl, sphEl, 'Spherical'));
+    for (const [name, shape] of TANK_SHAPE_ELEMENTS) {
+      const shapeEl = directChildren(tankEl, name)[0];
+      if (shapeEl) {
+        out.push(tankFromElement(tankEl, shapeEl, shape));
+        break;
+      }
+    }
   }
   return out;
 }

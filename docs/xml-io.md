@@ -68,13 +68,16 @@ Mirrors space-tape's `GameDataXmlSerializer.cs`. The popup-only metadata
     <PartGameData Id="..." DisplayName="My Tank">   <!-- DisplayName omitted when blank -->
         <EditorTag Value="Tanks"/>
         <CustomMass><Mass Kg="250"/></CustomMass>   <!-- omitted unless > 0 -->
-        <CylindricalTank>
-            <Material Id="Aluminum.2014(s)"/>
-            <Length M="3"/>                         <!-- cylinder only -->
-            <OuterRadius M="0.8"/>
-            <WallThickness Mm="2.5"/>
-        </CylindricalTank>
-        <SphericalTank> … </SphericalTank>          <!-- no <Length> -->
+        <Tank Id="Fuel">                            <!-- Id omitted when unnamed -->
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)"/>
+                <Length M="3"/>                     <!-- cylinder + cone only -->
+                <OuterRadius M="0.8"/>
+                <WallThickness Mm="2.5"/>
+            </CylindricalTank>
+        </Tank>
+        <Tank><ConicalTank> … <RadiusBase M="1"/><RadiusTop M="0.68"/> … </ConicalTank></Tank>
+        <Tank><SphericalTank> … </SphericalTank></Tank>  <!-- no <Length> -->
         <Battery><MaximumCapacity KWh="0.5"/></Battery>
         <Generator><Produced W="12"/></Generator>
         <PowerConsumer><Consumed W="3"/></PowerConsumer>

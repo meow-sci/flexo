@@ -305,8 +305,11 @@ the regression tests, and the highest-value checks. Each row's deep contract is 
 ### C. Engines — thrust/Isp physics · reactions · solid motors · nozzle exhaust — [`scope/engines.md`](../../../scope/engines.md) · [`docs/engines.md`](../../../docs/engines.md)
 
 - **Game anchors (ported VERBATIM — must stay byte-identical):** `DeLavalNozzleConfig.cs`,
-  `CombustorConfig.cs`, `GasProperties.cs`, `CombustionTable.cs`, `NozzlePerformance.cs`,
-  `RocketDesign.cs` / `RocketControllerData.cs`, `EngineDesigner.cs`; the reaction family
+  `CombustorConfig.cs`, `GasProperties.cs`, `NozzlePerformance.cs`, `RocketDesign.cs`,
+  `RocketCoreConditions.cs` / `GasConditions.cs` / `NozzleConditions.cs` / `RocketPerformance.cs`,
+  `EngineDesigner.cs` (the list in `src/ksa/enginePhysics.ts`'s header is authoritative;
+  `RocketControllerData.cs` is vehicle-level aggregation flexo does NOT port, and
+  `CombustionTable.cs` was deleted at 4892); the reaction family
   (`ReactionTemplate.cs`, `FixedReactionTable.cs`, `MixtureReactionTable.cs`) + `Reactions.xml`;
   solid motors (grain geometry / burn-rate classes, `AreaReference.cs`);
   `RocketNozzleTemplate.cs` (`OnDataLoad` FX fallback, `<ReactionPlume>`), `RocketNozzle.cs`

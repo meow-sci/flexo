@@ -807,7 +807,8 @@ design. Still deliberately out of scope:
   brightness. Revert point: the vkFormat mapping in `encodeKtx2.ts`.
 - **Red metallic button:** primitive + material (base color red, metal 1, rough
   ~0.15) → shiny red metal in-game; two meshes sharing the material must both render
-  (shared `<PbrMaterial>`).
+  (shared `<PbrMaterial>`). Judge the look on KSA 2026.9.22.5482 or later: rev 5472 fixed
+  the game's ambient BRDF lookup, which changes how smooth metals read.
 - **Normal-map orientation:** an asymmetric bump texture (arrow/dome) — confirm the
   X-flip convention reads correctly in-game.
 - **Imported model mod:** export a two-material Blender `.glb` → the mod loads with no

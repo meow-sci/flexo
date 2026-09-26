@@ -137,6 +137,7 @@ import {
   createGlow,
   createPartLight,
   createSubPartGameData,
+  createTank,
   identityTransform,
 } from '../ksa/types';
 import type { EditingPart } from '../ksa/types';
@@ -776,6 +777,10 @@ describe('normalization (default-fill, never conversion)', () => {
     stalePart.subPartGameData = [
       createSubPartGameData('Core.A') as unknown as Record<string, unknown>,
     ];
+    // A tank saved before <ConicalTank> (KSA 2026.9.22.5482) has no radiusTopM.
+    const preConicalTank: Record<string, unknown> = { ...createTank(), outerRadiusM: 0.8 };
+    delete preConicalTank.radiusTopM;
+    stalePart.gameData.tanks = [preConicalTank];
     stalePart.gameData.gimbals = [
       {
         subPartInstanceId: 'a_1',
@@ -841,6 +846,7 @@ describe('normalization (default-fill, never conversion)', () => {
       densityKgM3: null,
       paf2Asmb: { x: 0, y: 0, z: 0 },
     });
+    expect(part.gameData.tanks).toEqual([{ ...createTank(), outerRadiusM: 0.8 }]);
     expect(part.customReactions[0].description).toBe('');
     expect(part.gameData.gimbals[0]).toEqual({
       subPartInstanceId: 'a_1',

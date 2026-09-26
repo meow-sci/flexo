@@ -1,0 +1,136 @@
+---
+title: "react/jsx-boolean-value"
+rule: "react/jsx-boolean-value"
+category: "Style"
+version: "0.7.0"
+default: false
+type_aware: false
+fix: "fixable_fix"
+upstream: "https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-boolean-value.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | fixable_fix |
+| Type-aware | no |
+
+
+### What it does
+
+Enforce a consistent boolean attribute style in your code.
+
+### Why is this bad?
+
+In JSX, you can set a boolean attribute to `true` or omit it.
+This rule will enforce a consistent style for boolean attributes.
+
+### Examples
+
+Examples of **incorrect** code for this rule with default `"never"` mode:
+
+```jsx
+const Hello = <Hello personal={true} />;
+```
+
+Examples of **correct** code for this rule with default `"never"` mode:
+
+```jsx
+const Hello = <Hello personal />;
+
+const Foo = <Foo isSomething={false} />;
+```
+
+Examples of **incorrect** code for this rule with `"always"` mode:
+
+```jsx
+const Hello = <Hello personal />;
+```
+
+Examples of **correct** code for this rule with `"always"` mode:
+
+```jsx
+const Hello = <Hello personal={true} />;
+```
+
+## Configuration
+
+### The 1st option
+
+type: `"always" | "never"`
+
+#### `"always"`
+
+All boolean attributes must have explicit values.
+
+#### `"never"`
+
+All boolean attributes must omit values that are set to `true`.
+
+### The 2nd option
+
+This option is an object with the following properties:
+
+#### always
+
+type: `string[]`
+
+default: `[]`
+
+List of attribute names that should always have explicit boolean values.
+Only necessary when main mode is `"never"`.
+
+#### assumeUndefinedIsFalse
+
+type: `boolean`
+
+default: `false`
+
+If `true`, treats `prop={false}` as equivalent to the prop being `undefined`.
+When combined with `"never"` mode, this will enforce that the attribute is omitted entirely.
+
+```jsx
+// With "assumeUndefinedIsFalse": true
+<App foo={false} />; // Incorrect
+<App />; // Correct
+```
+
+This option does nothing in `"always"` mode.
+
+#### never
+
+type: `string[]`
+
+default: `[]`
+
+List of attribute names that should never have explicit boolean values.
+Only necessary when main mode is `"always"`.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "react/jsx-boolean-value": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "react/jsx-boolean-value": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.7.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-boolean-value.md)

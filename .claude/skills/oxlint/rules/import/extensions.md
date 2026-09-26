@@ -1,0 +1,293 @@
+---
+title: "import/extensions"
+rule: "import/extensions"
+category: "Restriction"
+version: "1.2.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/extensions.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Some file resolve algorithms allow you to omit the file extension within the import source path.
+For example the node resolver (which does not yet support ESM/import) can resolve ./foo/bar to the absolute path /User/someone/foo/bar.js because the .js extension is resolved automatically by default in CJS.
+Depending on the resolver you can configure more extensions to get resolved automatically.
+In order to provide a consistent use of file extensions across your code base, this rule can enforce or disallow the use of certain file extensions.
+
+### Why is this bad?
+
+ESM-based file resolve algorithms (e.g., the one that Vite provides) recommend
+specifying the file extension to improve performance. Without extensions, the
+bundler must check for various possible file extensions, which can slow down
+the build process on large projects. In addition, common ESM environments
+(such as browsers and Node.js) typically require fully specified relative imports,
+which means extensionless imports are not supported there.
+
+For personal preference and compatibility reasons, the rule also allows configuration
+to _disallow_ extensions in imports. This is generally not recommended, but it can be
+done if preferred.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+The following patterns are considered problems when configuration set to "always":
+
+```js
+import foo from "./foo";
+import bar from "./bar";
+import Component from "./Component";
+import foo from "@/foo";
+```
+
+The following patterns are considered problems when configuration set to "never":
+
+```js
+import foo from "./foo.js";
+import bar from "./bar.json";
+import Component from "./Component.jsx";
+import express from "express/index.js";
+```
+
+Examples of **correct** code for this rule:
+
+The following patterns are not considered problems when configuration set to "always":
+
+```js
+import foo from "./foo.js";
+import bar from "./bar.json";
+import Component from "./Component.jsx";
+import * as path from "path";
+import foo from "@/foo.js";
+```
+
+The following patterns are not considered problems when configuration set to "never":
+
+```js
+import foo from "./foo";
+import bar from "./bar";
+import Component from "./Component";
+import express from "express/index";
+import * as path from "path";
+```
+
+**Per-extension configuration examples**:
+
+```js
+// Configuration: { "vue": "always", "ts": "never" }
+import Component from "./Component.vue"; // ✓ OK - .vue configured as "always"
+import utils from "./utils"; // ✓ OK - .ts configured as "never"
+import styles from "./styles.css"; // ✓ OK - .css not configured, ignored
+
+// Configuration: ["ignorePackages", { "js": "never", "ts": "never" }]
+import foo from "./foo"; // ✓ OK - no extension
+import bar from "lodash/fp"; // ✓ OK - package import, ignored (ignorePackages sets this to true)
+```
+
+### Differences compared to `eslint-plugin-import`
+
+If you see differences between this rule implementation and the original `eslint-plugin-import`
+rule, please note that there are some intentional, inherent differences in the behavior of this
+rule and the original.
+
+Oxlint understands and can resolve TypeScript paths out-of-the-box. If your ESLint
+configuration did not include `eslint-import-resolver-typescript` or similar, then the original
+rule will not have been able to resolve TypeScript paths correctly, and so the behavior
+between ESLint and Oxlint may differ. Generally, this means that Oxlint will catch _more_
+valid violations than the original rule, though this depends on the specific configuration.
+
+Oxlint is also able to resolve multiple `tsconfig.json` files in a single repo, and so in a
+monorepo setup will be more capable with regards to resolving file paths.
+
+## Configuration
+
+This rule accepts three types of configuration:
+
+1. **Global rule** (string): `"always"`, `"never"`, or `"ignorePackages"`
+
+```jsonc
+{
+  "rules": {
+    // this would require extensions for all imports, *including from packages*
+    // e.g. `import React from 'react';` would be disallowed.
+    // You should generally always set `ignorePackages` to `true` when using `always`.
+    "import/extensions": ["error", "always"],
+  },
+}
+```
+
+2. **Per-extension rules** (object): `{ "js": "always", "jsx": "never", ... }`
+
+```jsonc
+{
+  "rules": {
+    "import/extensions": [
+      "error",
+      // per-extension rules:
+      // require extensions for .js imports and disallow them for .ts imports
+      { "js": "always", "ts": "never", "ignorePackages": true },
+    ],
+  },
+}
+```
+
+3. **Combined** (array): `["error", "always", { "js": "never" }]` or `["error", { "js": "always" }]`
+
+```jsonc
+{
+  "rules": {
+    "import/extensions": [
+      "error",
+      "always", // by default, require extensions for all imports
+      {
+        "ts": "never", // override the global value and disallow extensions on imports for specific file types
+        "ignorePackages": true,
+      },
+    ],
+  },
+}
+```
+
+**Default behavior (no configuration)**: All imports - of all kinds - pass.
+Unconfigured file extensions are ignored, to avoid false positives.
+
+This rule accepts a configuration object with the following properties:
+
+### checkTypeImports
+
+type: `boolean`
+
+default: `false`
+
+Whether to check type imports when enforcing extension rules.
+
+```ts
+// If checkTypeImports is `false`, we don't care about
+// whether these imports have file extensions or not, both are always allowed:
+import type { Foo } from "./foo";
+import type { Foo } from "./foo.ts";
+```
+
+### ignorePackages
+
+type: `boolean`
+
+default: `false`
+
+Whether to ignore package imports when enforcing extension rules.
+
+> [!IMPORTANT]
+> When setting this rule to `always`, you should also set `ignorePackages` to `true`.
+> Otherwise, package imports without extensions (such as `import React from 'react';`)
+> will be disallowed, which is not desirable and is not fixable.
+
+A boolean option (not per-extension) that exempts package imports from the "always" rule.
+
+Can be set in the config object: `["error", "always", { "ignorePackages": true }]`
+
+Legacy shorthand: `["error", "ignorePackages"]` is equivalent to `["error", "always", { "ignorePackages": true }]`
+
+- **With "always"**: When `true`, package imports (e.g., `lodash`, `@babel/core`) don't require extensions
+- **With "never"**: This option has no effect; extensions are still forbidden on package imports
+
+Example: `["error", "always", { "ignorePackages": true }]` allows `import foo from "lodash"` but requires `import bar from "./bar.js"`
+
+### pathGroupOverrides
+
+type: `array`
+
+default: `[]`
+
+Path group overrides for bespoke import specifiers.
+
+Array of pattern-action pairs for custom import protocols (monorepo tools, custom resolvers).
+Each override has: `{ "pattern": "<glob-pattern>", "action": "enforce" | "ignore" }`
+
+**Pattern matching**: Uses glob patterns (`*`, `**`, `{a,b}`) to match import specifiers.
+Note that the pattern matching is done in Rust with the fast-glob library, and so may differ
+from the JavaScript glob library used by the original ESLint rule.
+
+**Actions**:
+
+- `"enforce"`: Apply normal extension validation (respect global/per-extension rules)
+- `"ignore"`: Skip all extension validation for matching imports
+
+**Precedence**: First matching pattern wins.
+
+**Examples:**
+
+```json
+{
+  "pattern": "rootverse{*,*/**}",
+  "action": "ignore"
+}
+```
+
+Matches imports from `rootverse+debug:src`, `rootverse+bfe:src/symbols` and
+ignores whether or not they have an extension.
+
+#### pathGroupOverrides[n]
+
+type: `object`
+
+##### pathGroupOverrides[n].action
+
+type: `"enforce" | "ignore"`
+
+Action to take when pattern matches.
+
+Action to take for path group overrides.
+
+Determines how import extensions are validated for matching bespoke import specifiers.
+
+###### `"enforce"`
+
+Enforce extension validation for matching imports (require extensions based on config).
+
+###### `"ignore"`
+
+Ignore matching imports entirely (skip all extension validation).
+
+##### pathGroupOverrides[n].pattern
+
+type: `string`
+
+Glob pattern to match import specifiers. This uses Rust's fast-glob library for matching.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "import/extensions": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "import/extensions": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.2.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/extensions.md)

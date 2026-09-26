@@ -1,0 +1,82 @@
+---
+title: "eslint/no-unsafe-optional-chaining"
+rule: "eslint/no-unsafe-optional-chaining"
+category: "Correctness"
+version: "0.0.5"
+default: true
+type_aware: false
+fix: "none"
+upstream: "https://eslint.org/docs/latest/rules/no-unsafe-optional-chaining"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | yes |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Disallow use of optional chaining in contexts where the `undefined` value is not allowed.
+
+### Why is this bad?
+
+The optional chaining (`?.`) expression can short-circuit with a return value of `undefined`.
+Therefore, treating an evaluated optional chaining expression as a function, object, number, etc.,
+can cause TypeError or unexpected results. For example:
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+var obj = undefined;
+1 in obj?.foo; // TypeError
+with (obj?.foo); // TypeError
+for (bar of obj?.foo); // TypeError
+bar instanceof obj?.foo; // TypeError
+const { bar } = obj?.foo; // TypeError
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### disallowArithmeticOperators
+
+type: `boolean`
+
+default: `false`
+
+Disallow arithmetic operations on optional chaining expressions.
+If this is true, this rule warns arithmetic operations on optional chaining expressions, which possibly result in NaN.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/no-unsafe-optional-chaining": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/no-unsafe-optional-chaining": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.5.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/no-unsafe-optional-chaining)

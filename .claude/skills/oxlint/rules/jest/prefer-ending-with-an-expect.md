@@ -1,0 +1,156 @@
+---
+title: "jest/prefer-ending-with-an-expect"
+rule: "jest/prefer-ending-with-an-expect"
+category: "Style"
+version: "1.60.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/prefer-ending-with-an-expect.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Enforces that test blocks end with an assertion (`expect` or a configured
+assertion function).
+
+### Why is this bad?
+
+A test that doesn't end with an assertion may be performing side effects
+or setup after its last check, which makes the test harder to understand
+and can hide failures. Ending with an assertion ensures the test's final
+action is verifying behavior.
+
+### Examples
+
+Examples of **incorrect** code for this rule with default values:
+
+```js
+it("lets me change the selected option", () => {
+  const container = render(MySelect, {
+    props: { options: [1, 2, 3], selected: 1 },
+  });
+
+  expect(container).toBeDefined();
+  expect(container.toHTML()).toContain('<option value="1" selected>');
+
+  container.setProp("selected", 2);
+});
+```
+
+Examples of **correct** code for this rule with defaults values:
+
+```js
+it("lets me change the selected option", () => {
+  const container = render(MySelect, {
+    props: { options: [1, 2, 3], selected: 1 },
+  });
+
+  expect(container).toBeDefined();
+  expect(container.toHTML()).toContain('<option value="1" selected>');
+
+  container.setProp("selected", 2);
+
+  expect(container.toHTML()).not.toContain('<option value="1" selected>');
+  expect(container.toHTML()).toContain('<option value="2" selected>');
+});
+```
+
+Examples of **incorrect** code for this rule with `{ "assertFunctionNames": ["expect"] }`:
+
+```js
+import { expectSaga } from "redux-saga-test-plan";
+import { addSaga } from "../src/sagas";
+
+test("returns sum", () => {
+  expectSaga(addSaga, 1, 1).returns(2).run();
+});
+```
+
+Examples of **correct** code for this rule with `{ "assertFunctionNames": ["expect"] }`:
+
+```js
+import { expectSaga } from "redux-saga-test-plan";
+import { addSaga } from "../src/sagas";
+
+test("returns sum", () => {
+  expectSaga(addSaga, 1, 1).returns(2).run();
+});
+```
+
+Examples of **correct** code for this rule with `{ "additionalTestBlockFunctions": ["each.test"] }`:
+
+```js
+each([
+  [2, 3],
+  [1, 3],
+]).test("the selection can change from %d to %d", (firstSelection, secondSelection) => {
+  const container = render(MySelect, {
+    props: { options: [1, 2, 3], selected: firstSelection },
+  });
+
+  expect(container).toBeDefined();
+  expect(container.toHTML()).toContain(`<option value="${firstSelection}" selected>`);
+
+  container.setProp("selected", secondSelection);
+
+  expect(container.toHTML()).not.toContain(`<option value="${firstSelection}" selected>`);
+  expect(container.toHTML()).toContain(`<option value="${secondSelection}" selected>`);
+});
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### additionalTestBlockFunctions
+
+type: `string[]`
+
+default: `[]`
+
+An array of function names that should also be treated as test blocks.
+
+### assertFunctionNames
+
+type: `string[]`
+
+default: `["expect"]`
+
+A list of function names that should be treated as assertion functions.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "jest/prefer-ending-with-an-expect": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "jest/prefer-ending-with-an-expect": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.60.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/prefer-ending-with-an-expect.md)

@@ -1,0 +1,235 @@
+---
+title: "typescript/explicit-member-accessibility"
+rule: "typescript/explicit-member-accessibility"
+category: "Restriction"
+version: "1.61.0"
+default: false
+type_aware: false
+fix: "conditional_safe_fix_or_suggestion"
+upstream: "https://typescript-eslint.io/rules/explicit-member-accessibility/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | conditional_safe_fix_or_suggestion |
+| Type-aware | no |
+
+
+### What it does
+
+Require explicit accessibility modifiers on class properties and methods.
+
+### Why is this bad?
+
+TypeScript allows placing explicit `public`, `protected`, and `private`
+accessibility modifiers in front of class members. The modifiers exist
+solely in the type system and serve to describe who is allowed to access
+those members.
+
+Leaving off accessibility modifiers makes for less code to read and
+write. Members are `public` by default. However, adding explicit
+modifiers can make code more readable and explicit about who can use
+which properties.
+
+### Examples
+
+#### `{ "accessibility": "explicit" }` (default)
+
+Examples of **incorrect** code:
+
+```ts
+class Animal {
+  constructor(name: string) {}
+  animalName: string;
+  get name(): string {
+    return this.animalName;
+  }
+}
+```
+
+Examples of **correct** code:
+
+```ts
+class Animal {
+  public constructor(name: string) {}
+  private animalName: string;
+  public get name(): string {
+    return this.animalName;
+  }
+}
+```
+
+#### `{ "accessibility": "no-public" }`
+
+Examples of **incorrect** code:
+
+```ts
+class Animal {
+  public constructor(
+    public breed: string,
+    name: string,
+  ) {}
+  public animalName: string;
+  public get name(): string {
+    return this.animalName;
+  }
+}
+```
+
+Examples of **correct** code:
+
+```ts
+class Animal {
+  constructor(
+    protected breed: string,
+    name: string,
+  ) {}
+  private animalName: string;
+  get name(): string {
+    return this.animalName;
+  }
+}
+```
+
+#### `{ "overrides": { "constructors": "no-public" } }`
+
+Disallow the use of `public` on constructors while requiring explicit
+modifiers everywhere else.
+
+Examples of **incorrect** code:
+
+```ts
+class Animal {
+  public constructor(protected animalName: string) {}
+}
+```
+
+Examples of **correct** code:
+
+```ts
+class Animal {
+  constructor(protected animalName: string) {}
+  public get name(): string {
+    return this.animalName;
+  }
+}
+```
+
+#### `{ "accessibility": "no-public", "overrides": { "properties": "explicit" } }`
+
+Require explicit modifiers on properties while disallowing `public`
+everywhere else.
+
+Examples of **incorrect** code:
+
+```ts
+class Animal {
+  legs: number;
+  private hasFleas: boolean;
+}
+```
+
+Examples of **correct** code:
+
+```ts
+class Animal {
+  public legs: number;
+  private hasFleas: boolean;
+}
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### accessibility
+
+type: `"explicit" | "no-public" | "off"`
+
+Which accessibility modifier is required to exist or not exist.
+
+#### `"explicit"`
+
+Always require an accessibility modifier.
+
+#### `"no-public"`
+
+Require an accessibility modifier except when public.
+
+#### `"off"`
+
+Never check whether there is an accessibility modifier.
+
+### ignoredMethodNames
+
+type: `string[]`
+
+default: `[]`
+
+Specific method names that may be ignored.
+
+### overrides
+
+type: `object`
+
+Changes to required accessibility modifiers for specific kinds of class members.
+
+#### overrides.accessors
+
+type: `"explicit" | "no-public" | "off"`
+
+Which member accessibility modifier requirements to apply for accessors (getters/setters).
+
+#### overrides.constructors
+
+type: `"explicit" | "no-public" | "off"`
+
+Which member accessibility modifier requirements to apply for constructors.
+
+#### overrides.methods
+
+type: `"explicit" | "no-public" | "off"`
+
+Which member accessibility modifier requirements to apply for methods.
+
+#### overrides.parameterProperties
+
+type: `"explicit" | "no-public" | "off"`
+
+Which member accessibility modifier requirements to apply for parameter properties.
+
+#### overrides.properties
+
+type: `"explicit" | "no-public" | "off"`
+
+Which member accessibility modifier requirements to apply for properties.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/explicit-member-accessibility": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/explicit-member-accessibility": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.61.0.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/explicit-member-accessibility/)

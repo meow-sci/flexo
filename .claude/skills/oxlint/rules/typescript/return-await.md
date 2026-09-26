@@ -1,0 +1,137 @@
+---
+title: "typescript/return-await"
+rule: "typescript/return-await"
+category: "Pedantic"
+version: "1.12.0"
+default: false
+type_aware: true
+fix: "fixable_safe_fix_or_suggestion"
+upstream: "https://typescript-eslint.io/rules/return-await/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Pedantic |
+| Default | no |
+| Fix | fixable_safe_fix_or_suggestion |
+| Type-aware | yes |
+
+
+### What it does
+
+This rule enforces consistent returning of awaited values from async functions.
+
+### Why is this bad?
+
+There are different patterns for returning awaited values from async functions.
+Sometimes you want to await before returning (to handle errors in the current
+function), and sometimes you want to return the Promise directly (for better
+performance). This rule helps enforce consistency.
+
+### Examples
+
+Examples of **incorrect** code for this rule (depending on configuration):
+
+```ts
+// If configured to require await:
+async function fetchData() {
+  return fetch("/api/data"); // Should be: return await fetch('/api/data');
+}
+
+async function processData() {
+  return someAsyncOperation(); // Should be: return await someAsyncOperation();
+}
+
+// If configured to disallow unnecessary await:
+async function fetchData() {
+  return await fetch("/api/data"); // Should be: return fetch('/api/data');
+}
+
+async function processData() {
+  return await someAsyncOperation(); // Should be: return someAsyncOperation();
+}
+```
+
+Examples of **correct** code for this rule:
+
+```ts
+// When await is required for error handling:
+async function fetchData() {
+  try {
+    return await fetch("/api/data");
+  } catch (error) {
+    console.error("Fetch failed:", error);
+    throw error;
+  }
+}
+
+// When returning Promise directly for performance:
+async function fetchData() {
+  return fetch("/api/data");
+}
+
+// Processing before return requires await:
+async function fetchAndProcess() {
+  const response = await fetch("/api/data");
+  return response.json();
+}
+
+// Multiple async operations:
+async function multipleOperations() {
+  const data1 = await fetchData1();
+  const data2 = await fetchData2();
+  return data1 + data2;
+}
+```
+
+## Configuration
+
+This rule accepts one of the following string values:
+
+### `"in-try-catch"`
+
+Require `await` when returning Promises inside try/catch/finally blocks.
+This ensures proper error handling and stack traces.
+
+### `"always"`
+
+Require `await` before returning Promises in all cases.
+Example: `return await Promise.resolve()` is required.
+
+### `"error-handling-correctness-only"`
+
+Require `await` only when it affects error handling correctness.
+Only flags cases where omitting await would change error handling behavior.
+
+### `"never"`
+
+Disallow `await` before returning Promises in all cases.
+Example: `return Promise.resolve()` is required (no await).
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/return-await": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/return-await": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.12.0.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/return-await/)

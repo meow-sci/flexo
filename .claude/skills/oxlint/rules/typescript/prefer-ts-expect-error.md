@@ -1,0 +1,83 @@
+---
+title: "typescript/prefer-ts-expect-error"
+rule: "typescript/prefer-ts-expect-error"
+category: "Pedantic"
+version: "0.2.11"
+default: false
+type_aware: false
+fix: "fixable_fix"
+upstream: "https://typescript-eslint.io/rules/prefer-ts-expect-error/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Pedantic |
+| Default | no |
+| Fix | fixable_fix |
+| Type-aware | no |
+
+
+### What it does
+
+Enforce using @ts-expect-error over @ts-ignore.
+
+### Why is this bad?
+
+TypeScript allows you to suppress all errors on a line by placing a comment starting with @ts-ignore or @ts-expect-error immediately before the erroring line.
+The two directives work the same, except @ts-expect-error causes a type error if placed before a line that's not erroring in the first place.
+
+This means it's easy for @ts-ignores to be forgotten about, and remain in code even after the error they were suppressing is fixed.
+This is dangerous, as if a new error arises on that line it'll be suppressed by the forgotten about @ts-ignore, and so be missed.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```ts
+// @ts-ignore
+const str: string = 1;
+
+/**
+ * Explaining comment
+ *
+ * @ts-ignore */
+const multiLine: number = "value";
+```
+
+Examples of **correct** code for this rule:
+
+```ts
+/**
+ * Explaining comment
+ *
+ * @ts-expect-error */
+const multiLine: number = "value";
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/prefer-ts-expect-error": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/prefer-ts-expect-error": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.2.11.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/prefer-ts-expect-error/)

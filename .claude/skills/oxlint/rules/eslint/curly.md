@@ -1,0 +1,298 @@
+---
+title: "eslint/curly"
+rule: "eslint/curly"
+category: "Style"
+version: "0.15.13"
+default: false
+type_aware: false
+fix: "fixable_fix"
+upstream: "https://eslint.org/docs/latest/rules/curly"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | fixable_fix |
+| Type-aware | no |
+
+
+### What it does
+
+This rule enforces the use of curly braces `{}` for all control statements
+(`if`, `else`, `for`, `while`, `do`, `with`).
+It ensures that all blocks are enclosed in curly braces to improve code clarity and maintainability.
+
+### Why is this bad?
+
+Omitting curly braces can reduce code readability and increase the likelihood of errors, especially in deeply nested or indented code.
+It can also lead to bugs if additional statements are added later without properly enclosing them in braces.
+Using curly braces consistently makes the code safer and easier to modify.
+
+### Examples
+
+#### `"all"` (default)
+
+Examples of **incorrect** code for this rule:
+
+```js
+/* curly: ["error", "all"] */
+
+if (foo) foo++;
+while (bar) bar--;
+do foo();
+while (bar);
+```
+
+Examples of **correct** code for this rule:
+
+```js
+/* curly: ["error", "all"] */
+
+if (foo) {
+  foo++;
+}
+while (bar) {
+  bar--;
+}
+do {
+  foo();
+} while (bar);
+```
+
+#### `"multi"`
+
+Examples of **incorrect** code for this rule with the `"multi"` option:
+
+```js
+/* curly: ["error", "multi"] */
+
+if (foo) {
+  foo();
+}
+
+if (foo) bar();
+else {
+  foo();
+}
+```
+
+Examples of **correct** code for this rule with the `"multi"` option:
+
+```js
+/* curly: ["error", "multi"] */
+
+if (foo) foo();
+else bar();
+```
+
+#### `"multi-line"`
+
+Examples of **incorrect** code for this rule with the `"multi-line"` option:
+
+```js
+/* curly: ["error", "multi-line"] */
+
+if (foo) foo();
+else bar();
+
+if (foo) foo(bar, baz);
+```
+
+Examples of **correct** code for this rule with the `"multi-line"` option:
+
+```js
+/* curly: ["error", "multi-line"] */
+
+if (foo) foo();
+else bar();
+
+while (foo) foo();
+
+while (true) {
+  doSomething();
+  doSomethingElse();
+}
+```
+
+#### `"multi-or-nest"`
+
+Examples of **incorrect** code for this rule with the `"multi-or-nest"` option:
+
+```js
+/* curly: ["error", "multi-or-nest"] */
+
+while (true)
+  if (foo) foo();
+  else bar();
+
+if (foo) {
+  foo++;
+}
+```
+
+Examples of **correct** code for this rule with the `"multi-or-nest"` option:
+
+```js
+/* curly: ["error", "multi-or-nest"] */
+
+if (foo) {
+  if (bar) bar();
+}
+
+while (foo) {
+  while (bar) bar();
+}
+```
+
+#### `"consistent"`
+
+When enabled, `"consistent"` enforces consistent use of braces within an `if-else` chain.
+If one branch of the chain uses braces, then all branches must use braces, even if not strictly required by the first option.
+
+Examples of **incorrect** code with `"multi"` and `"consistent"`:
+
+```js
+/* curly: ["error", "multi", "consistent"] */
+
+if (foo) {
+  bar();
+  baz();
+} else qux();
+
+if (foo) bar();
+else {
+  baz();
+  qux();
+}
+```
+
+Examples of **correct** code with `"multi"` and `"consistent"`:
+
+```js
+/* curly: ["error", "multi", "consistent"] */
+
+if (foo) {
+  bar();
+  baz();
+} else {
+  qux();
+}
+
+if (foo) {
+  bar();
+} else {
+  baz();
+  qux();
+}
+```
+
+Examples of **incorrect** code with `"multi-line"` and `"consistent"`:
+
+```js
+/* curly: ["error", "multi-line", "consistent"] */
+
+if (foo) {
+  bar();
+} else baz();
+```
+
+Examples of **correct** code with `"multi-line"` and `"consistent"`:
+
+```js
+/* curly: ["error", "multi-line", "consistent"] */
+
+if (foo) {
+  bar();
+} else {
+  baz();
+}
+```
+
+Examples of **incorrect** code with `"multi-or-nest"` and `"consistent"`:
+
+```js
+/* curly: ["error", "multi-or-nest", "consistent"] */
+
+if (foo) {
+  if (bar) baz();
+} else qux();
+```
+
+Examples of **correct** code with `"multi-or-nest"` and `"consistent"`:
+
+```js
+/* curly: ["error", "multi-or-nest", "consistent"] */
+
+if (foo) {
+  if (bar) baz();
+} else {
+  qux();
+}
+```
+
+## Configuration
+
+Configuration for the curly rule, specified as an array of one or two elements.
+
+Examples:
+
+- `["all"]` - Require braces in all cases (default)
+- `["multi"]` - Require braces only for multi-statement blocks
+- `["multi-line"]` - Require braces for multi-line blocks
+- `["multi-or-nest"]` - Require braces for nested or multi-line blocks
+- `["multi", "consistent"]` - Multi mode with consistent braces in if-else chains
+
+### The 1st option
+
+type: `"all" | "multi" | "multi-line" | "multi-or-nest"`
+
+The enforcement type for the curly rule.
+
+#### `"all"`
+
+Require braces in all cases (default)
+
+#### `"multi"`
+
+Require braces only when there are multiple statements in the block
+
+#### `"multi-line"`
+
+Require braces when the block spans multiple lines
+
+#### `"multi-or-nest"`
+
+Require braces when the block is nested or spans multiple lines
+
+### The 2nd option
+
+type: `"consistent"`
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/curly": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/curly": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.15.13.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/curly)

@@ -1,0 +1,196 @@
+---
+title: "typescript/prefer-promise-reject-errors"
+rule: "typescript/prefer-promise-reject-errors"
+category: "Pedantic"
+version: "1.12.0"
+default: false
+type_aware: true
+fix: "none"
+upstream: "https://typescript-eslint.io/rules/prefer-promise-reject-errors/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Pedantic |
+| Default | no |
+| Fix | none |
+| Type-aware | yes |
+
+
+### What it does
+
+This rule enforces passing an Error object to `Promise.reject()`.
+
+### Why is this bad?
+
+It's considered good practice to only reject promises with Error objects. This is because Error objects automatically capture a stack trace, which is useful for debugging. Additionally, some tools and environments expect rejection reasons to be Error objects.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```ts
+Promise.reject("error"); // rejecting with string
+
+Promise.reject(42); // rejecting with number
+
+Promise.reject(true); // rejecting with boolean
+
+Promise.reject({ message: "error" }); // rejecting with plain object
+
+Promise.reject(null); // rejecting with null
+
+Promise.reject(); // rejecting with undefined
+
+const error = "Something went wrong";
+Promise.reject(error); // rejecting with non-Error variable
+```
+
+Examples of **correct** code for this rule:
+
+```ts
+Promise.reject(new Error("Something went wrong"));
+
+Promise.reject(new TypeError("Invalid type"));
+
+Promise.reject(new RangeError("Value out of range"));
+
+// Custom Error subclasses
+class CustomError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CustomError";
+  }
+}
+Promise.reject(new CustomError("Custom error occurred"));
+
+// Variables that are Error objects
+const error = new Error("Error message");
+Promise.reject(error);
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allow
+
+type: `array`
+
+default: `[]`
+
+An array of type or value specifiers for additional types that are allowed
+as Promise rejection reasons.
+
+#### allow[n]
+
+type: `object | string`
+
+Type or value specifier for matching specific declarations
+
+Supports four types of specifiers:
+
+1. **String specifier** (deprecated): Universal match by name
+
+```json
+"Promise"
+```
+
+2. **File specifier**: Match types/values declared in local files
+
+```json
+{ "from": "file", "name": "MyType" }
+{ "from": "file", "name": ["Type1", "Type2"] }
+{ "from": "file", "name": "MyType", "path": "./types.ts" }
+```
+
+3. **Lib specifier**: Match TypeScript built-in lib types
+
+```json
+{ "from": "lib", "name": "Promise" }
+{ "from": "lib", "name": ["Promise", "PromiseLike"] }
+```
+
+4. **Package specifier**: Match types/values from npm packages
+
+```json
+{ "from": "package", "name": "Observable", "package": "rxjs" }
+{ "from": "package", "name": ["Observable", "Subject"], "package": "rxjs" }
+```
+
+##### allow[n].from
+
+type: `"file"`
+
+Must be "file"
+
+##### allow[n].name
+
+type: `array | string`
+
+The name(s) of the type or value to match
+
+Name specifier that can be a single string or array of strings
+
+###### allow[n].name[n]
+
+type: `string`
+
+##### allow[n].path
+
+type: `string`
+
+Optional file path to specify where the types or values must be declared.
+If omitted, all files will be matched.
+
+### allowEmptyReject
+
+type: `boolean`
+
+default: `false`
+
+Whether to allow calling `Promise.reject()` with no arguments.
+
+### allowThrowingAny
+
+type: `boolean`
+
+default: `false`
+
+Whether to allow rejecting Promises with values typed as `any`.
+
+### allowThrowingUnknown
+
+type: `boolean`
+
+default: `false`
+
+Whether to allow rejecting Promises with values typed as `unknown`.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/prefer-promise-reject-errors": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/prefer-promise-reject-errors": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.12.0.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/prefer-promise-reject-errors/)

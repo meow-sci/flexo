@@ -1,0 +1,113 @@
+---
+title: "jsx-a11y/no-noninteractive-tabindex"
+rule: "jsx-a11y/no-noninteractive-tabindex"
+category: "Correctness"
+version: "0.15.4"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/no-noninteractive-tabindex.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+This rule checks that non-interactive elements don't have a tabIndex which would make them interactive via keyboard navigation.
+
+### Why is this bad?
+
+Tab key navigation should be limited to elements on the page that can be interacted with.
+Thus it is not necessary to add a tabindex to items in an unordered list, for example,
+to make them navigable through assistive technology.
+
+These applications already afford page traversal mechanisms based on the HTML of the page.
+Generally, we should try to reduce the size of the page's tab ring rather than increasing it.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```jsx
+<div tabIndex="0" />
+<div role="article" tabIndex="0" />
+<article tabIndex="0" />
+<article tabIndex={0} />
+```
+
+Examples of **correct** code for this rule:
+
+```jsx
+<div />
+<MyButton tabIndex={0} />
+<button />
+<button tabIndex="0" />
+<button tabIndex={0} />
+<div />
+<div tabIndex="-1" />
+<div role="button" tabIndex="0" />
+<div role="article" tabIndex="-1" />
+<article tabIndex="-1" />
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allowExpressionValues
+
+type: `boolean`
+
+default: `true`
+
+If `true`, allows tabIndex values to be expression values (e.g., variables, ternaries). If `false`, only string literal values are allowed.
+
+### roles
+
+type: `string[]`
+
+default: `["tabpanel"]`
+
+An array of ARIA roles that should be considered interactive.
+
+### tags
+
+type: `string[]`
+
+default: `[]`
+
+An array of custom HTML elements that should be considered interactive.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "jsx-a11y/no-noninteractive-tabindex": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "jsx-a11y/no-noninteractive-tabindex": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.15.4.
+
+## References
+
+- [Upstream rule documentation](https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/no-noninteractive-tabindex.md)

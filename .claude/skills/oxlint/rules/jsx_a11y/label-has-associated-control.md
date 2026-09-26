@@ -1,0 +1,142 @@
+---
+title: "jsx-a11y/label-has-associated-control"
+rule: "jsx-a11y/label-has-associated-control"
+category: "Correctness"
+version: "0.9.1"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/label-has-associated-control.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Enforce that a label tag has a text label and an associated control.
+
+### Why is this bad?
+
+A form label that either isn't properly associated with a form control (such as an `<input>`), or doesn't contain accessible text, hinders accessibility for users using assistive technologies such as screen readers. The user may not have enough information to understand the purpose of the form control.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```jsx
+function Foo(props) {
+    return <label {...props} />
+}
+
+<input type="text" />
+<label>Surname</label>
+```
+
+Examples of **correct** code for this rule:
+
+```jsx
+function Foo(props) {
+  const { htmlFor, ...otherProps } = props;
+
+  return <label htmlFor={htmlFor} {...otherProps} />;
+}
+
+<label>
+  <input type="text" />
+  Surname
+</label>;
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### assert
+
+type: `"htmlFor" | "nesting" | "both" | "either"`
+
+default: `"either"`
+
+The type of association required between the label and the control.
+
+#### `"htmlFor"`
+
+Assert that the label uses `htmlFor` to associate a control.
+
+#### `"nesting"`
+
+Assert that the label has a nested control
+
+#### `"both"`
+
+Assert that the label uses both `htmlFor` and nesting for associating a control
+
+#### `"either"`
+
+Assert that the label uses either `htmlFor` or nesting for associating a control
+
+### controlComponents
+
+type: `string[]`
+
+default: `[]`
+
+Custom JSX components to be treated as form controls.
+
+### depth
+
+type: `integer`
+
+default: `2`
+
+Maximum depth to search for a nested control.
+
+### labelAttributes
+
+type: `string[]`
+
+default: `["alt", "aria-label", "aria-labelledby"]`
+
+Attributes to check for accessible label text.
+
+### labelComponents
+
+type: `string[]`
+
+default: `["label"]`
+
+Custom JSX components to be treated as labels.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "jsx-a11y/label-has-associated-control": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "jsx-a11y/label-has-associated-control": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.9.1.
+
+## References
+
+- [Upstream rule documentation](https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/label-has-associated-control.md)

@@ -1,0 +1,171 @@
+---
+title: "react/only-export-components"
+rule: "react/only-export-components"
+category: "Restriction"
+version: "1.23.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/ArnaudBarre/eslint-plugin-react-refresh/blob/main/docs/only-export-components.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Ensures that modules only **export React components (and related HMR-safe items)** so
+that Fast Refresh (a.k.a. hot reloading) can safely preserve component state.
+Concretely, it validates the shape of your module’s exports and common entrypoints
+(e.g. `createRoot(...).render(<App />)`) to match what integrations like
+`react-refresh` expect.
+
+This rule is based on the rule from `eslint-plugin-react-refresh`.
+
+### Why is this bad?
+
+Fast Refresh can only reliably retain state if a module exports components and
+avoids patterns that confuse the refresh runtime. Problematic patterns (like
+`export *`, anonymous default functions, exporting arrays of JSX, or mixing
+non-component exports in unsupported ways) can cause:
+
+- Components to remount and lose state on edit
+- Missed updates (no refresh) or overly broad reloads
+- Fragile HMR behavior that differs between bundlers
+
+By enforcing predictable exports, edits stay fast and stateful during development.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```jsx
+// 1) Mixing util exports with components in unsupported ways
+export const foo = () => {}; // util, not a component
+export const Bar = () => <></>; // component
+```
+
+```jsx
+// 2) Anonymous default export (name is required)
+export default function () {}
+```
+
+```jsx
+// 3) Re-exporting everything hides what’s exported
+export * from "./foo";
+```
+
+```jsx
+// 4) Exporting JSX collections makes components non-discoverable
+const Tab = () => null;
+export const tabs = [<Tab />, <Tab />];
+```
+
+```jsx
+// 5) Bootstrapping a root within the same module that defines components
+const App = () => null;
+createRoot(document.getElementById("root")).render(<App />);
+```
+
+Examples of **correct** code for this rule:
+
+```jsx
+// Named or default component exports are fine
+export default function Foo() {
+  return null;
+}
+```
+
+```jsx
+// Utilities may coexist if allowed by options or naming conventions
+const foo = () => {};
+export const Bar = () => null;
+```
+
+```jsx
+// Entrypoint files may render an imported component
+import { App } from "./App";
+createRoot(document.getElementById("root")).render(<App />);
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allowConstantExport
+
+type: `boolean`
+
+default: `false`
+
+Allow exporting primitive constants (string/number/boolean/template literal)
+alongside component exports without triggering a violation. Recommended when your
+bundler’s Fast Refresh integration supports this (enabled by the plugin’s `vite`
+preset).
+
+```jsx
+// Allowed when allowConstantExport: true
+export const VERSION = "3";
+export const Foo = () => null;
+```
+
+### allowExportNames
+
+type: `string[]`
+
+default: `[]`
+
+Treat specific named exports as HMR-safe (useful for frameworks that hot-replace
+certain exports). For example, in Remix:
+`{ "allowExportNames": ["meta", "links", "headers", "loader", "action"] }`
+
+### checkJS
+
+type: `boolean`
+
+default: `false`
+
+Check `.js` files that contain JSX (in addition to `.tsx`/`.jsx`). To reduce
+false positives, only files that import React are checked when this is enabled.
+
+### customHOCs
+
+type: `string[]`
+
+default: `[]`
+
+If you export components wrapped in custom higher-order components, list their
+identifiers here to avoid false positives.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "react/only-export-components": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "react/only-export-components": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.23.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/ArnaudBarre/eslint-plugin-react-refresh/blob/main/docs/only-export-components.md)

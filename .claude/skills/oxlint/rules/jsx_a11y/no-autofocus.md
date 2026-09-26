@@ -1,0 +1,96 @@
+---
+title: "jsx-a11y/no-autofocus"
+rule: "jsx-a11y/no-autofocus"
+category: "Correctness"
+version: "0.0.19"
+default: false
+type_aware: false
+fix: "fixable_suggestion"
+upstream: "https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/no-autofocus.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | no |
+| Fix | fixable_suggestion |
+| Type-aware | no |
+
+
+### What it does
+
+Enforce that `autoFocus` prop is not used on elements.
+
+### Why is this bad?
+
+Autofocusing elements can cause usability issues for sighted and
+non-sighted users alike. It can be disorienting when focus is shifted
+without user input and can interfere with assistive technologies.
+Users should control when and where focus moves on a page.
+
+### Exceptions
+
+`<dialog>` elements, elements with `role="dialog"`, and elements with the
+`popover` attribute (and their descendants) are exempt, since directing
+focus into them when opened is the expected behavior.
+See [MDN: `<dialog>` accessibility](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dialog#accessibility).
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```jsx
+<div autoFocus />
+<div autoFocus="true" />
+<div autoFocus="false" />
+<div autoFocus={undefined} />
+```
+
+Examples of **correct** code for this rule:
+
+```jsx
+<div />
+<dialog><input autoFocus /></dialog>
+<div role="dialog"><input autoFocus /></div>
+<div popover><input autoFocus /></div>
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### ignoreNonDOM
+
+type: `boolean`
+
+default: `false`
+
+Determines if developer-created components are checked.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "jsx-a11y/no-autofocus": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "jsx-a11y/no-autofocus": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.19.
+
+## References
+
+- [Upstream rule documentation](https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/no-autofocus.md)

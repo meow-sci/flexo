@@ -1,0 +1,157 @@
+---
+title: "typescript/prefer-optional-chain"
+rule: "typescript/prefer-optional-chain"
+category: "Nursery"
+version: "1.39.0"
+default: false
+type_aware: true
+fix: "fixable_dangerous_fix_or_suggestion"
+upstream: "https://typescript-eslint.io/rules/prefer-optional-chain/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Nursery |
+| Default | no |
+| Fix | fixable_dangerous_fix_or_suggestion |
+| Type-aware | yes |
+
+
+### What it does
+
+Enforce using concise optional chain expressions instead of chained logical AND
+operators, negated logical OR operators, or empty objects.
+
+Note that this rule is in the nursery category while we ensure it is working
+correctly in as many edge-case scenarios as possible. The logic for this is
+complex and the autofix may cause logic changes in some edge-cases.
+
+### Why is this bad?
+
+TypeScript 3.7 introduced optional chaining (`?.`) which provides a more concise
+and readable way to access properties on potentially nullish values. Using optional
+chaining instead of logical AND chains (`&&`) or other patterns improves code clarity.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```ts
+foo && foo.bar;
+foo && foo.bar && foo.bar.baz;
+foo && foo["bar"];
+foo && foo.bar && foo.bar.baz && foo.bar.baz.buzz;
+foo && foo.bar && foo.bar.baz.buzz;
+foo && foo.bar.baz && foo.bar.baz.buzz;
+(foo || {}).bar;
+```
+
+Examples of **correct** code for this rule:
+
+```ts
+foo?.bar;
+foo?.bar?.baz;
+foo?.["bar"];
+foo?.bar?.baz?.buzz;
+foo?.bar?.baz.buzz;
+foo?.bar.baz?.buzz;
+foo?.bar;
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allowPotentiallyUnsafeFixesThatModifyTheReturnTypeIKnowWhatImDoing
+
+type: `boolean`
+
+default: `false`
+
+Allow autofixers that will change the return type of the expression.
+This option is considered unsafe as it may break the build.
+
+### checkAny
+
+type: `boolean`
+
+default: `true`
+
+Check operands that are typed as `any` when inspecting "loose boolean" operands.
+
+### checkBigInt
+
+type: `boolean`
+
+default: `true`
+
+Check operands that are typed as `bigint` when inspecting "loose boolean" operands.
+
+### checkBoolean
+
+type: `boolean`
+
+default: `true`
+
+Check operands that are typed as `boolean` when inspecting "loose boolean" operands.
+
+### checkNumber
+
+type: `boolean`
+
+default: `true`
+
+Check operands that are typed as `number` when inspecting "loose boolean" operands.
+
+### checkString
+
+type: `boolean`
+
+default: `true`
+
+Check operands that are typed as `string` when inspecting "loose boolean" operands.
+
+### checkUnknown
+
+type: `boolean`
+
+default: `true`
+
+Check operands that are typed as `unknown` when inspecting "loose boolean" operands.
+
+### requireNullish
+
+type: `boolean`
+
+default: `false`
+
+Skip operands that are not typed with `null` and/or `undefined` when inspecting
+"loose boolean" operands.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/prefer-optional-chain": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/prefer-optional-chain": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.39.0.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/prefer-optional-chain/)

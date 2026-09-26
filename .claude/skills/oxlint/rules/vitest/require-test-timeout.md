@@ -1,0 +1,88 @@
+---
+title: "vitest/require-test-timeout"
+rule: "vitest/require-test-timeout"
+category: "Restriction"
+version: "1.58.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/vitest-dev/eslint-plugin-vitest/blob/main/docs/rules/require-test-timeout.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Requires every test to have a timeout specified, either as a numeric third
+argument, a `{ timeout }` option, or via `vi.setConfig({ testTimeout: ... })`.
+
+### Why is this bad?
+
+Tests without an explicit timeout rely on the default, which may be too
+generous to catch performance regressions or too short for slow CI
+environments, leading to flaky failures.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```js
+it("slow test", async () => {
+  await doSomethingSlow();
+});
+```
+
+Examples of **correct** code for this rule:
+
+```js
+// good (numeric timeout)
+test("slow test", async () => {
+  await doSomethingSlow();
+}, 1000);
+
+// good (options object)
+test("slow test", { timeout: 1000 }, async () => {
+  await doSomethingSlow();
+});
+
+// good (file-level)
+vi.setConfig({ testTimeout: 1000 });
+
+test("slow test", async () => {
+  await doSomethingSlow();
+});
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "vitest/require-test-timeout": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "vitest/require-test-timeout": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.58.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/vitest-dev/eslint-plugin-vitest/blob/main/docs/rules/require-test-timeout.md)

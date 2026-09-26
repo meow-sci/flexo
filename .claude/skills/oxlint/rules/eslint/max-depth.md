@@ -1,0 +1,118 @@
+---
+title: "eslint/max-depth"
+rule: "eslint/max-depth"
+category: "Pedantic"
+version: "0.15.12"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://eslint.org/docs/latest/rules/max-depth"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Pedantic |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Enforce a maximum depth that blocks can be nested. This rule helps to limit the complexity
+of nested blocks, improving readability and maintainability by ensuring that code does not
+become too deeply nested.
+
+### Why is this bad?
+
+Many developers consider code difficult to read if blocks are nested beyond a certain depth.
+Excessive nesting can make it harder to follow the flow of the code, increasing cognitive load
+and making maintenance more error-prone. By enforcing a maximum block depth, this rule encourages
+cleaner, more readable code.
+
+### Examples
+
+Examples of **incorrect** code for this rule with the default `{ "max": 3 }` option:
+
+```js
+function foo() {
+  for (;;) { // Nested 1 deep
+    while (true) { // Nested 2 deep
+      if (true) { // Nested 3 deep
+        if (true) { // Nested 4 deep }
+      }
+    }
+  }
+}
+```
+
+Examples of **correct** code for this rule with the default `{ "max": 3 }` option:
+
+```js
+function foo() {
+  for (;;) { // Nested 1 deep
+    while (true) { // Nested 2 deep
+      if (true) { // Nested 3 deep }
+    }
+  }
+}
+```
+
+Note that class static blocks do not count as nested blocks, and that the depth in
+them is calculated separately from the enclosing context.
+
+Example:
+
+```js
+function foo() {
+  if (true) { // Nested 1 deep
+    class C {
+      static {
+        if (true) { // Nested 1 deep
+          if (true) { // Nested 2 deep }
+        }
+      }
+    }
+  }
+}
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### max
+
+type: `integer`
+
+default: `4`
+
+The `max` enforces a maximum depth that blocks can be nested
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/max-depth": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/max-depth": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.15.12.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/max-depth)

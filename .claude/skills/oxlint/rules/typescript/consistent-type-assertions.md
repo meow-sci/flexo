@@ -1,0 +1,257 @@
+---
+title: "typescript/consistent-type-assertions"
+rule: "typescript/consistent-type-assertions"
+category: "Style"
+version: "1.44.0"
+default: false
+type_aware: false
+fix: "conditional_safe_fix_or_suggestion"
+upstream: "https://typescript-eslint.io/rules/consistent-type-assertions/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | conditional_safe_fix_or_suggestion |
+| Type-aware | no |
+
+
+### What it does
+
+Enforce consistent usage of TypeScript type assertions.
+
+### Why is this bad?
+
+Mixing assertion styles (`as` vs angle-bracket) makes code harder to read and maintain.
+In some codebases, type assertions are banned in favor of safer alternatives like
+type annotations or `satisfies`.
+
+### Examples
+
+Examples of **incorrect** code for this rule (default: `assertionStyle: "as"`):
+
+```ts
+const value = <Foo>bar;
+```
+
+Examples of **correct** code for this rule (default: `assertionStyle: "as"`):
+
+```ts
+const value = bar as Foo;
+```
+
+When `objectLiteralTypeAssertions` or `arrayLiteralTypeAssertions` are set to `never`, then the preferred syntax
+for type assertions on object and array literals is to use a type annotation or the `satisfies` operator instead of a type assertion.
+
+Examples of **incorrect** code when `objectLiteralTypeAssertions: "never"` and `arrayLiteralTypeAssertions: "never"`:
+
+```ts
+const obj = { a: 1 } as Foo;
+const arr = [1, 2] as Foo[];
+```
+
+Examples of **correct** code when `objectLiteralTypeAssertions: "never"` and `arrayLiteralTypeAssertions: "never"`:
+
+```ts
+const obj: Foo = { a: 1 };
+const obj = { a: 1 } satisfies Foo;
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### arrayLiteralTypeAssertions
+
+type: `"allow" | "allow-as-parameter" | "never"`
+
+Whether array literal type assertions are allowed, allowed only as parameters, or disallowed.
+
+#### `"allow"`
+
+Allow type assertions on array literals.
+
+Examples of **correct** code with this option:
+
+```ts
+const x = [1, 2] as number[];
+const x = ["a"] as Array<string>;
+```
+
+#### `"allow-as-parameter"`
+
+Allow type assertions on array literals only when used as a function parameter,
+`throw` target, or default value.
+
+Examples of **incorrect** code with this option:
+
+```ts
+const x = [1, 2] as Foo;
+const foo = () => [5] as Foo;
+```
+
+Examples of **correct** code with this option:
+
+```ts
+print([5] as Foo);
+throw [1, 2] as Bar;
+function f(x = [5] as Foo.Bar) {}
+```
+
+#### `"never"`
+
+Disallow type assertions on array literals entirely.
+
+Examples of **incorrect** code with this option:
+
+```ts
+const x = [1, 2] as Foo;
+print([5] as Foo);
+```
+
+Examples of **correct** code with this option:
+
+```ts
+const x: Foo = [1, 2];
+const x = [1, 2] satisfies Foo;
+```
+
+### assertionStyle
+
+type: `"as" | "angle-bracket" | "never"`
+
+Which assertion syntax is enforced.
+
+#### `"as"`
+
+Enforce `as` syntax for type assertions.
+
+Examples of **incorrect** code with this option:
+
+```ts
+const value = <Foo>bar;
+```
+
+Examples of **correct** code with this option:
+
+```ts
+const value = bar as Foo;
+```
+
+#### `"angle-bracket"`
+
+Enforce angle-bracket syntax for type assertions.
+
+Examples of **incorrect** code with this option:
+
+```ts
+const value = bar as Foo;
+```
+
+Examples of **correct** code with this option:
+
+```ts
+const value = <Foo>bar;
+```
+
+#### `"never"`
+
+Disallow type assertions entirely.
+
+Examples of **incorrect** code with this option:
+
+```ts
+const value = bar as Foo;
+const value = <Foo>bar;
+```
+
+Examples of **correct** code with this option:
+
+```ts
+const value: Foo = bar;
+const value = bar satisfies Foo;
+```
+
+### objectLiteralTypeAssertions
+
+type: `"allow" | "allow-as-parameter" | "never"`
+
+Whether object literal type assertions are allowed, allowed only as parameters, or disallowed.
+
+#### `"allow"`
+
+Allow type assertions on object literals.
+
+Examples of **correct** code with this option:
+
+```ts
+const x = { a: 1 } as Foo;
+const x = {} as Foo<int>;
+```
+
+#### `"allow-as-parameter"`
+
+Allow type assertions on object literals only when used as a function parameter,
+`throw` target, or default value.
+
+Examples of **incorrect** code with this option:
+
+```ts
+const x = { a: 1 } as Foo;
+const x = {} as Foo<int>;
+```
+
+Examples of **correct** code with this option:
+
+```ts
+print({ a: 1 } as Foo);
+throw { bar: 5 } as Foo;
+function f(x = {} as Foo) {}
+```
+
+#### `"never"`
+
+Disallow type assertions on object literals entirely.
+
+Examples of **incorrect** code with this option:
+
+```ts
+const x = { a: 1 } as Foo;
+print({ a: 1 } as Foo);
+```
+
+Examples of **correct** code with this option:
+
+```ts
+const x: Foo = { a: 1 };
+const x = { a: 1 } satisfies Foo;
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/consistent-type-assertions": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/consistent-type-assertions": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.44.0.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/consistent-type-assertions/)

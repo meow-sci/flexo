@@ -1,0 +1,113 @@
+---
+title: "react/prefer-function-component"
+rule: "react/prefer-function-component"
+category: "Restriction"
+version: "1.59.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/prefer-function-component.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Enforces that React components are written as function components
+instead of class components.
+
+### Why is this bad?
+
+Function components are simpler, easier to read, and support React
+hooks. Class components are a legacy pattern that is discouraged in
+modern React.
+
+This rule is based on the rule from
+[eslint-plugin-react-prefer-function-component](https://www.npmjs.com/package/eslint-plugin-react-prefer-function-component).
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```jsx
+class Foo extends React.Component {
+  render() {
+    return <div>{this.props.foo}</div>;
+  }
+}
+
+class Bar extends React.PureComponent {
+  render() {
+    return <div>{this.props.bar}</div>;
+  }
+}
+```
+
+Examples of **correct** code for this rule:
+
+```jsx
+const Foo = function (props) {
+  return <div>{props.foo}</div>;
+};
+
+const Bar = ({ bar }) => <div>{bar}</div>;
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allowErrorBoundary
+
+type: `boolean`
+
+default: `true`
+
+If `true`, error boundary classes (those implementing `componentDidCatch`
+or `static getDerivedStateFromError`) are allowed as class components.
+
+This is because these classes are not easily converted to function components,
+and so they are exempted from this rule by default.
+
+### allowJsxUtilityClass
+
+type: `boolean`
+
+default: `false`
+
+If `true`, classes that contain JSX but do not extend `Component` or
+`PureComponent` are allowed.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "react/prefer-function-component": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "react/prefer-function-component": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.59.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/prefer-function-component.md)

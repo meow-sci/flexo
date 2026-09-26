@@ -1,0 +1,238 @@
+---
+title: "typescript/restrict-template-expressions"
+rule: "typescript/restrict-template-expressions"
+category: "Correctness"
+version: "1.12.0"
+default: true
+type_aware: true
+fix: "none"
+upstream: "https://typescript-eslint.io/rules/restrict-template-expressions/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | yes |
+| Fix | none |
+| Type-aware | yes |
+
+
+### What it does
+
+This rule restricts the types allowed in template literal expressions.
+
+### Why is this bad?
+
+Template literals will call `toString()` on the interpolated values. Some types don't have meaningful string representations (like objects that become `"[object Object]"`) or may not have a `toString` method at all. This rule helps ensure that only appropriate types are used in template expressions.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```ts
+declare const obj: object;
+declare const sym: symbol;
+declare const fn: () => void;
+declare const arr: unknown[];
+
+// Objects become "[object Object]"
+const str1 = `Value: ${obj}`;
+
+// Symbols might not be what you expect
+const str2 = `Symbol: ${sym}`;
+
+// Functions become their source code or "[Function]"
+const str3 = `Function: ${fn}`;
+
+// Arrays might not format as expected
+const str4 = `Array: ${arr}`;
+
+// undefined/null become "undefined"/"null" which might be confusing
+declare const maybeValue: string | undefined;
+const str5 = `Value: ${maybeValue}`; // Could be "Value: undefined"
+```
+
+Examples of **correct** code for this rule:
+
+```ts
+declare const str: string;
+declare const num: number;
+declare const bool: boolean;
+declare const obj: object;
+
+// Safe types
+const result1 = `String: ${str}`;
+const result2 = `Number: ${num}`;
+const result3 = `Boolean: ${bool}`;
+
+// Explicit conversions for complex types
+const result4 = `Object: ${JSON.stringify(obj)}`;
+const result5 = `Array: ${arr.join(", ")}`;
+
+// Handle undefined/null explicitly
+declare const maybeValue: string | undefined;
+const result6 = `Value: ${maybeValue ?? "N/A"}`;
+const result7 = `Value: ${maybeValue || "default"}`;
+
+// Type guards for unknown values
+declare const unknown: unknown;
+const result8 = typeof unknown === "string" ? `Value: ${unknown}` : "Invalid";
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allow
+
+type: `array`
+
+default: `[{"from":"lib", "name":["Error", "URL", "URLSearchParams"]}]`
+
+An array of type or value specifiers for additional types that are allowed in template expressions.
+Defaults include Error, URL, and URLSearchParams from lib.
+
+#### allow[n]
+
+type: `object | string`
+
+Type or value specifier for matching specific declarations
+
+Supports four types of specifiers:
+
+1. **String specifier** (deprecated): Universal match by name
+
+```json
+"Promise"
+```
+
+2. **File specifier**: Match types/values declared in local files
+
+```json
+{ "from": "file", "name": "MyType" }
+{ "from": "file", "name": ["Type1", "Type2"] }
+{ "from": "file", "name": "MyType", "path": "./types.ts" }
+```
+
+3. **Lib specifier**: Match TypeScript built-in lib types
+
+```json
+{ "from": "lib", "name": "Promise" }
+{ "from": "lib", "name": ["Promise", "PromiseLike"] }
+```
+
+4. **Package specifier**: Match types/values from npm packages
+
+```json
+{ "from": "package", "name": "Observable", "package": "rxjs" }
+{ "from": "package", "name": ["Observable", "Subject"], "package": "rxjs" }
+```
+
+##### allow[n].from
+
+type: `"file"`
+
+Must be "file"
+
+##### allow[n].name
+
+type: `array | string`
+
+The name(s) of the type or value to match
+
+Name specifier that can be a single string or array of strings
+
+###### allow[n].name[n]
+
+type: `string`
+
+##### allow[n].path
+
+type: `string`
+
+Optional file path to specify where the types or values must be declared.
+If omitted, all files will be matched.
+
+### allowAny
+
+type: `boolean`
+
+default: `true`
+
+Whether to allow `any` typed values in template expressions.
+
+### allowArray
+
+type: `boolean`
+
+default: `false`
+
+Whether to allow array types in template expressions.
+
+### allowBoolean
+
+type: `boolean`
+
+default: `true`
+
+Whether to allow boolean types in template expressions.
+
+### allowNever
+
+type: `boolean`
+
+default: `false`
+
+Whether to allow `never` type in template expressions.
+
+### allowNullish
+
+type: `boolean`
+
+default: `true`
+
+Whether to allow nullish types (`null` or `undefined`) in template expressions.
+
+### allowNumber
+
+type: `boolean`
+
+default: `true`
+
+Whether to allow number and bigint types in template expressions.
+
+### allowRegExp
+
+type: `boolean`
+
+default: `true`
+
+Whether to allow RegExp values in template expressions.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/restrict-template-expressions": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/restrict-template-expressions": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.12.0.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/restrict-template-expressions/)

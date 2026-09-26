@@ -1,0 +1,86 @@
+---
+title: "jsx-a11y/heading-has-content"
+rule: "jsx-a11y/heading-has-content"
+category: "Correctness"
+version: "0.0.19"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/heading-has-content.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Enforce that heading elements (h1, h2, etc.) have content and
+that the content is accessible to screen readers.
+Accessible means that it is not hidden using the aria-hidden prop.
+
+### Why is this bad?
+
+Screen readers alert users to the presence of a heading tag.
+If the heading is empty or the text cannot be accessed,
+this could either confuse users or even prevent them
+from accessing information on the page's structure.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```jsx
+<h1 />
+```
+
+Examples of **correct** code for this rule:
+
+```jsx
+<h1>Foo</h1>
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### components
+
+type: `string[]`
+
+default: `null`
+
+Additional custom component names to treat as heading elements.
+These will be validated in addition to the standard h1-h6 elements.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "jsx-a11y/heading-has-content": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "jsx-a11y/heading-has-content": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.19.
+
+## References
+
+- [Upstream rule documentation](https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/heading-has-content.md)

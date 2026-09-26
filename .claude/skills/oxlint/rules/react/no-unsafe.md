@@ -1,0 +1,103 @@
+---
+title: "react/no-unsafe"
+rule: "react/no-unsafe"
+category: "Correctness"
+version: "1.35.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-unsafe.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+This rule identifies and restricts the use of unsafe React lifecycle methods.
+
+### Why is this bad?
+
+Certain lifecycle methods (`componentWillMount`, `componentWillReceiveProps`, and `componentWillUpdate`)
+are considered unsafe and have been deprecated since React 16.9. They are frequently misused and cause
+problems in async rendering. Using their `UNSAFE_` prefixed versions or the deprecated names themselves
+should be avoided.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```jsx
+// By default, UNSAFE_ prefixed methods are flagged
+class Foo extends React.Component {
+  UNSAFE_componentWillMount() {}
+  UNSAFE_componentWillReceiveProps() {}
+  UNSAFE_componentWillUpdate() {}
+}
+
+// With checkAliases: true, non-prefixed versions are also flagged
+class Bar extends React.Component {
+  componentWillMount() {}
+  componentWillReceiveProps() {}
+  componentWillUpdate() {}
+}
+```
+
+Examples of **correct** code for this rule:
+
+```jsx
+class Foo extends React.Component {
+  componentDidMount() {}
+  componentDidUpdate() {}
+  render() {}
+}
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### checkAliases
+
+type: `boolean`
+
+default: `false`
+
+Whether to check for the non-prefixed lifecycle methods.
+If `true`, this means `componentWillMount`, `componentWillReceiveProps`,
+and `componentWillUpdate` will also be flagged, rather than just the
+UNSAFE\_ versions. It is recommended to set this to `true` to fully
+avoid unsafe lifecycle methods.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "react/no-unsafe": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "react/no-unsafe": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.35.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-unsafe.md)

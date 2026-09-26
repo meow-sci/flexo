@@ -1,0 +1,135 @@
+---
+title: "react/jsx-no-target-blank"
+rule: "react/jsx-no-target-blank"
+category: "Pedantic"
+version: "0.2.5"
+default: false
+type_aware: false
+fix: "pending"
+upstream: "https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-no-target-blank.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Pedantic |
+| Default | no |
+| Fix | 🚧 fix pending |
+| Type-aware | no |
+
+
+### What it does
+
+This rule aims to prevent user generated link hrefs and form actions from creating security vulnerabilities by
+requiring `rel='noreferrer'` for external link hrefs and form actions, and optionally any dynamically generated
+link hrefs and form actions.
+
+### Why is this bad?
+
+When creating a JSX element that has an `a` tag, it is often desired to have the link open in a new tab using the
+`target='_blank'` attribute. Using this attribute unaccompanied by `rel='noreferrer'`, however, is a severe security
+vulnerability (see [`noreferrer` docs] and [`noopener` docs] for more details).
+This rules requires that you accompany `target='_blank'` attributes with `rel='noreferrer'`.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```jsx
+var Hello = <a target="_blank" href="https://example.com/"></a>;
+var Hello = <a target="_blank" href={dynamicLink}></a>;
+```
+
+Examples of **correct** code for this rule:
+
+```jsx
+/// correct
+var Hello = <p target="_blank"></p>;
+var Hello = <a target="_blank" rel="noreferrer" href="https://example.com"></a>;
+var Hello = <a target="_blank" rel="noopener noreferrer" href="https://example.com"></a>;
+var Hello = <a target="_blank" href="relative/path/in/the/host"></a>;
+var Hello = <a target="_blank" href="/absolute/path/in/the/host"></a>;
+var Hello = <a></a>;
+```
+
+[`noreferrer` docs]: https://html.spec.whatwg.org/multipage/links.html#link-type-noreferrer
+[`noopener` docs]: https://html.spec.whatwg.org/multipage/links.html#link-type-noopener
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allowReferrer
+
+type: `boolean`
+
+default: `false`
+
+Whether to allow referrers.
+
+### enforceDynamicLinks
+
+type: `"always" | "never"`
+
+default: `"always"`
+
+Whether to enforce dynamic links or enforce static links.
+
+#### `"always"`
+
+Always enforce dynamic links.
+
+#### `"never"`
+
+Always enforce static links.
+
+### forms
+
+type: `boolean`
+
+default: `false`
+
+Whether to check form elements.
+
+### links
+
+type: `boolean`
+
+default: `true`
+
+Whether to check link elements.
+
+### warnOnSpreadAttributes
+
+type: `boolean`
+
+default: `false`
+
+Whether to warn when spread attributes are used.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "react/jsx-no-target-blank": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "react/jsx-no-target-blank": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.2.5.
+
+## References
+
+- [Upstream rule documentation](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-no-target-blank.md)

@@ -1,0 +1,85 @@
+---
+title: "node/no-path-concat"
+rule: "node/no-path-concat"
+category: "Restriction"
+version: "1.49.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/eslint-community/eslint-plugin-n/blob/master/docs/rules/no-path-concat.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Disallows string concatenation with `__dirname` and `__filename`.
+
+### Why is this bad?
+
+In Node.js, the `__dirname` and `__filename` global variables contain the directory path and the file path of the currently executing script file, respectively.
+Sometimes, developers try to use these variables to create paths to other files, such as:
+
+```js
+var fullPath = __dirname + "/foo.js";
+```
+
+However, this is error-prone because it doesn't account for different
+operating systems, which use different path separators. Using `path.join()`
+or `path.resolve()` is the proper way to create cross-platform file paths.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```js
+const fullPath1 = __dirname + "/foo.js";
+const fullPath2 = __filename + "/foo.js";
+const fullPath3 = `${__dirname}/foo.js`;
+const fullPath4 = `${__filename}/foo.js`;
+```
+
+Examples of **correct** code for this rule:
+
+```js
+const fullPath1 = path.join(__dirname, "foo.js");
+const fullPath2 = path.join(__filename, "foo.js");
+const fullPath3 = __dirname + ".js";
+const fullPath4 = __filename + ".map";
+const fullPath5 = `${__dirname}_foo.js`;
+const fullPath6 = `${__filename}.test.js`;
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "node/no-path-concat": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "node/no-path-concat": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.49.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/eslint-community/eslint-plugin-n/blob/master/docs/rules/no-path-concat.md)

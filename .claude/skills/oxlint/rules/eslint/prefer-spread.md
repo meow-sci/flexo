@@ -1,0 +1,95 @@
+---
+title: "eslint/prefer-spread"
+rule: "eslint/prefer-spread"
+category: "Style"
+version: "0.0.17"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://eslint.org/docs/latest/rules/prefer-spread"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Require spread operators instead of `.apply()`
+
+### Why is this bad?
+
+Before ES2015, one must use `Function.prototype.apply()` to call variadic functions.
+
+```javascript
+var args = [1, 2, 3, 4];
+Math.max.apply(Math, args);
+```
+
+In ES2015, one can use spread syntax to call variadic functions.
+
+```javascript
+var args = [1, 2, 3, 4];
+Math.max(...args);
+```
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+foo.apply(undefined, args);
+foo.apply(null, args);
+obj.foo.apply(obj, args);
+```
+
+Examples of **correct** code for this rule:
+
+```javascript
+// Using spread syntax
+foo(...args);
+obj.foo(...args);
+
+// The `this` binding is different.
+foo.apply(obj, args);
+obj.foo.apply(null, args);
+obj.foo.apply(otherObj, args);
+
+// The argument list is not variadic.
+// Those are warned by the `no-useless-call` rule.
+foo.apply(undefined, [1, 2, 3]);
+foo.apply(null, [1, 2, 3]);
+obj.foo.apply(obj, [1, 2, 3]);
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/prefer-spread": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/prefer-spread": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.17.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/prefer-spread)

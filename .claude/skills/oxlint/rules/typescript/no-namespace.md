@@ -1,0 +1,151 @@
+---
+title: "typescript/no-namespace"
+rule: "typescript/no-namespace"
+category: "Restriction"
+version: "0.0.8"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://typescript-eslint.io/rules/no-namespace/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Disallow TypeScript namespaces.
+
+### Why is this bad?
+
+TypeScript historically allowed a form of code organization called "custom modules" (module Example {}),
+later renamed to "namespaces" (namespace Example). Namespaces are an outdated way to organize TypeScript code.
+ES2015 module syntax is now preferred (`import`/`export`).
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```typescript
+module foo {}
+namespace foo {}
+declare module foo {}
+declare namespace foo {}
+```
+
+Examples of **correct** code for this rule:
+
+```typescript
+declare module "foo" {}
+// anything inside a d.ts file
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allowDeclarations
+
+type: `boolean`
+
+default: `false`
+
+Whether to allow declare with custom TypeScript namespaces.
+
+Examples of **incorrect** code for this rule when `{ "allowDeclarations": true }`
+
+```typescript
+module foo {}
+namespace foo {}
+```
+
+Examples of **correct** code for this rule when `{ "allowDeclarations": true }`
+
+```typescript
+declare module "foo" {}
+declare module foo {}
+declare namespace foo {}
+
+declare global {
+  namespace foo {}
+}
+
+declare module foo {
+  namespace foo {}
+}
+```
+
+Examples of **incorrect** code for this rule when `{ "allowDeclarations": false }`
+
+```typescript
+module foo {}
+namespace foo {}
+declare module foo {}
+declare namespace foo {}
+```
+
+Examples of **correct** code for this rule when `{ "allowDeclarations": false }`
+
+```typescript
+declare module "foo" {}
+```
+
+### allowDefinitionFiles
+
+type: `boolean`
+
+default: `true`
+
+Examples of **incorrect** code for this rule when `{ "allowDefinitionFiles": true }`
+
+```typescript
+// if outside a d.ts file
+module foo {}
+namespace foo {}
+
+// if outside a d.ts file
+module foo {}
+namespace foo {}
+declare module foo {}
+declare namespace foo {}
+```
+
+Examples of **correct** code for this rule when `{ "allowDefinitionFiles": true }`
+
+```typescript
+declare module "foo" {}
+// anything inside a d.ts file
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/no-namespace": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/no-namespace": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.8.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/no-namespace/)

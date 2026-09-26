@@ -1,0 +1,122 @@
+---
+title: "vitest/require-mock-type-parameters"
+rule: "vitest/require-mock-type-parameters"
+category: "Correctness"
+version: "1.58.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/vitest-dev/eslint-plugin-vitest/blob/main/docs/rules/require-mock-type-parameters.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Enforces the use of type parameters on `vi.fn()`, and optionally on `vi.importActual()` and `vi.importMock()`.
+
+By default, only `vi.fn()` is checked. Set `checkImportFunctions` to `true` to also check `vi.importActual()` and `vi.importMock()`.
+
+### Why is this bad?
+
+Without explicit type parameters, `vi.fn()` creates a mock typed as `(...args: any[]) => any`.
+This disables type checking between the mock and the real implementation, which can lead to two problems:
+
+- tests that fail due to incorrect mock usage when they should pass
+- or worse, tests that pass while the mock silently diverges from the actual runtime behavior.
+
+### Examples
+
+Examples of **incorrect** code for this rule configured as `{ "checkImportFunctions": false }`:
+
+```ts
+import { vi } from "vitest";
+
+test("foo", () => {
+  const myMockedFn = vi.fn();
+});
+```
+
+Examples of **incorrect** code for this rule configured as `{ "checkImportFunctions": true }`:
+
+```ts
+import { vi } from "vitest";
+
+vi.mock("./example.js", async () => {
+  const originalModule = await vi.importActual("./example.js");
+
+  return { ...originalModule };
+});
+const fs = await vi.importMock("fs");
+```
+
+Examples of **correct** code for this rule configured as `{ "checkImportFunctions": false }`:
+
+```ts
+import { vi } from "vitest";
+
+test("foo", () => {
+  const myMockedFnOne = vi.fn<(arg1: string, arg2: boolean) => number>();
+  const myMockedFnTwo = vi.fn<() => void>();
+  const myMockedFnThree = vi.fn<any>();
+});
+```
+
+Examples of **correct** code for this rule configured as `{ "checkImportFunctions": true }`:
+
+```ts
+import { vi } from "vitest";
+
+vi.mock("./example.js", async () => {
+  const originalModule = await vi.importActual<any>("./example.js");
+
+  return { ...originalModule };
+});
+const fs = await vi.importMock<any>("fs");
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### checkImportFunctions
+
+type: `boolean`
+
+default: `false`
+
+Also require type parameters for `importActual` and `importMock`.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "vitest/require-mock-type-parameters": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "vitest/require-mock-type-parameters": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.58.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/vitest-dev/eslint-plugin-vitest/blob/main/docs/rules/require-mock-type-parameters.md)

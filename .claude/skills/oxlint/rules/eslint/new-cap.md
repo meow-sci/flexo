@@ -1,0 +1,414 @@
+---
+title: "eslint/new-cap"
+rule: "eslint/new-cap"
+category: "Style"
+version: "0.15.5"
+default: false
+type_aware: false
+fix: "pending"
+upstream: "https://eslint.org/docs/latest/rules/new-cap"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | 🚧 fix pending |
+| Type-aware | no |
+
+
+### What it does
+
+This rule requires constructor names to begin with a capital letter.
+
+### Why is this bad?
+
+The new operator in JavaScript creates a new instance of a particular type of object.
+That type of object is represented by a constructor function.
+Since constructor functions are just regular functions, the only defining characteristic
+is that new is being used as part of the call.
+Native JavaScript functions begin with an uppercase letter to distinguish those functions
+that are to be used as constructors from functions that are not.
+Many style guides recommend following this pattern
+to more easily determine which functions are to be used as constructors.
+
+**Warning**:
+The option `newIsCapExceptionPattern` and `capIsNewExceptionPattern` are implemented with
+the [rust regex syntax](https://docs.rs/regex/latest/regex/). Many JavaScript features
+are not supported (Lookahead, Lookbehinds, ...).
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```js
+function foo(arg) {
+  return Boolean(arg);
+}
+```
+
+Examples of **incorrect** code for this rule with the default `{ "newIsCap": true }` option:
+
+```js
+/* new-cap: ["error", { "newIsCap": true }] */
+
+var friend = new person();
+```
+
+Examples of **correct** code for this rule with the default `{ "newIsCap": true }` option:
+
+```js
+/* new-cap: ["error", { "newIsCap": true }] */
+
+var friend = new Person();
+```
+
+Examples of **correct** code for this rule with the `{ "newIsCap": false }` option:
+
+```js
+/* new-cap: ["error", { "newIsCap": false }] */
+
+var friend = new person();
+```
+
+Examples of **incorrect** code for this rule with the default `{ "capIsNew": true }` option:
+
+```js
+/* new-cap: ["error", { "capIsNew": true }] */
+
+var colleague = Person();
+```
+
+Examples of **correct** code for this rule with the default `{ "capIsNew": true }` option:
+
+```js
+/* new-cap: ["error", { "capIsNew": true }] */
+
+var colleague = new Person();
+```
+
+Examples of **correct** code for this rule with the `{ "capIsNew": false }` option:
+
+```js
+/* new-cap: ["error", { "capIsNew": false }] */
+
+var colleague = Person();
+```
+
+Examples of additional **correct** code for this rule with the `{ "newIsCapExceptions": ["events"] }` option:
+
+```js
+/* new-cap: ["error", { "newIsCapExceptions": ["events"] }] */
+
+var events = require("events");
+
+var emitter = new events();
+```
+
+Examples of additional **correct** code for this rule with the `{ "newIsCapExceptionPattern": "^person\\.." }` option:
+
+```js
+/* new-cap: ["error", { "newIsCapExceptionPattern": "^person\\.." }] */
+
+var friend = new person.acquaintance();
+
+var bestFriend = new person.friend();
+```
+
+Examples of additional **correct** code for this rule with the `{ "newIsCapExceptionPattern": "\\.bar$" }` option:
+
+```js
+/* new-cap: ["error", { "newIsCapExceptionPattern": "\\.bar$" }] */
+
+var friend = new person.bar();
+```
+
+Examples of additional **correct** code for this rule with the `{ "capIsNewExceptions": ["Person"] }` option:
+
+```js
+/* new-cap: ["error", { "capIsNewExceptions": ["Person"] }] */
+
+function foo(arg) {
+  return Person(arg);
+}
+```
+
+Examples of additional **correct** code for this rule with the `{ "capIsNewExceptionPattern": "^person\\.." }` option:
+
+```js
+/* new-cap: ["error", { "capIsNewExceptionPattern": "^person\\.." }] */
+
+var friend = person.Acquaintance();
+var bestFriend = person.Friend();
+```
+
+Examples of additional **correct** code for this rule with the `{ "capIsNewExceptionPattern": "\\.Bar$" }` option:
+
+```js
+/* new-cap: ["error", { "capIsNewExceptionPattern": "\\.Bar$" }] */
+
+foo.Bar();
+```
+
+Examples of additional **correct** code for this rule with the `{ "capIsNewExceptionPattern": "^Foo" }` option:
+
+```js
+/* new-cap: ["error", { "capIsNewExceptionPattern": "^Foo" }] */
+
+var x = Foo(42);
+
+var y = Foobar(42);
+
+var z = Foo.Bar(42);
+```
+
+### properties
+
+Examples of **incorrect** code for this rule with the default `{ "properties": true }` option:
+
+```js
+/* new-cap: ["error", { "properties": true }] */
+
+var friend = new person.acquaintance();
+```
+
+Examples of **correct** code for this rule with the default `{ "properties": true }` option:
+
+```js
+/* new-cap: ["error", { "properties": true }] */
+
+var friend = new person.Acquaintance();
+```
+
+Examples of **correct** code for this rule with the `{ "properties": false }` option:
+
+```js
+/* new-cap: ["error", { "properties": false }] */
+
+var friend = new person.acquaintance();
+```
+
+Examples of **incorrect** code for this rule with the default `{ "newIsCap": true }` option:
+
+```js
+/* new-cap: ["error", { "newIsCap": true }] */
+
+var friend = new person();
+```
+
+Examples of **correct** code for this rule with the default `{ "newIsCap": true }` option:
+
+```js
+/* new-cap: ["error", { "newIsCap": true }] */
+
+var friend = new Person();
+```
+
+Examples of **correct** code for this rule with the `{ "newIsCap": false }` option:
+
+```js
+/* new-cap: ["error", { "newIsCap": false }] */
+
+var friend = new person();
+```
+
+Examples of **incorrect** code for this rule with the default `{ "capIsNew": true }` option:
+
+```js
+/* new-cap: ["error", { "capIsNew": true }] */
+
+var colleague = Person();
+```
+
+Examples of **correct** code for this rule with the default `{ "capIsNew": true }` option:
+
+```js
+/* new-cap: ["error", { "capIsNew": true }] */
+
+var colleague = new Person();
+```
+
+Examples of **correct** code for this rule with the `{ "capIsNew": false }` option:
+
+```js
+/* new-cap: ["error", { "capIsNew": false }] */
+
+var colleague = Person();
+```
+
+Examples of additional **correct** code for this rule with the `{ "newIsCapExceptions": ["events"] }` option:
+
+```js
+/* new-cap: ["error", { "newIsCapExceptions": ["events"] }] */
+
+var events = require("events");
+
+var emitter = new events();
+```
+
+Examples of additional **correct** code for this rule with the `{ "newIsCapExceptionPattern": "^person\\.." }` option:
+
+```js
+/* new-cap: ["error", { "newIsCapExceptionPattern": "^person\\.." }] */
+
+var friend = new person.acquaintance();
+
+var bestFriend = new person.friend();
+```
+
+Examples of additional **correct** code for this rule with the `{ "newIsCapExceptionPattern": "\\.bar$" }` option:
+
+```js
+/* new-cap: ["error", { "newIsCapExceptionPattern": "\\.bar$" }] */
+
+var friend = new person.bar();
+```
+
+Examples of additional **correct** code for this rule with the `{ "capIsNewExceptions": ["Person"] }` option:
+
+::: correct
+
+```js
+/* new-cap: ["error", { "capIsNewExceptions": ["Person"] }] */
+
+function foo(arg) {
+  return Person(arg);
+}
+```
+
+Examples of additional **correct** code for this rule with the `{ "capIsNewExceptionPattern": "^person\\.." }` option:
+
+```js
+/* new-cap: ["error", { "capIsNewExceptionPattern": "^person\\.." }] */
+
+var friend = person.Acquaintance();
+var bestFriend = person.Friend();
+```
+
+Examples of additional **correct** code for this rule with the `{ "capIsNewExceptionPattern": "\\.Bar$" }` option:
+
+```js
+/* new-cap: ["error", { "capIsNewExceptionPattern": "\\.Bar$" }] */
+
+foo.Bar();
+```
+
+Examples of additional **correct** code for this rule with the `{ "capIsNewExceptionPattern": "^Foo" }` option:
+
+```js
+/* new-cap: ["error", { "capIsNewExceptionPattern": "^Foo" }] */
+
+var x = Foo(42);
+
+var y = Foobar(42);
+
+var z = Foo.Bar(42);
+```
+
+Examples of **incorrect** code for this rule with the default `{ "properties": true }` option:
+
+```js
+/* new-cap: ["error", { "properties": true }] */
+
+var friend = new person.acquaintance();
+```
+
+Examples of **correct** code for this rule with the default `{ "properties": true }` option:
+
+```js
+/* new-cap: ["error", { "properties": true }] */
+
+var friend = new person.Acquaintance();
+```
+
+Examples of **correct** code for this rule with the `{ "properties": false }` option:
+
+```js
+/* new-cap: ["error", { "properties": false }] */
+
+var friend = new person.acquaintance();
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### capIsNew
+
+type: `boolean`
+
+default: `true`
+
+`true` to require that all functions with names starting with an uppercase letter to be called with `new`.
+
+### capIsNewExceptionPattern
+
+type: `string`
+
+A regex pattern to match exceptions for functions with names starting with an uppercase letter.
+
+### capIsNewExceptions
+
+type: `string[]`
+
+default: `[]`
+
+Exceptions to ignore for functions with names starting with an uppercase letter.
+
+### newIsCap
+
+type: `boolean`
+
+default: `true`
+
+`true` to require that all constructor names start with an uppercase letter, e.g. `new Person()`.
+
+### newIsCapExceptionPattern
+
+type: `string`
+
+A regex pattern to match exceptions for constructor names starting with an uppercase letter.
+
+### newIsCapExceptions
+
+type: `string[]`
+
+default: `["Array", "Boolean", "Date", "Error", "Function", "Number", "Object", "RegExp", "String", "Symbol", "BigInt"]`
+
+Exceptions to ignore for constructor names starting with an uppercase letter.
+
+### properties
+
+type: `boolean`
+
+default: `true`
+
+`true` to require capitalization for object properties (e.g., `new obj.Method()`).
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/new-cap": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/new-cap": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.15.5.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/new-cap)

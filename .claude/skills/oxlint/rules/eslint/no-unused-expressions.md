@@ -1,0 +1,106 @@
+---
+title: "eslint/no-unused-expressions"
+rule: "eslint/no-unused-expressions"
+category: "Correctness"
+version: "0.14.0"
+default: true
+type_aware: false
+fix: "none"
+upstream: "https://eslint.org/docs/latest/rules/no-unused-expressions"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | yes |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+This rule disallows unused expressions.
+
+### Why is this bad?
+
+Unused expressions are usually a mistake. They can be a symptom of a bug or a misunderstanding of the code.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```ts
+Set<number>;
+1 as number;
+window!;
+```
+
+Examples of **correct** code for this rule:
+
+```ts
+const foo = new Set<number>();
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allowShortCircuit
+
+type: `boolean`
+
+default: `false`
+
+When set to `true`, allows short circuit evaluations in expressions.
+
+### allowTaggedTemplates
+
+type: `boolean`
+
+default: `false`
+
+When set to `true`, allows tagged template literals in expressions.
+
+### allowTernary
+
+type: `boolean`
+
+default: `false`
+
+When set to `true`, allows ternary operators in expressions.
+
+### enforceForJSX
+
+type: `boolean`
+
+default: `false`
+
+When set to `true`, enforces the rule for unused JSX expressions also.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/no-unused-expressions": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/no-unused-expressions": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.14.0.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/no-unused-expressions)

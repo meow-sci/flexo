@@ -1,0 +1,178 @@
+---
+title: "typescript/prefer-readonly-parameter-types"
+rule: "typescript/prefer-readonly-parameter-types"
+category: "Pedantic"
+version: "1.49.0"
+default: false
+type_aware: true
+fix: "none"
+upstream: "https://typescript-eslint.io/rules/prefer-readonly-parameter-types/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Pedantic |
+| Default | no |
+| Fix | none |
+| Type-aware | yes |
+
+
+### What it does
+
+Require function and method parameters to use readonly-compatible types.
+
+### Why is this bad?
+
+Mutable parameter types make accidental mutation easier and weaken function contracts.
+Readonly parameter types communicate intent and improve API safety.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```ts
+function update(items: string[]) {
+  items.push("x");
+}
+
+function consume(obj: { value: string }) {
+  obj.value = obj.value.trim();
+}
+```
+
+Examples of **correct** code for this rule:
+
+```ts
+function update(items: readonly string[]) {
+  return items.length;
+}
+
+function consume(obj: Readonly<{ value: string }>) {
+  return obj.value;
+}
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allow
+
+type: `array`
+
+default: `[]`
+
+Type/value specifiers that should be exempt from this rule.
+
+#### allow[n]
+
+type: `object | string`
+
+Type or value specifier for matching specific declarations
+
+Supports four types of specifiers:
+
+1. **String specifier** (deprecated): Universal match by name
+
+```json
+"Promise"
+```
+
+2. **File specifier**: Match types/values declared in local files
+
+```json
+{ "from": "file", "name": "MyType" }
+{ "from": "file", "name": ["Type1", "Type2"] }
+{ "from": "file", "name": "MyType", "path": "./types.ts" }
+```
+
+3. **Lib specifier**: Match TypeScript built-in lib types
+
+```json
+{ "from": "lib", "name": "Promise" }
+{ "from": "lib", "name": ["Promise", "PromiseLike"] }
+```
+
+4. **Package specifier**: Match types/values from npm packages
+
+```json
+{ "from": "package", "name": "Observable", "package": "rxjs" }
+{ "from": "package", "name": ["Observable", "Subject"], "package": "rxjs" }
+```
+
+##### allow[n].from
+
+type: `"file"`
+
+Must be "file"
+
+##### allow[n].name
+
+type: `array | string`
+
+The name(s) of the type or value to match
+
+Name specifier that can be a single string or array of strings
+
+###### allow[n].name[n]
+
+type: `string`
+
+##### allow[n].path
+
+type: `string`
+
+Optional file path to specify where the types or values must be declared.
+If omitted, all files will be matched.
+
+### checkParameterProperties
+
+type: `boolean`
+
+default: `true`
+
+Whether to check constructor parameter properties.
+
+### ignoreInferredTypes
+
+type: `boolean`
+
+default: `false`
+
+Whether to ignore parameters without explicit type annotations.
+
+### treatMethodsAsReadonly
+
+type: `boolean`
+
+default: `false`
+
+Whether mutable methods should be treated as readonly members.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/prefer-readonly-parameter-types": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/prefer-readonly-parameter-types": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.49.0.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/prefer-readonly-parameter-types/)

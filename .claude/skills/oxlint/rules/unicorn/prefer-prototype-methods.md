@@ -1,0 +1,73 @@
+---
+title: "unicorn/prefer-prototype-methods"
+rule: "unicorn/prefer-prototype-methods"
+category: "Pedantic"
+version: "0.0.21"
+default: false
+type_aware: false
+fix: "fixable_fix"
+upstream: "https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/prefer-prototype-methods.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Pedantic |
+| Default | no |
+| Fix | fixable_fix |
+| Type-aware | no |
+
+
+### What it does
+
+This rule prefers borrowing methods from the prototype instead of the instance.
+
+### Why is this bad?
+
+“Borrowing” a method from an instance of `Array` or `Object` is less clear than getting it from the corresponding prototype.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+const array = [].slice.apply(bar);
+const type = {}.toString.call(foo);
+Reflect.apply([].forEach, arrayLike, [callback]);
+```
+
+Examples of **correct** code for this rule:
+
+```javascript
+const array = Array.prototype.slice.apply(bar);
+const type = Object.prototype.toString.call(foo);
+Reflect.apply(Array.prototype.forEach, arrayLike, [callback]);
+const maxValue = Math.max.apply(Math, numbers);
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "unicorn/prefer-prototype-methods": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "unicorn/prefer-prototype-methods": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.21.
+
+## References
+
+- [Upstream rule documentation](https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/prefer-prototype-methods.md)

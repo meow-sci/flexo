@@ -1,0 +1,83 @@
+---
+title: "vue/max-props"
+rule: "vue/max-props"
+category: "Restriction"
+version: "1.19.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://eslint.vuejs.org/rules/max-props.html"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Enforce a maximum number of props defined for a given Vue component.
+
+### Why is this bad?
+
+A large number of props on a component can indicate that it is trying
+to do too much and may be difficult to maintain or understand.
+
+By limiting the number of props, developers are encouraged to avoid
+overly complex components and instead create smaller, more focused
+components that are easier to reason about.
+
+### Examples
+
+Examples of **incorrect** code for this rule with the default `{ "maxProps": 1 }` option:
+
+```js
+```
+
+Examples of **correct** code for this rule with the default `{ "maxProps": 1 }` option:
+
+```js
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### maxProps
+
+type: `integer`
+
+default: `1`
+
+The maximum number of props allowed in a Vue SFC.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "vue/max-props": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "vue/max-props": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.19.0.
+
+## References
+
+- [Upstream rule documentation](https://eslint.vuejs.org/rules/max-props.html)

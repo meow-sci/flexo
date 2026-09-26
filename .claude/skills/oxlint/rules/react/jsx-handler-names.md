@@ -1,0 +1,126 @@
+---
+title: "react/jsx-handler-names"
+rule: "react/jsx-handler-names"
+category: "Style"
+version: "1.13.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-handler-names.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Ensures that any component or prop methods used to handle events are correctly prefixed.
+
+### Why is this bad?
+
+Inconsistent naming of event handlers and props can reduce code readability and maintainability.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```jsx
+<MyComponent handleChange={this.handleChange} />
+<MyComponent onChange={this.componentChanged} />
+```
+
+Examples of **correct** code for this rule:
+
+```jsx
+<MyComponent onChange={this.handleChange} />
+<MyComponent onChange={this.props.onFoo} />
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### checkInlineFunctions
+
+type: `boolean`
+
+default: `false`
+
+Whether to check for inline functions in JSX attributes.
+
+### checkLocalVariables
+
+type: `boolean`
+
+default: `false`
+
+Whether to check for local variables in JSX attributes.
+
+### eventHandlerPrefixes
+
+type: `string`
+
+default: `"handle"`
+
+Event handler prefixes to check against.
+
+### eventHandlerPropPrefixes
+
+type: `string`
+
+default: `"on"`
+
+Event handler prop prefixes to check against.
+
+### eventHandlerPropRegex
+
+type: `string`
+
+Compiled regex for event handler prop prefixes.
+
+### eventHandlerRegex
+
+type: `string`
+
+Compiled regex for event handler prefixes.
+
+### ignoreComponentNames
+
+type: `string[]`
+
+default: `[]`
+
+Component names to ignore when checking for event handler prefixes.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "react/jsx-handler-names": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "react/jsx-handler-names": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.13.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-handler-names.md)

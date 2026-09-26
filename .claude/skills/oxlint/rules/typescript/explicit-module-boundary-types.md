@@ -1,0 +1,170 @@
+---
+title: "typescript/explicit-module-boundary-types"
+rule: "typescript/explicit-module-boundary-types"
+category: "Restriction"
+version: "1.9.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://typescript-eslint.io/rules/explicit-module-boundary-types/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Require explicit return and argument types on exported functions' and classes' public class methods.
+
+### Why is this bad?
+
+Explicit types for function return values and arguments makes it clear
+to any calling code what is the module boundary's input and output.
+Adding explicit type annotations for those types can help improve code
+readability. It can also improve TypeScript type checking performance on
+larger codebases.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```ts
+// Should indicate that no value is returned (void)
+export function test() {
+  return;
+}
+
+// Should indicate that a string is returned
+export var arrowFn = () => "test";
+
+// All arguments should be typed
+export var arrowFn = (arg): string => `test ${arg}`;
+export var arrowFn = (arg: any): string => `test ${arg}`;
+
+export class Test {
+  // Should indicate that no value is returned (void)
+  method() {
+    return;
+  }
+}
+```
+
+Examples of **correct** code for this rule:
+
+```ts
+// A function with no return value (void)
+export function test(): void {
+  return;
+}
+
+// A return value of type string
+export var arrowFn = (): string => "test";
+
+// All arguments should be typed
+export var arrowFn = (arg: string): string => `test ${arg}`;
+export var arrowFn = (arg: unknown): string => `test ${arg}`;
+
+export class Test {
+  // A class method with no return value (void)
+  method(): void {
+    return;
+  }
+}
+
+// The function does not apply because it is not an exported function.
+function test() {
+  return;
+}
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allowArgumentsExplicitlyTypedAsAny
+
+type: `boolean`
+
+default: `false`
+
+Whether to ignore arguments that are explicitly typed as `any`.
+
+### allowDirectConstAssertionInArrowFunctions
+
+type: `boolean`
+
+default: `true`
+
+Whether to ignore return type annotations on body-less arrow functions
+that return an `as const` type assertion. You must still type the
+parameters of the function.
+
+### allowHigherOrderFunctions
+
+type: `boolean`
+
+default: `true`
+
+Whether to ignore return type annotations on functions immediately
+returning another function expression. You must still type the
+parameters of the function.
+
+### allowOverloadFunctions
+
+type: `boolean`
+
+default: `false`
+
+Whether to ignore return type annotations on functions with overload
+signatures.
+
+### allowTypedFunctionExpressions
+
+type: `boolean`
+
+default: `true`
+
+Whether to ignore type annotations on the variable of a function
+expression.
+
+### allowedNames
+
+type: `string[]`
+
+default: `[]`
+
+An array of function/method names that will not have their arguments or
+return values checked.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/explicit-module-boundary-types": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/explicit-module-boundary-types": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.9.0.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/explicit-module-boundary-types/)

@@ -1,0 +1,144 @@
+---
+title: "typescript/array-type"
+rule: "typescript/array-type"
+category: "Style"
+version: "0.2.8"
+default: false
+type_aware: false
+fix: "fixable_fix"
+upstream: "https://typescript-eslint.io/rules/array-type/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | fixable_fix |
+| Type-aware | no |
+
+
+### What it does
+
+Require consistently using either `T[]` or `Array<T>` for arrays.
+
+### Why is this bad?
+
+Using the `Array` type directly is not idiomatic. Instead, use the array type `T[]` or `Array<T>`.
+
+### Examples
+
+Examples of **incorrect** code for this rule (with default configuration):
+
+```typescript
+const arr: Array<number> = new Array<number>();
+const readonlyArr: ReadonlyArray<number> = [1, 2, 3];
+```
+
+Examples of **correct** code for this rule (with default configuration):
+
+```typescript
+const arr: number[] = new Array<number>();
+const readonlyArr: readonly number[] = [1, 2, 3];
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### default
+
+type: `"array" | "array-simple" | "generic"`
+
+default: `"array"`
+
+The array type expected for mutable cases.
+
+#### `"array"`
+
+Enforce using `T[]` for all array types.
+
+Example of **incorrect** code for this option:
+
+```ts
+const arr: Array<number> = new Array<number>();
+```
+
+Example of **correct** code for this option:
+
+```ts
+const arr: number[] = new Array<number>();
+```
+
+#### `"array-simple"`
+
+Enforce using `T[]` for simple types, and `Array<T>` for complex types.
+
+Example of **incorrect** code for this option:
+
+```ts
+const a: (string | number)[] = ["a", "b"];
+const b: { prop: string }[] = [{ prop: "a" }];
+const c: Array<MyType> = ["a", "b"];
+const d: Array<string> = ["a", "b"];
+```
+
+Example of **correct** code for this option:
+
+```ts
+const a: Array<string | number> = ["a", "b"];
+const b: Array<{ prop: string }> = [{ prop: "a" }];
+const c: string[] = ["a", "b"];
+const d: MyType[] = ["a", "b"];
+```
+
+#### `"generic"`
+
+Enforce using `Array<T>` for all array types.
+
+Example of **incorrect** code for this option:
+
+```ts
+const arr: number[] = new Array<number>();
+```
+
+Example of **correct** code for this option:
+
+```ts
+const arr: Array<number> = new Array<number>();
+```
+
+### readonly
+
+type: `"array" | "array-simple" | "generic"`
+
+default: `null`
+
+The array type expected for readonly cases. If omitted, the value for `default` will be used.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/array-type": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/array-type": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.2.8.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/array-type/)

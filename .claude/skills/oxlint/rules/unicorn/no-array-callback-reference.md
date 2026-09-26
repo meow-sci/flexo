@@ -1,0 +1,80 @@
+---
+title: "unicorn/no-array-callback-reference"
+rule: "unicorn/no-array-callback-reference"
+category: "Pedantic"
+version: "1.19.0"
+default: false
+type_aware: false
+fix: "pending"
+upstream: "https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/no-array-callback-reference.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Pedantic |
+| Default | no |
+| Fix | 🚧 fix pending |
+| Type-aware | no |
+
+
+### What it does
+
+Prevents passing a function reference directly to iterator methods.
+
+### Why is this bad?
+
+Passing functions to iterator methods can cause issues when the function is changed
+without realizing that the iterator passes 2 more parameters to it (index and array).
+This can lead to unexpected behavior when the function signature changes.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```js
+const foo = array.map(callback);
+array.forEach(callback);
+const result = array.filter(lib.method);
+```
+
+Examples of **correct** code for this rule:
+
+```js
+const foo = array.map((element) => callback(element));
+array.forEach((element) => {
+  callback(element);
+});
+const result = array.filter((element) => lib.method(element));
+
+// Built-in functions are allowed
+const foo = array.map(String);
+const bar = array.filter(Boolean);
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "unicorn/no-array-callback-reference": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "unicorn/no-array-callback-reference": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.19.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/no-array-callback-reference.md)

@@ -1,0 +1,79 @@
+---
+title: "eslint/unicode-bom"
+rule: "eslint/unicode-bom"
+category: "Restriction"
+version: "0.3.3"
+default: false
+type_aware: false
+fix: "fixable_fix"
+upstream: "https://eslint.org/docs/latest/rules/unicode-bom"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | fixable_fix |
+| Type-aware | no |
+
+
+### What it does
+
+Require or disallow Unicode byte order mark (BOM)
+
+### Why is this bad?
+
+The Unicode Byte Order Mark (BOM) is used to specify whether code units are big endian or
+little endian. That is, whether the most significant or least significant bytes come first.
+UTF-8 does not require a BOM because byte ordering does not matter when characters are a
+single byte. Since UTF-8 is the dominant encoding of the web, we make "never" the default
+option.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+var a = 123;
+```
+
+## Configuration
+
+This rule accepts one of the following string values:
+
+### `"always"`
+
+Always require a Unicode BOM (Byte Order Mark) at the beginning of the file.
+
+### `"never"`
+
+Never allow a Unicode BOM (Byte Order Mark) at the beginning of the file.
+This is the default option.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/unicode-bom": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/unicode-bom": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.3.3.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/unicode-bom)

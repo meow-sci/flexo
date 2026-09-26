@@ -1,0 +1,121 @@
+---
+title: "eslint/no-self-assign"
+rule: "eslint/no-self-assign"
+category: "Correctness"
+version: "0.0.5"
+default: true
+type_aware: false
+fix: "none"
+upstream: "https://eslint.org/docs/latest/rules/no-self-assign"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | yes |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Disallow assignments where both sides are exactly the same.
+
+### Why is this bad?
+
+Self assignments have no effect, so probably those are an error due to incomplete
+refactoring. Those indicate that what you should do is still remaining.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+foo = foo;
+
+[a, b] = [a, b];
+[a, ...b] = [x, ...b];
+
+({ a, b } = { a, x });
+
+foo &&= foo;
+foo ||= foo;
+foo ??= foo;
+```
+
+```javascript
+obj.a = obj.a;
+obj.a.b = obj.a.b;
+obj["a"] = obj["a"];
+obj[a] = obj[a];
+```
+
+Examples of **correct** code for this rule:
+
+```javascript
+foo = bar;
+[a, b] = [b, a];
+
+// This pattern is warned by the `no-use-before-define` rule.
+let foo = foo;
+
+// The default values have an effect.
+[foo = 1] = [foo];
+
+// This ignores if there is a function call.
+obj.a().b = obj.a().b;
+a().b = a().b;
+
+// `&=` and `|=` have an effect on non-integers.
+foo &= foo;
+foo |= foo;
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### props
+
+type: `boolean`
+
+default: `true`
+
+The `props` option when set to `false`, disables the checking of properties.
+
+With `props` set to `false` the following are examples of correct code:
+
+```javascript
+obj.a = obj.a;
+obj.a.b = obj.a.b;
+obj["a"] = obj["a"];
+obj[a] = obj[a];
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/no-self-assign": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/no-self-assign": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.5.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/no-self-assign)

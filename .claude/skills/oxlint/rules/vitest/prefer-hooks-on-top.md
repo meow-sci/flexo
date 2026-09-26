@@ -1,0 +1,169 @@
+---
+title: "vitest/prefer-hooks-on-top"
+rule: "vitest/prefer-hooks-on-top"
+category: "Style"
+version: "0.4.2"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/vitest-dev/eslint-plugin-vitest/blob/main/docs/rules/prefer-hooks-on-top.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+While hooks can be setup anywhere in a test file, they are always called in a
+specific order, which means it can be confusing if they're intermixed with test
+cases.
+
+### Why is this bad?
+
+When hooks are mixed with test cases, it becomes harder to understand
+the test setup and execution order. This can lead to confusion about
+which hooks apply to which tests and when they run. Grouping hooks at
+the top of each `describe` block makes the test structure clearer and
+more maintainable.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+describe("foo", () => {
+  beforeEach(() => {
+    seedMyDatabase();
+  });
+
+  it("accepts this input", () => {
+    // ...
+  });
+
+  beforeAll(() => {
+    createMyDatabase();
+  });
+
+  it("returns that value", () => {
+    // ...
+  });
+
+  describe("when the database has specific values", () => {
+    const specificValue = "...";
+    beforeEach(() => {
+      seedMyDatabase(specificValue);
+    });
+
+    it("accepts that input", () => {
+      // ...
+    });
+
+    it("throws an error", () => {
+      // ...
+    });
+
+    afterEach(() => {
+      clearLogger();
+    });
+
+    beforeEach(() => {
+      mockLogger();
+    });
+
+    it("logs a message", () => {
+      // ...
+    });
+  });
+
+  afterAll(() => {
+    removeMyDatabase();
+  });
+});
+```
+
+Examples of **correct** code for this rule:
+
+```javascript
+describe("foo", () => {
+  beforeAll(() => {
+    createMyDatabase();
+  });
+
+  beforeEach(() => {
+    seedMyDatabase();
+  });
+
+  afterAll(() => {
+    clearMyDatabase();
+  });
+
+  it("accepts this input", () => {
+    // ...
+  });
+
+  it("returns that value", () => {
+    // ...
+  });
+
+  describe("when the database has specific values", () => {
+    const specificValue = "...";
+
+    beforeEach(() => {
+      seedMyDatabase(specificValue);
+    });
+
+    beforeEach(() => {
+      mockLogger();
+    });
+
+    afterEach(() => {
+      clearLogger();
+    });
+
+    it("accepts that input", () => {
+      // ...
+    });
+
+    it("throws an error", () => {
+      // ...
+    });
+
+    it("logs a message", () => {
+      // ...
+    });
+  });
+});
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "vitest/prefer-hooks-on-top": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "vitest/prefer-hooks-on-top": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.4.2.
+
+## References
+
+- [Upstream rule documentation](https://github.com/vitest-dev/eslint-plugin-vitest/blob/main/docs/rules/prefer-hooks-on-top.md)

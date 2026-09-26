@@ -1,0 +1,146 @@
+---
+title: "unicorn/consistent-function-scoping"
+rule: "unicorn/consistent-function-scoping"
+category: "Suspicious"
+version: "0.8.0"
+default: false
+type_aware: false
+fix: "pending"
+upstream: "https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/consistent-function-scoping.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Suspicious |
+| Default | no |
+| Fix | 🚧 fix pending |
+| Type-aware | no |
+
+
+### What it does
+
+Disallow functions that are declared in a scope which does not capture
+any variables from the outer scope.
+
+### Why is this bad?
+
+Moving function declarations to the highest possible scope improves
+readability, directly [improves performance](https://stackoverflow.com/questions/80802/does-use-of-anonymous-functions-affect-performance/81329#81329)
+and allows JavaScript engines to better [optimize your performance](https://ponyfoo.com/articles/javascript-performance-pitfalls-v8#optimization-limit).
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```js
+export function doFoo(foo) {
+  // Does not capture anything from the scope, can be moved to the outer scope
+  function doBar(bar) {
+    return bar === "bar";
+  }
+  return doBar;
+}
+
+function doFoo(foo) {
+  const doBar = (bar) => {
+    return bar === "bar";
+  };
+}
+```
+
+Examples of **correct** code for this rule:
+
+```js
+function doBar(bar) {
+  return bar === "bar";
+}
+
+export function doFoo(foo) {
+  return doBar;
+}
+
+export function doFoo(foo) {
+  function doBar(bar) {
+    return bar === "bar" && foo.doBar(bar);
+  }
+  return doBar;
+}
+```
+
+### Limitations
+
+This rule does not detect or remove extraneous code blocks inside of functions:
+
+```js
+function doFoo(foo) {
+  {
+    function doBar(bar) {
+      return bar;
+    }
+  }
+
+  return foo;
+}
+```
+
+It also ignores functions that contain `JSXElement` references:
+
+```jsx
+function doFoo(FooComponent) {
+  function Bar() {
+    return <FooComponent />;
+  }
+
+  return Bar;
+}
+```
+
+[Immediately invoked function expressions (IIFE)](https://en.wikipedia.org/wiki/Immediately_invoked_function_expression) are ignored:
+
+```js
+(function () {
+  function doFoo(bar) {
+    return bar;
+  }
+})();
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### checkArrowFunctions
+
+type: `boolean`
+
+default: `true`
+
+Whether to check scoping with arrow functions.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "unicorn/consistent-function-scoping": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "unicorn/consistent-function-scoping": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.8.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/consistent-function-scoping.md)

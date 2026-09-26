@@ -1,0 +1,196 @@
+---
+title: "typescript/only-throw-error"
+rule: "typescript/only-throw-error"
+category: "Pedantic"
+version: "1.12.0"
+default: false
+type_aware: true
+fix: "none"
+upstream: "https://typescript-eslint.io/rules/only-throw-error/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Pedantic |
+| Default | no |
+| Fix | none |
+| Type-aware | yes |
+
+
+### What it does
+
+This rule disallows throwing non-Error values.
+
+### Why is this bad?
+
+It's considered good practice to only throw Error objects (or subclasses of Error). This is because Error objects automatically capture a stack trace, which is useful for debugging. Additionally, some tools and environments expect thrown values to be Error objects.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```ts
+throw "error"; // throwing string
+
+throw 42; // throwing number
+
+throw true; // throwing boolean
+
+throw { message: "error" }; // throwing plain object
+
+throw null; // throwing null
+
+throw undefined; // throwing undefined
+
+const error = "Something went wrong";
+throw error; // throwing non-Error variable
+```
+
+Examples of **correct** code for this rule:
+
+```ts
+throw new Error("Something went wrong");
+
+throw new TypeError("Invalid type");
+
+throw new RangeError("Value out of range");
+
+// Custom Error subclasses
+class CustomError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CustomError";
+  }
+}
+throw new CustomError("Custom error occurred");
+
+// Variables that are Error objects
+const error = new Error("Error message");
+throw error;
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allow
+
+type: `array`
+
+default: `[]`
+
+An array of type or value specifiers for additional types that are allowed to be thrown.
+Use this to allow throwing custom error types.
+
+#### allow[n]
+
+type: `object | string`
+
+Type or value specifier for matching specific declarations
+
+Supports four types of specifiers:
+
+1. **String specifier** (deprecated): Universal match by name
+
+```json
+"Promise"
+```
+
+2. **File specifier**: Match types/values declared in local files
+
+```json
+{ "from": "file", "name": "MyType" }
+{ "from": "file", "name": ["Type1", "Type2"] }
+{ "from": "file", "name": "MyType", "path": "./types.ts" }
+```
+
+3. **Lib specifier**: Match TypeScript built-in lib types
+
+```json
+{ "from": "lib", "name": "Promise" }
+{ "from": "lib", "name": ["Promise", "PromiseLike"] }
+```
+
+4. **Package specifier**: Match types/values from npm packages
+
+```json
+{ "from": "package", "name": "Observable", "package": "rxjs" }
+{ "from": "package", "name": ["Observable", "Subject"], "package": "rxjs" }
+```
+
+##### allow[n].from
+
+type: `"file"`
+
+Must be "file"
+
+##### allow[n].name
+
+type: `array | string`
+
+The name(s) of the type or value to match
+
+Name specifier that can be a single string or array of strings
+
+###### allow[n].name[n]
+
+type: `string`
+
+##### allow[n].path
+
+type: `string`
+
+Optional file path to specify where the types or values must be declared.
+If omitted, all files will be matched.
+
+### allowRethrowing
+
+type: `boolean`
+
+default: `true`
+
+Whether to allow rethrowing caught values that are not Error objects.
+
+### allowThrowingAny
+
+type: `boolean`
+
+default: `true`
+
+Whether to allow throwing values typed as `any`.
+
+### allowThrowingUnknown
+
+type: `boolean`
+
+default: `true`
+
+Whether to allow throwing values typed as `unknown`.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/only-throw-error": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/only-throw-error": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.12.0.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/only-throw-error/)

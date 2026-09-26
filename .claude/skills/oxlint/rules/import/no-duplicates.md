@@ -1,0 +1,117 @@
+---
+title: "import/no-duplicates"
+rule: "import/no-duplicates"
+category: "Style"
+version: "0.2.11"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-duplicates.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Reports if a resolved path is imported more than once in the same module.
+This helps avoid unnecessary duplicate imports and keeps the code clean.
+
+### Why is this bad?
+
+Importing the same module multiple times can lead to redundancy and
+unnecessary complexity. It also affects maintainability, as it might
+confuse developers and result in inconsistent usage of imports across the code.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+import { foo } from "./module";
+import { bar } from "./module";
+
+import a from "./module";
+import { b } from "./module";
+```
+
+Examples of **correct** code for this rule:
+
+```typescript
+import { foo, bar } from "./module";
+
+import * as a from "foo"; // separate statements for namespace imports
+import { b } from "foo";
+
+import { c } from "foo"; // separate type imports, unless
+import type { d } from "foo"; // `prefer-inline` is true
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### considerQueryString
+
+type: `boolean`
+
+default: `false`
+
+When set to `true`, the rule will consider the query string part of the import path
+when determining if imports are duplicates. This is useful when using loaders like
+webpack that use query strings to configure how a module should be loaded.
+
+Examples of **correct** code with this option set to `true`:
+
+```javascript
+import x from "./bar?optionX";
+import y from "./bar?optionY";
+```
+
+### preferInline
+
+type: `boolean`
+
+default: `false`
+
+When set to `true`, prefer inline type imports instead of separate type import
+statements for TypeScript code.
+
+Examples of **correct** code with this option set to `true`:
+
+```typescript
+import { Foo, type Bar } from "./module";
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "import/no-duplicates": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "import/no-duplicates": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.2.11.
+
+## References
+
+- [Upstream rule documentation](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-duplicates.md)

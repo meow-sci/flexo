@@ -1,0 +1,119 @@
+---
+title: "unicorn/no-empty-file"
+rule: "unicorn/no-empty-file"
+category: "Correctness"
+version: "0.0.15"
+default: true
+type_aware: false
+fix: "none"
+upstream: "https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/no-empty-file.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | yes |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Disallows files that do not contain any meaningful code.
+
+This includes files that consist only of:
+
+- Whitespace
+- Comments
+- Directives (e.g., `"use strict"`)
+- Empty statements (`;`)
+- Empty blocks (`{}`)
+- Hashbangs (`#!/usr/bin/env node`)
+
+### Why is this bad?
+
+Files with no executable or exportable content are typically unintentional
+or left over from refactoring. They clutter the codebase and may confuse
+tooling or developers by appearing to serve a purpose when they do not.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```js
+
+```
+
+```js
+// Comment
+```
+
+```js
+/* Comment */
+```
+
+```js
+"use strict";
+```
+
+```js
+
+```
+
+```js
+{
+}
+```
+
+```js
+#!/usr/bin/env node
+```
+
+Examples of **correct** code for this rule:
+
+```js
+const x = 0;
+```
+
+```js
+"use strict";
+const x = 0;
+```
+
+```js
+const x = 0;
+```
+
+```js
+{
+  const x = 0;
+}
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "unicorn/no-empty-file": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "unicorn/no-empty-file": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.15.
+
+## References
+
+- [Upstream rule documentation](https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/no-empty-file.md)

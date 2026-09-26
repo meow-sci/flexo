@@ -1,0 +1,139 @@
+---
+title: "eslint/class-methods-use-this"
+rule: "eslint/class-methods-use-this"
+category: "Restriction"
+version: "1.16.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://eslint.org/docs/latest/rules/class-methods-use-this"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Enforce that class methods utilize `this`.
+
+### Why is this bad?
+
+For class methods that do not use `this`, you should consider converting them
+to `static` methods. This is not always possible or desirable, but it can
+help clarify that the method does not rely on instance state.
+
+If you do convert the method into a `static` function,
+instances of the class that call that particular method have to be converted
+to a `static` call as well.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```js
+class A {
+  foo() {
+    console.log("Hello World");
+  }
+}
+```
+
+Examples of **correct** code for this rule:
+
+```js
+class A {
+  foo() {
+    this.bar = "Hello World"; // OK, this is used
+  }
+}
+
+class B {
+  constructor() {
+    // OK. constructor is exempt
+  }
+}
+
+class C {
+  static foo() {
+    // OK. static methods aren't expected to use this.
+  }
+}
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### enforceForClassFields
+
+type: `boolean`
+
+default: `true`
+
+Enforce this rule for class fields that are functions.
+
+### exceptMethods
+
+type: `string[]`
+
+default: `[]`
+
+List of method names to exempt from this rule. Names can include the hash for private methods.
+Example: `save`, `#rerender`
+
+### ignoreClassesWithImplements
+
+type: `"all" | "public-fields"`
+
+default: `null`
+
+Whether to ignore classes that implement interfaces.
+
+#### `"all"`
+
+Ignores all classes that implement interfaces
+
+#### `"public-fields"`
+
+Only ignores public fields in classes that implement interfaces
+
+### ignoreOverrideMethods
+
+type: `boolean`
+
+default: `false`
+
+Whether to ignore methods that are overridden.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/class-methods-use-this": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/class-methods-use-this": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.16.0.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/class-methods-use-this)

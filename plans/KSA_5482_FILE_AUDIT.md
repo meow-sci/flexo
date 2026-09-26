@@ -10,9 +10,13 @@ results.
 - Previous snapshot: `ksa-game-assemblies_prev/current`, build **2026.9.10.5438** (the verified baseline).
 - Current snapshot: `ksa-game-assemblies/current`, build **2026.9.22.5482** (assemblies git `a2f724f`).
 - Decompiled source paths are relative to the snapshot root (`decomp/…`); asset paths are `Content/…`.
-- `decomp/`: **150 changed, 35 added, 6 removed = 191** paths. The Brutal/System/MIConvexHull/Planet
-  namespace filter excludes no path in this build; a plain `grep -v "System\."` would wrongly drop
-  ten `*System.cs` files, so they are counted and routed here.
+- `decomp/`: **150 changed, 35 added, 6 removed = 191** paths. No changed path lies under the
+  excluded `Brutal*`, `System.*`, `MIConvexHull` or `KSA.Rendering.Planet` directories. A plain
+  `grep -vE "Brutal|System\.|MIConvexHull|Planet"` over the file list would wrongly drop ten
+  paths anyway — nine `*System.cs` files (`KSA/CelestialSystem.cs`, `KSA/ExplosionSystem.cs`,
+  `KSA/ExplosionVolumeSystem.cs`, `KSA/SelectSystem.cs`, `KSA/SuperMeshRenderSystem.cs` and the
+  five `RenderCore.Systems/*System.cs`) plus `KSA/PlanetTransparenciesRenderer.cs` — so the
+  filter was applied by directory, and all ten are counted and routed here.
 - `Content/`: **33 changed, 3 added, 0 removed = 36** paths.
 - These are **raw file counts, not semantic-change counts**. Renamed classes appear as an added and
   a removed path (the mesh-bucket systems).

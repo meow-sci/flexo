@@ -25,6 +25,7 @@ import type {
   SubPartIdRef,
 } from './types';
 import type { ReactionData } from './reactionCatalog';
+import { ksaQuatFromEulerXyz, rotate } from './ivaSeatAxes';
 
 /**
  * How far `|ExhaustDirection|` may drift from 1 before it is called out. Generous enough to
@@ -754,22 +755,33 @@ export function validateEngines(
       );
       return;
     }
-    // KSA deflects about the SubPart's local Y and Z, and sizes the TVC authority with
-    // `new float3(0, sin(MaxAngleY), sin(MaxAngleZ))` — a zero X component, i.e. the model
-    // assumes thrust runs along the SubPart's local X. A thrust axis along local Y or Z makes
-    // one of the two rotations a roll about the thrust vector, which vectors nothing.
+    // KSA deflects about the GIMBAL FRAME's Y and Z — `Gimbal2Asmb = Transform.RotationValue`
+    // (`GimbalReference.Create`), the deflection `Concatenate(AxisAngle(UnitY), AxisAngle(UnitZ))`
+    // is conjugated by it (`RocketNozzle.UpdateState`), and the TVC authority is sized as
+    // `new float3(0, sin(MaxAngleY), sin(MaxAngleZ)).Transform(Gimbal2Asmb · Asmb2VehicleAsmb)`
+    // (`GimbalController.RecomputeStaticData`) — a zero X component, i.e. the model assumes
+    // thrust runs along the gimbal's own X. With the default identity `<Gimbal><Transform>`
+    // that is the SubPart's local X; a rotated gimbal frame moves it. A thrust axis along the
+    // gimbal's Y or Z makes one of the two deflections a roll about the thrust vector, which
+    // vectors nothing. The fix is therefore to rotate the GIMBAL onto the nozzle's axis, never
+    // to bend the nozzle's direction off the bell it describes.
+    const q = ksaQuatFromEulerXyz(gimbal.transform.rotation);
+    const asmb2Gimbal = [-q[0], -q[1], -q[2], q[3]] as const;
     for (const nozzle of nozzles) {
       const d = nozzle.exhaustDirection;
       const len = Math.hypot(d.x, d.y, d.z);
       if (len < UNIT_EPSILON) continue; // the zero-length case has its own finding
-      if (Math.abs(d.x) / len >= 0.5) continue;
+      const inGimbal = rotate(d, asmb2Gimbal);
+      if (Math.abs(inGimbal.x) / len >= 0.5) continue;
       warn(
         'gimbal-thrust-axis-not-x',
         `Gimbal on ${gimbal.subPartInstanceId} vectors nozzle ${nozzle.id}, whose ` +
-          `ExhaustDirection is not along the SubPart's local X — KSA deflects about local Y and ` +
-          `Z and sizes gimbal authority assuming thrust runs along local X, so at least one ` +
-          `axis of this gimbal will do nothing. Aim the nozzle along ±X in the SubPart's own ` +
-          `frame and rotate the PLACEMENT to point the engine.`,
+          `ExhaustDirection does not run along the gimbal's own X axis — KSA deflects about ` +
+          `the gimbal frame's Y and Z (its <Transform><Rotation>, identity by default) and ` +
+          `sizes gimbal authority assuming thrust runs along the gimbal's X, so at least one ` +
+          `axis of this gimbal will do nothing. Keep the nozzle's direction on the bell's ` +
+          `exit axis and use "Align axes to nozzle" in the Gimbal editor (or set its Axis ` +
+          `rotation so local X follows the thrust) instead.`,
         gimbalSource,
       );
       break;

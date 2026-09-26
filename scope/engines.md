@@ -251,7 +251,17 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   `FxExhaustDirection` across `Content/`.
 - `<Rocket>`: `Id`, `<Core Id [SubPartId]>`, `<Nozzle Id [SubPartId]>`.
 - `<RocketEngineController>` / `<RocketThrusterController>`: `Id`, `<RocketReference Id [SubPartId]>`, `<ControlMap CSV>`.
-- `<Gimbal>` (under `<SubPart Id>`): `<MaxAngleY Degrees>`, `<MaxAngleZ Degrees>`, `<ConstrainToCircle Value>`.
+- `<Gimbal>` (under `<SubPart Id>`): `<MaxAngleY Degrees>`, `<MaxAngleZ Degrees>`, `<ConstrainToCircle Value>`,
+  plus the geometry-side `<Transform>` whose `<Rotation>` IS the gimbal frame: `Gimbal2Asmb =
+Transform.RotationValue` (`decomp/KSA/GimbalReference.cs:36-46`); the commanded deflection is
+  `Concatenate(AxisAngle(UnitY, AngleY), AxisAngle(UnitZ, AngleZ))` in that frame
+  (`Gimbal.cs:113`) and is conjugated by `Gimbal2Asmb` before it turns the nozzle
+  (`RocketNozzle.cs:313`) and the mesh (`PartTreeRenderData.cs:1084`); the TVC authority is
+  `float3(0, sin(MaxAngleY), sin(MaxAngleZ)).Transform(Gimbal2Asmb · Asmb2VehicleAsmb)`
+  (`GimbalController.cs:45-51`), i.e. thrust is assumed along the GIMBAL frame's X. flexo's
+  `gimbal-thrust-axis-not-x` therefore tests `ExhaustDirection` rotated into the gimbal frame,
+  and `moduleActions.gimbalRotationAlignedTo` / `addGimbals` write a `<Rotation>` whose X
+  follows `−ExhaustDirection` (identity for a stock −X bell).
 - `<FixedReaction>` (custom propellants; also Core monoprops/solids): `Id`, `Category` attr
   (Bipropellant/Hypergolic/Monopropellant[default]/Solid/Thermal), `<Name Value>`,
   `<Description Value>`, `<Reactant Id MassShare>`, `<PressureCondition>`→`<LnPressure Value>`/`<Temperature K>`/`<Gamma Value>`/`<MolarMass GPerMol>`.
@@ -292,7 +302,9 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   `<DeLavalNozzle>` or `<SolidMotorNozzle>` (`Content/Core/CorePropulsionAGameData.xml`;
   `decomp/KSA/RocketNozzleTemplate.cs:10-20`, `RocketNozzle.cs:278-288`). This makes the
   selected placement's arrow follow the chosen Part axis while a reused template's other
-  placements still follow their own rotations. The chooser does not change
+  placements still follow their own rotations. The written vector is snapped to an exact
+  cardinal axis within 1e-4 (six-decimal placement Eulers otherwise leave ~3e-7 residue that
+  `formatG6` would emit as `-3.26795E-07`). The chooser does not change
   `<ExhaustLocation X Y Z>` or the game's default of local −X.
 - **There is no rotation/quaternion/Euler field on a nozzle, and no roll.** Orientation is a
   direction vector, full stop; roll about the exhaust axis is undefined by design

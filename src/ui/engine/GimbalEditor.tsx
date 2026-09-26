@@ -1,10 +1,10 @@
 import { useStore } from '@nanostores/react';
-import { Field, ListBoxItem, Select, Switch } from '../kit';
+import { Button, Field, ListBoxItem, Select, Switch } from '../kit';
 import { PreciseNumberInput } from '../PreciseNumberInput';
 import { Vec3Field } from '../Vec3Field';
 import { InstanceScopeChip } from '../data/ScopeChip';
 import { $part, pushUndo, removeGimbal, setGimbal } from '../../state/editorStore';
-import { addGimbals } from './moduleActions';
+import { addGimbals, gimbalRotationAlignedTo, nozzleThrustAxisOn } from './moduleActions';
 
 /**
  * **The gimbal editor** (design: design-data-engine-modes.md §B4.9, §A5) — one `<Gimbal>`, the
@@ -33,6 +33,13 @@ export function GimbalEditor({ index, showAdd = true }: { index: number; showAdd
   const begin = () => pushUndo('edit gimbal', id);
   const taken = new Set(part.gameData.gimbals.map((g) => g.subPartInstanceId));
   const free = part.placements.map((p) => p.instanceId).filter((p) => !taken.has(p));
+  // KSA deflects about the GIMBAL frame's Y/Z and sizes authority along its X, so a bell that
+  // is not modelled down local −X (every Blender import) needs the gimbal turned onto its
+  // thrust axis — not the nozzle bent off the bell. One click does that here.
+  const thrust = nozzleThrustAxisOn(part, id);
+  const alignedRotation = thrust
+    ? gimbalRotationAlignedTo(gimbal.transform.rotation, thrust)
+    : null;
 
   return (
     <div className="flex flex-col gap-2">
@@ -88,6 +95,23 @@ export function GimbalEditor({ index, showAdd = true }: { index: number; showAdd
           }
         />
       </Field>
+      {alignedRotation && (
+        <Button
+          size="sm"
+          variant="secondary"
+          onPress={() => {
+            begin();
+            setGimbal(id, { transform: { ...gimbal.transform, rotation: alignedRotation } });
+          }}
+        >
+          Align axes to nozzle
+        </Button>
+      )}
+      <p className="text-[11px] leading-snug text-fg-subtle">
+        KSA deflects about this frame&rsquo;s Y and Z and assumes thrust runs along its X. Align
+        puts X on the nozzle&rsquo;s thrust axis (−ExhaustDirection); a stock −X bell needs no
+        rotation.
+      </p>
       <Field label="Max angle Y (°)">
         <PreciseNumberInput
           aria-label="Gimbal max angle Y in degrees"

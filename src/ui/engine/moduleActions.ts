@@ -35,7 +35,8 @@ import {
   type EngineModuleGroup,
   type EngineModuleRef,
 } from '../../state/editorStore';
-import type { EditingPart } from '../../ksa/types';
+import { identityTransform, type EditingPart, type EulerXYZ, type Vec3 } from '../../ksa/types';
+import { lightAimRotation } from '../../three/coords';
 import { engineModuleCount, focusModule, type EngineEntry } from '../../state/engineStore';
 import { scopeOfGroup } from './moduleTreeModel';
 
@@ -121,20 +122,65 @@ export const DEFAULT_GIMBAL_ANGLE_DEG = 5;
  * goes through here too, so both surfaces open a gimbal with the same angles.
  */
 export function addGimbals(instanceIds: readonly string[]): number {
-  const taken = new Set($part.get().gameData.gimbals.map((g) => g.subPartInstanceId));
+  const part = $part.get();
+  const taken = new Set(part.gameData.gimbals.map((g) => g.subPartInstanceId));
   const fresh = instanceIds.filter((id) => id && !taken.has(id));
   if (fresh.length === 0) return 0;
   pushUndo('add gimbal', fresh.length === 1 ? fresh[0] : `${fresh.length} placements`);
   // Captured BEFORE the upserts: every one appends, so this is the first new row.
-  const index = $part.get().gameData.gimbals.length;
+  const index = part.gameData.gimbals.length;
   for (const id of fresh) {
+    // Born aligned: a stock −X bell yields the identity frame; an imported bell modelled down
+    // any other local axis gets its gimbal X put on the thrust axis from the start, so the
+    // `gimbal-thrust-axis-not-x` finding never fires for a gimbal flexo itself created.
+    const thrust = nozzleThrustAxisOn(part, id);
+    const rotation = thrust ? lightAimRotation({ x: 0, y: 0, z: 0 }, thrust) : null;
     setGimbal(id, {
       maxAngleYDeg: DEFAULT_GIMBAL_ANGLE_DEG,
       maxAngleZDeg: DEFAULT_GIMBAL_ANGLE_DEG,
+      ...(rotation ? { transform: { ...identityTransform(), rotation } } : {}),
     });
   }
   focusModule({ group: 'gimbal', scope: 'part', index });
   return fresh.length;
+}
+
+/**
+ * The THRUST axis (−`ExhaustDirection`, in the SubPart's frame) of the first nozzle the
+ * SubPart under `instanceId` carries — what a gimbal on that instance vectors. Null when the
+ * placement is unknown, carries no nozzle, or its direction is degenerate.
+ */
+export function nozzleThrustAxisOn(part: EditingPart, instanceId: string): Vec3 | null {
+  const placement = part.placements.find((p) => p.instanceId === instanceId);
+  if (!placement) return null;
+  const spd = part.subPartGameData.find(
+    (sp) => sp.subPartTemplateId === placement.subPartTemplateId,
+  );
+  const nozzle = spd?.nozzles[0] ?? spd?.solidNozzles[0];
+  if (!nozzle) return null;
+  const d = nozzle.exhaustDirection;
+  if (Math.hypot(d.x, d.y, d.z) < 1e-6) return null;
+  return { x: -d.x, y: -d.y, z: -d.z };
+}
+
+/**
+ * The gimbal `<Transform><Rotation>` that puts the gimbal frame's X on `thrust` while
+ * disturbing the current rotation as little as possible — KSA deflects about the gimbal
+ * frame's Y and Z and sizes authority assuming thrust runs along its X
+ * (`GimbalReference.Create` → `Gimbal2Asmb`, `GimbalController.RecomputeStaticData`), so
+ * this is the one rotation that makes both deflection axes real. Null for a zero thrust axis.
+ */
+export function gimbalRotationAlignedTo(current: EulerXYZ, thrust: Vec3): EulerXYZ | null {
+  const aimed = lightAimRotation(current, thrust);
+  if (!aimed) return null;
+  // A cardinal thrust axis lands on a ±90° Euler — the ZYX decomposition's singularity — with
+  // ~1e-9 rad of float noise, which the editor would print as −89.99999879°. Snap to the exact
+  // right angle when within 1e-6 rad; anything further off is a genuinely oblique axis.
+  const snap = (rad: number) => {
+    const quarter = Math.round(rad / (Math.PI / 2)) * (Math.PI / 2);
+    return Math.abs(rad - quarter) < 1e-6 ? quarter || 0 : rad; // `|| 0` drops a −0
+  };
+  return { x: snap(aimed.x), y: snap(aimed.y), z: snap(aimed.z) };
 }
 
 /** Removes the module a ref names, through the action family its scope belongs to. */

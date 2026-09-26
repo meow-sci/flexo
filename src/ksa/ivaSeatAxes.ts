@@ -28,9 +28,10 @@ export const SEAT_LOCAL_UP: Readonly<Vec3> = { x: 0, y: 0, z: -1 };
 
 /**
  * Rotates `v` by `q`. Duplicated from `colliderFit.ts` rather than widening that module's
- * API — it is 8 lines of standard quaternion-rotate.
+ * API — it is 8 lines of standard quaternion-rotate. Exported for the gimbal-frame check in
+ * `engineValidation.ts`, which needs the same KSA-convention rotate without three.js.
  */
-function rotate(v: Vec3, q: Quat): Vec3 {
+export function rotate(v: Vec3, q: Quat): Vec3 {
   const [x, y, z, w] = q;
   // t = 2·(q_vec × v); v' = v + w·t + q_vec × t
   const tx = 2 * (y * v.z - z * v.y);

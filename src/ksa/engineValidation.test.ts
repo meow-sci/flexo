@@ -506,6 +506,20 @@ describe('validateEngines — gimbals (Gimbal.cs / GimbalController.RecomputeSta
     expect(has(gimballed({ x: -0.98, y: 0.2, z: 0 }), 'gimbal-thrust-axis-not-x')).toBe(false);
   });
 
+  // `Gimbal2Asmb = Transform.RotationValue` (GimbalReference.Create): the deflection axes and
+  // the authority model live in the GIMBAL frame, so a bell modelled down local −Z (the
+  // imported-mesh case) is fine once the gimbal's own X is rotated onto that axis — and a
+  // stock −X bell under a gimbal turned 90° about Y is the one that stops vectoring.
+  it('judges the thrust axis in the gimbal frame, not the SubPart frame', () => {
+    const aligned = gimballed({ x: 0, y: 0, z: -1 });
+    aligned.gameData.gimbals[0].transform.rotation = { x: 0, y: Math.PI / 2, z: 0 };
+    expect(has(aligned, 'gimbal-thrust-axis-not-x')).toBe(false);
+
+    const misaligned = gimballed({ x: -1, y: 0, z: 0 });
+    misaligned.gameData.gimbals[0].transform.rotation = { x: 0, y: Math.PI / 2, z: 0 };
+    expect(has(misaligned, 'gimbal-thrust-axis-not-x')).toBe(true);
+  });
+
   // Gimbal.CanActuate() — a 0/0 gimbal is never even built.
   it('flags a 0/0 gimbal, and says nothing else about it', () => {
     const p = gimballed();

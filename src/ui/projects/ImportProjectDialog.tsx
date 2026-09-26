@@ -392,22 +392,26 @@ function ImportingView({
   const [error, setError] = useState<string | null>(null);
   /**
    * Exactly once. StrictMode's development mount/unmount/remount would otherwise import the
-   * archive TWICE — two undo steps, two copies of every mesh (verified in the browser).
+   * archive TWICE — two undo steps, two copies of every mesh (verified in the browser). The
+   * job is keyed on a ref so the remount attaches to the SAME run, and `mounted` (a ref, not
+   * an effect-local flag) is what the run consults before touching state: an effect-local
+   * `live` flag belongs to the FIRST mount, which StrictMode has already cleaned up by the
+   * time the import finishes — so the dialog sat on "Importing…" forever in dev while the
+   * import itself had long completed.
    */
-  const started = useRef(false);
+  const job = useRef<Promise<void> | null>(null);
+  const mounted = useRef(false);
 
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    let live = true;
-    void (async () => {
+    mounted.current = true;
+    job.current ??= (async () => {
       try {
         if (pending.kind === 'archive') {
           const result = await importArchive({
             mode,
             parsed: pending.parsed,
             onProgress: (done, total) => {
-              if (live) setProgress({ done, total });
+              if (mounted.current) setProgress({ done, total });
             },
           });
           finish(mode, result.name, pending.parsed.envelope.parts.length);
@@ -420,22 +424,22 @@ function ImportingView({
           // Same path the archive takes, with an empty asset table: the parse boundary already
           // dropped every binary-backed descriptor a pasted payload could not carry.
           await importEnvelopeAsParts(pending.env, [], (done, total) => {
-            if (live) setProgress({ done, total });
+            if (mounted.current) setProgress({ done, total });
           });
           finish(mode, pending.env.projectName, pending.env.parts.length);
         } else {
           const created = await loadProjectAsNew(pending.env);
           finish(mode, created.name, pending.env.parts.length);
         }
-        if (live) onDone();
+        if (mounted.current) onDone();
       } catch (err) {
         const message = (err as Error)?.message ?? String(err);
-        if (live) setError(message);
+        if (mounted.current) setError(message);
         toast({ title: 'Import failed', description: message, variant: 'danger' });
       }
     })();
     return () => {
-      live = false;
+      mounted.current = false;
     };
     // Mount-only: the import runs once, and its inputs were fixed when the view was pushed.
     // eslint-disable-next-line react-hooks/exhaustive-deps

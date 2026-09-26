@@ -32,7 +32,13 @@ An "engine" is a small graph of cooperating GameData modules (see `src/ksa/types
 - **`RocketController`** (`<RocketEngineController>` / `<RocketThrusterController>`) — what
   makes the part fire; groups rockets, receives throttle/staging (or RCS pulses).
 - **`Gimbal`** (`<SubPart Id><Gimbal>`) — thrust-vectors a placed SubPart's nozzles; 0/0 ⇒
-  fixed.
+  fixed. Its `<Transform><Rotation>` is the **gimbal frame**: KSA deflects about that frame's
+  Y and Z and sizes the authority assuming thrust runs along its X (identity ⇒ the SubPart's
+  local X, which is why stock −X bells never set it). A bell modelled down any other local
+  axis (every Blender import) needs the gimbal turned onto its thrust axis, not the nozzle
+  bent off the bell — the Gimbal editor's **Align axes to nozzle** writes that rotation, a
+  gimbal added from the Engine tree is born aligned, and `gimbal-thrust-axis-not-x` judges
+  the direction in the gimbal frame.
 - **`CustomReaction`** (`<FixedReaction>`) — an optional user-authored propellant
   (category + mixture + gas LUT). A combustor references any reaction via `<Reaction Id>`;
   Core's `<MixtureReaction>`s additionally require a `<MixtureRatio>` (O/F by mass).
@@ -259,7 +265,12 @@ the gizmo editing the wrong one:
   The numeric editor labels the direction as **SubPart local**, offers the six local cardinal
   axes as exact unit-vector choices, and reads out the active or first placement's **Part-space**
   arrow beside it. A second chooser aims that arrow along a Part axis by rotating the chosen
-  unit vector back into the placement's local frame before writing `<ExhaustDirection>`. For a
+  unit vector back into the placement's local frame before writing `<ExhaustDirection>`, and
+  snaps the result to an exact cardinal axis when it is within 1e-4 of one — placements store
+  six-decimal Euler radians (`1.570796`), so an unsnapped inverse leaves `3.27e-7` residue
+  that reads as a "custom vector". When the placement is rotated at all, a note above the two
+  vector fields spells out where each local axis lands in Part space (`local +X → +Y · +Y → +Z ·
+  +Z → +X`), because that rotation is why typing a local X moves the handle along Part Y. For a
   custom bell with its exit on local −Z, choose local −Z even though the stock game default is
   −X; to make its arrow point along Part-space −X, choose −X in the Part-axis chooser.
 - **Magnitude.** Gizmo writes keep the PHYSICS direction unit-length, because KSA applies

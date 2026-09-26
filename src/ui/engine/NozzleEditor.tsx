@@ -32,6 +32,7 @@ import {
   type NozzleKind,
 } from '../../state/engineStore';
 import { exhaustLocalDirection, exhaustWorldDirection } from '../../three/coords';
+import { AXIS_DIRECTIONS, axisLabel, nearestAxis, snapToAxis } from './exhaustAxes';
 import { setMode } from '../../state/modeStore';
 import { $allReactions } from '../../state/reactionStore';
 import { UNIT_EPSILON } from '../../ksa/engineValidation';
@@ -46,6 +47,7 @@ import {
   type RocketSoundAction,
   type SolidMotorNozzle,
   type Vec3,
+  type Transform,
 } from '../../ksa/types';
 
 /**
@@ -71,24 +73,18 @@ import {
  * Normalize, the FX override toggle and every plume-entry mutation are discrete pushes (§B11).
  */
 
-const AXIS_DIRECTIONS = [
-  { id: '-x', label: '−X', direction: { x: -1, y: 0, z: 0 } },
-  { id: '+x', label: '+X', direction: { x: 1, y: 0, z: 0 } },
-  { id: '-y', label: '−Y', direction: { x: 0, y: -1, z: 0 } },
-  { id: '+y', label: '+Y', direction: { x: 0, y: 1, z: 0 } },
-  { id: '-z', label: '−Z', direction: { x: 0, y: 0, z: -1 } },
-  { id: '+z', label: '+Z', direction: { x: 0, y: 0, z: 1 } },
-] as const;
-
 function directionComponent(value: number): string {
   return Math.abs(value) < 0.0005 ? '0' : value.toFixed(3);
 }
 
-function exactAxisComponent(value: number): number {
-  if (Math.abs(value) < 1e-10) return 0;
-  if (Math.abs(value - 1) < 1e-10) return 1;
-  if (Math.abs(value + 1) < 1e-10) return -1;
-  return value;
+/** True when a placement carries any rotation at all — the case where local ≠ Part axes. */
+function isRotated(frame: Transform | null): frame is Transform {
+  return (
+    frame !== null &&
+    (Math.abs(frame.rotation.x) > 1e-9 ||
+      Math.abs(frame.rotation.y) > 1e-9 ||
+      Math.abs(frame.rotation.z) > 1e-9)
+  );
 }
 
 export function NozzleEditor({ templateId, index }: { templateId: string | null; index: number }) {
@@ -209,20 +205,20 @@ function NozzleBody({
   const partDirection = directionTarget
     ? exhaustWorldDirection(nozzle.exhaustDirection, directionTarget.frame)
     : null;
-  const localAxis = AXIS_DIRECTIONS.find(
-    ({ direction }) =>
-      direction.x === nozzle.exhaustDirection.x &&
-      direction.y === nozzle.exhaustDirection.y &&
-      direction.z === nozzle.exhaustDirection.z,
-  );
-  const partAxis =
-    partDirection &&
-    AXIS_DIRECTIONS.find(
-      ({ direction }) =>
-        Math.abs(direction.x - partDirection.x) < 1e-6 &&
-        Math.abs(direction.y - partDirection.y) < 1e-6 &&
-        Math.abs(direction.z - partDirection.z) < 1e-6,
-    );
+  const localAxis = nearestAxis(nozzle.exhaustDirection);
+  const partAxis = partDirection && nearestAxis(partDirection);
+  // The rotated-placement hint: where each SubPart-local axis lands in Part space, so a user
+  // whose imported bell arrived under a (90°, 0, 90°) placement can see why typing X moves
+  // the handle along Y before they conclude the fields are broken.
+  const rotatedFrame = directionTarget && isRotated(directionTarget.frame) ? directionTarget : null;
+  const axisMap = rotatedFrame
+    ? (['x', 'y', 'z'] as const).map(
+        (axis) =>
+          `+${axis.toUpperCase()} → ${axisLabel(
+            exhaustWorldDirection({ x: 0, y: 0, z: 0, [axis]: 1 }, rotatedFrame.frame),
+          )}`,
+      )
+    : null;
 
   return (
     <div className="flex flex-col gap-2">
@@ -267,6 +263,18 @@ function NozzleBody({
             moves the opposite way in world space (that is what aims each thruster outward). To
             place thrusters independently, author a nozzle per thruster at <b>part level</b>{' '}
             instead.
+          </span>
+        </div>
+      )}
+
+      {rotatedFrame && axisMap && (
+        <div className={cn(noteBox, 'text-[11px] leading-snug')}>
+          <span>
+            {rotatedFrame.instanceCount > 1
+              ? `Placement #${rotatedFrame.instanceIndex + 1} is rotated`
+              : 'This SubPart is placed with a rotation'}
+            , so the local axes both vectors below use are not the Part&rsquo;s: local{' '}
+            {axisMap.join(' · ')}. Typing a local X moves the 3D handle along that Part axis.
           </span>
         </div>
       )}
@@ -330,15 +338,13 @@ function NozzleBody({
               onSelectionChange={(key) => {
                 const preset = AXIS_DIRECTIONS.find(({ id }) => id === key);
                 if (!preset) return;
-                const local = exhaustLocalDirection(preset.direction, directionTarget.frame);
+                // Snap: six-decimal placement Eulers leave ~1e-7 residue on the other
+                // components, which would read as a "custom vector" and print as 3.27e-7.
+                const local = snapToAxis(
+                  exhaustLocalDirection(preset.direction, directionTarget.frame),
+                );
                 begin();
-                onUpdate({
-                  exhaustDirection: {
-                    x: exactAxisComponent(local.x),
-                    y: exactAxisComponent(local.y),
-                    z: exactAxisComponent(local.z),
-                  },
-                });
+                onUpdate({ exhaustDirection: local });
               }}
             >
               {AXIS_DIRECTIONS.map(({ id, label }) => (

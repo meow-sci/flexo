@@ -111,6 +111,11 @@ export async function importBuiltInPart(
       rocketControllers: part.rocketControllers,
       rockets: part.rockets,
       combustors: part.combustors,
+      thermalCores: part.thermalCores,
+      antimatterRamCores: part.antimatterRamCores,
+      magneticNozzles: part.magneticNozzles,
+      magneticScoops: part.magneticScoops,
+
       nozzles: part.nozzles,
       gimbals: part.gimbals,
       tanks: part.tanks,
@@ -128,10 +133,19 @@ export async function importBuiltInPart(
   // scope explicitly so returning to Engine mode cannot retain an unrelated old scope
   // or select the turbine exhaust merely because it was the last imported placement.
   const chamber = part.subPartGameData.find(
-    (s) => s.combustors.length > 0 || s.solidMotors.length > 0,
+    (s) =>
+      s.combustors.length > 0 ||
+      s.solidMotors.length > 0 ||
+      s.thermalCores.length > 0 ||
+      s.antimatterRamCores.length > 0,
   );
   if (chamber) activateEngine({ kind: 'subpart', templateId: chamber.subPartTemplateId });
-  else if (part.combustors.length > 0 || part.solidMotors.length > 0)
+  else if (
+    part.combustors.length > 0 ||
+    part.solidMotors.length > 0 ||
+    part.thermalCores.length > 0 ||
+    part.antimatterRamCores.length > 0
+  )
     activateEngine({ kind: 'part' });
 
   // Open the first imported clip. Without this an import that brought animations left

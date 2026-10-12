@@ -21,13 +21,13 @@ When `ConnectorTyping` is enabled, two internal connectors cannot attach to each
 
 ## ToSurface
 
-**Behavior:** Unidirectional surface attachment. This connector attaches *to* external surfaces only.
+**Behavior:** Unidirectional surface attachment. This connector attaches _to_ external surfaces only.
 
 The part positions itself so the connector point contacts the target part's surface. Default connector-to-connector attachment is disabled. Used for parts that mount perpendicular to surfaces, like RCS thrusters.
 
 ## FromSurface
 
-**Behavior:** Unidirectional surface attachment. Other parts attach *from their surfaces* to this connector.
+**Behavior:** Unidirectional surface attachment. Other parts attach _from their surfaces_ to this connector.
 
 Other parts can mount their surfaces against this connector point. Default connector-to-connector attachment is disabled. Does not support sliding/repositioning along the surface during attachment. Primary use: radial decoupler.
 
@@ -43,13 +43,13 @@ connector inspector's **Capabilities** row.
 
 A connection carries a resource only when **both** endpoints declare it.
 
-| Token            | Effect                                                                       |
-| ---------------- | ---------------------------------------------------------------------------- |
-| `BulkFluid`      | Main-engine propellant may cross. **Required** for any `Bulk`-plumbed engine. |
-| `SolidMotorCase` | SRB grain segments may stack across this connector.                          |
+| Token            | Effect                                                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `BulkFluid`      | Main-engine propellant may cross. **Required** for any `Bulk`-plumbed engine.                                               |
+| `SolidMotorCase` | SRB grain segments may stack across this connector.                                                                         |
 | `DecouplerJoint` | This connector forms a decoupler joint (**required** since rev 5007 — a `<Decoupler ConnectorId>` alone no longer does it). |
-| `NoElectricity`  | Removes electricity from the default.                                        |
-| `NoServiceFluid` | Removes service fluid (RCS) from the default.                                |
+| `NoElectricity`  | Removes electricity from the default.                                                                                       |
+| `NoServiceFluid` | Removes service fluid (RCS) from the default.                                                                               |
 
 **Empty is not "nothing".** An unauthored connector is `Electricity | ServiceFluid` — the
 two `No…` tokens SUBTRACT from that default rather than adding to an empty set (KSA inverts
@@ -78,6 +78,11 @@ Editor tags are no longer hardcoded statics in the game. They're a **data-driven
 `Fuel Tanks` are registered from that data — the old `EditorTag` static fields (and the obsolete
 `Tanks` tag, now `Fuel Tanks`) were removed game-side.
 
+Build 5554 adds the `Interstellar` category for the placeholder fusion, antimatter, scoop,
+and magnetic-trap parts. Core marks its `<EditorTagDef>` with `RootPartWhitelist="true"`
+and `FaceSnapTargetWhitelist="true"`; flexo's static autocomplete registry includes it
+in the authored category order after `Lights`.
+
 Each `<EditorTagDef>` carries boolean flags that drive editor behavior (read by `VehicleEditor.cs`):
 
 - `NotaCategory` — the tag is a **functional** marker, not a part-picker category button. flexo
@@ -100,7 +105,7 @@ registry only drives autocomplete suggestions + their grouping (`KNOWN_EDITOR_TA
 
 ---
 
-**Enable/disable connectors:** Toggle with "Enable Connecting" in the Debug Editor to show/hide attachment UI. 
+**Enable/disable connectors:** Toggle with "Enable Connecting" in the Debug Editor to show/hide attachment UI.
 
 ## Connector orientation now drives flight control, not just attachment
 

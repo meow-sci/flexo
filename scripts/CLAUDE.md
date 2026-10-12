@@ -1,7 +1,7 @@
 # scripts/ — standalone build/asset utilities
 
 **Runtime rule: NEW scripts here are vanilla Node 24+, not Bun.** Node runs
-TypeScript directly by *stripping* types (unflagged since 23.6), CI already has
+TypeScript directly by _stripping_ types (unflagged since 23.6), CI already has
 Node 24, and the repo needs no second runtime. Bun survives only for the
 **existing, unmigrated** scripts listed below — do not add to them.
 
@@ -18,7 +18,8 @@ A Node script here must therefore be:
 
 This directory is still its own package (`scripts/package.json`, `"type":
 "module"`) with its own tsconfig; the flexo app at the repo root is pnpm + Vite
-+ vitest, so never apply this file's guidance outside `scripts/`.
+
+- vitest, so never apply this file's guidance outside `scripts/`.
 
 ## Setup & running
 
@@ -30,7 +31,7 @@ pnpm thumbs:partpreview                              # = node scripts/capture-pa
 cd scripts
 bun install                                          # once (upng-js + @types/bun)
 bun build-cartoon-moon.ts ../faces                   # a dir of PNGs (or individual files)
-bun copy-ksa-assets-to-private-repo.ts --target <dir>
+bun run sync-fixtures                               # refresh vendored Core XML
 ```
 
 ## The scripts
@@ -68,15 +69,15 @@ bun copy-ksa-assets-to-private-repo.ts --target <dir>
   (`--out`, `--shape`, `--brightness`, `--zstd`, …) are documented in the
   script's header comment; mod-level docs live in
   [`ksa-mods/cartoon-moon/README.md`](../ksa-mods/cartoon-moon/README.md).
-- `copy-ksa-assets-to-private-repo.ts` — discovers the KSA Core Part/SubPart
-  catalog plus every binary it references (and the kitten character dirs,
-  copied verbatim) and writes them into the private assets repo used at CI
-  build time. Context: [`docs/asset-pipeline.md`](../docs/asset-pipeline.md).
 - `sync-test-fixtures.ts` — re-copies the vendored KSA asset fixtures in
   `src/ksa/__fixtures__/` (byte-identical Core XML committed so parser/catalog
   tests run without the private tree) from `$KSA_ASSETS_DIR`. Run after a KSA
   asset update that materially changes a vendored file. Context:
   [`src/ksa/__fixtures__/README.md`](../src/ksa/__fixtures__/README.md).
+
+The game-to-private-mirror copy utility lives in the private assets repo as
+`copy-assets.ts`, not in this directory. Its texture re-encoder also lives there.
+Context: [`docs/asset-pipeline.md`](../docs/asset-pipeline.md).
 
 ## Conventions
 

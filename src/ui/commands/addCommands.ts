@@ -14,7 +14,7 @@ import { $hasSelection } from '../../state/selectors';
 import { requestColliderFit } from '../../state/colliderStore';
 import { makeKittenMeshPart, openImportModel } from '../../state/customAssetStore';
 import {
-  COLLIDER_SHAPES,
+  ANALYTIC_COLLIDER_SHAPES,
   COLLIDER_SHAPE_LABELS,
   KITTEN_KINDS,
   KITTEN_LABELS,
@@ -78,7 +78,7 @@ function lastId(
   return list[list.length - 1]?.id;
 }
 
-const colliderCommands: Command[] = COLLIDER_SHAPES.flatMap((shape) => [
+const colliderCommands: Command[] = ANALYTIC_COLLIDER_SHAPES.flatMap((shape) => [
   {
     id: `add.collider:${shape}`,
     title: COLLIDER_SHAPE_LABELS[shape],

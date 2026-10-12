@@ -86,8 +86,8 @@ export function validateLights(part: EditingPart): LightIssue[] {
 
   for (const light of part.lights) {
     // Range ≤ 0 and Intensity ≤ 0 are culled on the CPU, before the light is ever
-    // packed for the GPU: `ClusteredLightSystem.cs:669` (`!inLight.Range.IsNearlyZero()`)
-    // and `:760` (`!(light.Range <= 0f) && !(light.Intensity <= 0f)`). The SHADER would
+    // packed for the GPU: `ClusteredLightSystem.cs:899` (`inLight.Range.IsNearlyZero()`)
+    // and `:1083` (`!(light.Range <= 0f) && !(light.Intensity <= 0f)`). The SHADER would
     // happily light with either — `step(RANGE_EPSILON, …)` merely drops the distance
     // window (a windowless 1/d²) — so "the shader rejects it" is NOT why these are dark.
     if (light.rangeM <= 0) {
@@ -95,7 +95,7 @@ export function validateLights(part: EditingPart): LightIssue[] {
         light.id,
         'light-range-nonpositive',
         `Light "${light.id}" has Range ${light.rangeM} m. KSA culls Range ≤ 0 lights ` +
-          `CPU-side before they reach the renderer (ClusteredLightSystem.cs:669,760), so it ` +
+          `CPU-side before they reach the renderer (ClusteredLightSystem.cs:899,1083), so it ` +
           `never lights anything — give it a positive range.`,
       );
     }
@@ -105,7 +105,7 @@ export function validateLights(part: EditingPart): LightIssue[] {
         light.id,
         'light-intensity-nonpositive',
         `Light "${light.id}" has Intensity ${light.intensity}. KSA culls Intensity ≤ 0 ` +
-          `lights CPU-side (ClusteredLightSystem.cs:760), so it contributes nothing — it is ` +
+          `lights CPU-side (ClusteredLightSystem.cs:1083), so it contributes nothing — it is ` +
           `not a dim light, it is no light at all.`,
       );
     }

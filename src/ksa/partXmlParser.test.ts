@@ -740,7 +740,7 @@ describe('gameDataFromAssets diameter + control (direct GameData XML)', () => {
 });
 
 describe('editor-tag registry (gap 5)', () => {
-  it('matches CoreEditorTagsGameData.xml order (build 4939)', () => {
+  it('matches CoreEditorTagsGameData.xml order (build 5554)', () => {
     expect(KNOWN_EDITOR_TAGS).toEqual([
       'Booster',
       'Capsules',
@@ -755,6 +755,7 @@ describe('editor-tag registry (gap 5)', () => {
       'Passage',
       'Cargo',
       'Lights',
+      'Interstellar',
       'Radial',
       'NoFaceSnapping',
       'All',
@@ -1425,6 +1426,36 @@ describe('<Tank Id> round-trip at both levels', () => {
   });
 });
 
+describe('<Tank><MagneticTrap> (KSA 2026.10.10.5554)', () => {
+  it('preserves the stock magnetic trap tank through export and reimport', () => {
+    const partId = 'CoreFuelTankA_Prefab_MagneticTrapA';
+    const parsed = gameDataFromAssets(
+      readVendoredAsset('CoreFuelTankAGameData.xml'),
+      partId,
+      new DOMParser(),
+    )!;
+    expect(parsed.gameData.tanks[0]).toMatchObject({ magneticTrap: true, outerRadiusM: 3 });
+    const source = editingPart({ partId, gameData: parsed.gameData });
+    const xml = serializeGameData(source);
+    expect(xml).toContain('<MagneticTrap Value="true"/>');
+    expect(roundTrip(source).gameData.tanks).toEqual(parsed.gameData.tanks);
+  });
+
+  it.each(['', '<MagneticTrap/>', '<MagneticTrap Value="false"/>'])(
+    'defaults to ordinary containment: %s',
+    (marker) => {
+      const parsed = gameDataFromAssets(
+        `<Assets><PartGameData Id="P"/><SubPartGameData Id="T"><Tank><SphericalTank><OuterRadius M="1"/></SphericalTank>${marker}</Tank></SubPartGameData></Assets>`,
+        'P',
+        new DOMParser(),
+      )!;
+      expect(parsed.subPartGameData[0].tanks[0].magneticTrap).toBe(false);
+      const source = editingPart({ subPartGameData: parsed.subPartGameData });
+      expect(serializeGameData(source)).not.toContain('MagneticTrap');
+    },
+  );
+});
+
 describe('<ConicalTank> (KSA 2026.9.22.5482)', () => {
   // Core's CoreFairingA_Prefab_NoseconeE tank, verbatim (comment dropped).
   const GAMEDATA = `<Assets>
@@ -1847,16 +1878,65 @@ describe('colliders', () => {
     warn.mockRestore();
   });
 
-  it('ignores a child element that is not one of the four Bepu primitives', () => {
+  it('ignores an unsupported triangle-mesh collider child', () => {
     const parsed = gameDataFromAssets(
       `<Assets><PartGameData Id="P"><Collider Id="C">
-        <ConvexHull Id="nope" />
+        <TriangleMesh Id="nope" />
         <Box Id="yes"><LengthX M="1"/><LengthY M="1"/><LengthZ M="1"/></Box>
       </Collider></PartGameData></Assets>`,
       'P',
       new DOMParser(),
     )!;
     expect(parsed.colliders.map((c) => c.id)).toEqual(['yes']);
+  });
+
+  it('round-trips the 5554 capsule convex hull and an explicitly scaled SubPart hull', () => {
+    const parsed = gameDataFromAssets(
+      `<Assets>
+        <PartGameData Id="P"><Collider Id="Collider1">
+          <ConvexHull Id="ConvexHullCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="-1.5708" />
+            <Mesh Id="_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1" />
+          </ConvexHull>
+        </Collider></PartGameData>
+        <SubPartGameData Id="T"><Collider Id="Collider1">
+          <ConvexHull Id="scaled"><Mesh Id="stock_hull"/><Scale X="2" Y="3" Z="4"/></ConvexHull>
+        </Collider></SubPartGameData>
+      </Assets>`,
+      'P',
+      new DOMParser(),
+    )!;
+    expect(parsed.colliders[0]).toMatchObject({
+      shape: 'ConvexHull',
+      meshId: '_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1',
+      scale: { x: 1, y: 1, z: 1 },
+      rotation: { x: 0, y: 0, z: -1.5708 },
+    });
+    expect(parsed.colliders[1]).toMatchObject({
+      shape: 'ConvexHull',
+      ownerTemplateId: 'T',
+      meshId: 'stock_hull',
+      scale: { x: 2, y: 3, z: 4 },
+    });
+    const part = editingPart({ partId: 'P', colliders: parsed.colliders });
+    expect(roundTrip(part).colliders).toEqual(parsed.colliders);
+    expect(serializeGameData(part)).toContain(
+      '<Mesh Id="_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1"',
+    );
+  });
+
+  it('distinguishes an absent hull Scale from omitted Vector3Reference attributes', () => {
+    const parsed = gameDataFromAssets(
+      `<Assets><PartGameData Id="P"><Collider>
+      <ConvexHull Id="default"><Mesh Id="hull"/></ConvexHull>
+      <ConvexHull Id="partial"><Mesh Id="hull"/><Scale Y="2"/></ConvexHull>
+    </Collider></PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!;
+    expect(parsed.colliders[0].scale).toEqual({ x: 1, y: 1, z: 1 });
+    expect(parsed.colliders[1].scale).toEqual({ x: 0, y: 2, z: 0 });
   });
 
   it('keeps <Collider> out of the unmodeled passthrough on both GameData levels', () => {

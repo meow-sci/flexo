@@ -1,7 +1,12 @@
+import {
+  ThermalCoreEditor,
+  AntimatterRamCoreEditor,
+  MagneticScoopEditor,
+} from './AdvancedPropulsionEditor';
 import { useStore } from '@nanostores/react';
 import { Button, ItemCard } from '../kit';
 import { CombustorEditor } from './CombustorEditor';
-import { NozzleEditor, SolidNozzleEditor } from './NozzleEditor';
+import { NozzleEditor, SolidNozzleEditor, MagneticNozzleEditor } from './NozzleEditor';
 import { SolidMotorEditor } from './SolidMotorEditor';
 import { GrainSegmentEditor } from './GrainSegmentEditor';
 import { ControllerEditor } from './ControllerEditor';
@@ -34,6 +39,10 @@ const EDITORS: Record<
   (props: { templateId: string | null; index: number }) => React.ReactNode
 > = {
   combustor: CombustorEditor,
+  thermalCore: ThermalCoreEditor,
+  antimatterRamCore: AntimatterRamCoreEditor,
+  magneticNozzle: MagneticNozzleEditor,
+  magneticScoop: MagneticScoopEditor,
   nozzle: NozzleEditor,
   solidMotor: SolidMotorEditor,
   grain: GrainSegmentEditor,
@@ -53,6 +62,14 @@ function listOf(
   const owner = ownerOf(part, templateId);
   if (!owner) return [];
   switch (group) {
+    case 'thermalCore':
+      return owner.thermalCores;
+    case 'antimatterRamCore':
+      return owner.antimatterRamCores;
+    case 'magneticNozzle':
+      return owner.magneticNozzles;
+    case 'magneticScoop':
+      return owner.magneticScoops;
     case 'controller':
       return owner.rocketControllers;
     case 'combustor':

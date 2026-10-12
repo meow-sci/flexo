@@ -44,7 +44,7 @@ function focusLast(): void {
 }
 
 export function cloneShippedPropellant(
-  source: ReactionData,
+  source: Exclude<ReactionData, { kind: 'Thermal' }>,
   catalog: readonly ReactionData[],
 ): void {
   const id = uniquePropellantId(`${source.id}_custom`, takenIds(catalog));

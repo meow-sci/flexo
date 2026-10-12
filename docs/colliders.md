@@ -6,20 +6,11 @@ docking port with no collider never docks. This doc is the flexo-internal view; 
 contract (schema, Bepu semantics, runtime behaviour, gotchas) lives in
 [scope/colliders.md](../scope/colliders.md).
 
-> **flexo authors four analytic primitives** — **Cylinder, Box, Sphere, Capsule** — and nothing
-> else. If a shape needs a hull, the answer is more primitives.
->
-> This used to be an absolute statement about the game ("KSA has no collider meshes"), and it is
-> no longer: **KSA build 5261 (rev 5185) added a fifth element, `<ConvexHull>`**, backed by a mesh
-> reference rather than an analytic shape (`ConvexHullColliderTemplate` extending
-> `MeshColliderTemplate`; `<Mesh>` id + optional `<Scale>`, hull built at load and **throwing** if
-> the mesh is not a closed solid). Only the ground-clutter rocks author one today, but it is
-> schema-legal on a part — and flexo does not model it, so a part carrying one round-trips lossy.
-> Tracked as gap **S1** in [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md);
-> the game-side detail is in
-> [scope/colliders.md](../scope/colliders.md#what-changed-in-5261). Note the sibling
-> `MeshColliderTemplate` is **not** authorable — it has no element in `ColliderModule` and its
-> shape creation throws "cannot be registered with Bepu yet".
+flexo authors four analytic primitives: **Cylinder, Box, Sphere, Capsule**. It also imports,
+previews, edits the transform of and exports **stock convex hull colliders**. KSA 5554 uses
+these on the medium capsule, an interstage bridge, three nosecones and a large radial decoupler;
+their `<Mesh Id>` references are preserved through saves, undo, XML and mod export. New custom
+hull creation remains unavailable (gap **S1**).
 
 ## Document model
 
@@ -30,24 +21,31 @@ visibility/lock/opacity and undo with almost no new machinery.
 
 ```ts
 interface PartCollider extends Transform {
-  id: string                        // "_collider1"; also the emitted shape Id
-  shape: 'Box' | 'Sphere' | 'Cylinder' | 'Capsule'
-  ownerTemplateId: string | null    // null = part-level; else a subPartTemplateId
-  layerId: string                   // any ordinary layer, like a placement's
+  id: string; // "_collider1"; also the emitted shape Id
+  shape: 'Box' | 'Sphere' | 'Cylinder' | 'Capsule' | 'ConvexHull';
+  meshId?: string; // ConvexHull's stock collision mesh reference
+  ownerTemplateId: string | null; // null = part-level; else a subPartTemplateId
+  layerId: string; // any ordinary layer, like a placement's
 }
 ```
 
 ### Size lives in `scale` — deliberately
 
 `Transform` is reused with one reinterpretation: **`scale` is the collider's outer size in
-METERS, not a multiplier.** KSA colliders have no scale field, so nothing is lost, and it
+METERS, not a multiplier, for an analytic shape.** This
 makes every existing transform path correct for free:
 
 - the scene object holds **normalised** (unit-box) wire geometry, so `group.scale === size`;
 - the scale gizmo therefore natively edits dimensions — exactly how `ContainerLayer` drives
   `ReferenceContainer.size`;
-- every *multiplicative* bulk op (`scaleEverything`, bulk gizmo scale) is semantically right
+- every _multiplicative_ bulk op (`scaleEverything`, bulk gizmo scale) is semantically right
   for both a mesh scale factor and a collider metre size.
+
+A **convex hull** uses `scale` as the `<Scale X Y Z>` multiplier over its collision mesh.
+Its inspector therefore says **Scale (×)** and shows the referenced mesh id. The preview loads
+the real host-only collision atlas, builds the convex envelope in the mesh's original local
+coordinates and applies the multiplier. Coverage uses the scaled hull planes and true volume.
+Converting a hull to an analytic shape removes its mesh reference; Undo restores it.
 
 `position` → `<LocationAsmb>` and `rotation` → `<Collider2Asmb>` are direct: the rotation is
 Euler XYZ radians, the same convention as a placement `<Rotation>`, so `coords.ts` applies
@@ -55,10 +53,10 @@ verbatim.
 
 ### Ownership: part-level vs SubPart-owned
 
-| `ownerTemplateId` | Emitted under                | Frame                    | Follows animation |
-| ----------------- | ---------------------------- | ------------------------ | ----------------- |
-| `null`            | `<PartGameData>`             | the Part assembly frame  | n/a               |
-| a template id     | that `<SubPartGameData Id>`  | the SubPart TEMPLATE's local frame | ✅ yes  |
+| `ownerTemplateId` | Emitted under               | Frame                              | Follows animation |
+| ----------------- | --------------------------- | ---------------------------------- | ----------------- |
+| `null`            | `<PartGameData>`            | the Part assembly frame            | n/a               |
+| a template id     | that `<SubPartGameData Id>` | the SubPart TEMPLATE's local frame | ✅ yes            |
 
 A SubPart-owned collider applies to **every placement of that template** — KSA has no
 per-instance collider — and it **follows joint animation**, which is how a landing leg gets a
@@ -69,16 +67,20 @@ deployed foot collider. Connectors cannot do this.
 `src/ksa/colliderSize.ts` is the single place that knows the mapping. Sizes are outer
 bounding dimensions in meters; **local Y is the cylinder/capsule axis**.
 
-| Shape    | `size` → XML                                | XML → `size`             | `normalizeColliderSize`               |
-| -------- | ------------------------------------------- | ------------------------ | ------------------------------------- |
-| Box      | `LengthX=x`, `LengthY=y`, `LengthZ=z`       | `(LX, LY, LZ)`           | free                                  |
-| Sphere   | `Radius = x/2`                              | `(2R, 2R, 2R)`           | uniform: `x=y=z=max(x,y,z)`           |
-| Cylinder | `LengthY = y`, `Radius = x/2`               | `(2R, LengthY, 2R)`      | `x = z = max(x,z)`                    |
-| Capsule  | `LengthY = y − x`, `Radius = x/2`           | `(2R, LengthY + 2R, 2R)` | `x = z = max(x,z)`; `y = max(y, x)`   |
+| Shape    | `size` → XML                          | XML → `size`             | `normalizeColliderSize`             |
+| -------- | ------------------------------------- | ------------------------ | ----------------------------------- |
+| Box      | `LengthX=x`, `LengthY=y`, `LengthZ=z` | `(LX, LY, LZ)`           | free                                |
+| Sphere   | `Radius = x/2`                        | `(2R, 2R, 2R)`           | uniform: `x=y=z=max(x,y,z)`         |
+| Cylinder | `LengthY = y`, `Radius = x/2`         | `(2R, LengthY, 2R)`      | `x = z = max(x,z)`                  |
+| Capsule  | `LengthY = y − x`, `Radius = x/2`     | `(2R, LengthY + 2R, 2R)` | `x = z = max(x,z)`; `y = max(y, x)` |
 
 A capsule's `<LengthY>` is only the **cylindrical segment** — the hemispherical caps add a
 radius at each end, so the outer height is `LengthY + 2·Radius`. A capsule shorter than its
-diameter *is* a sphere, hence the `y ≥ x` clamp.
+diameter _is_ a sphere, hence the `y ≥ x` clamp.
+
+Convex hulls emit `<Mesh Id>` and `<Scale X Y Z>` instead of distance dimensions; `(1,1,1)`
+is the game's default multiplier. The referenced stock collision atlas belongs to Core and
+does not need copying into the exported mod.
 
 `normalizeColliderSize` is applied by both the numeric fields and the scale gizmo, so a
 non-uniform drag snaps back. A `1e-4 m` floor prevents degenerate/NaN Bepu shapes.
@@ -114,12 +116,16 @@ names — so the built-in collision volume is explicitly copied forward onto it.
 low-alpha solid fill (which doubles as the raycast target — a bare line is fiddly to
 click). Amber by default, green when selected, matching connectors.
 
-All geometry is **normalised into the unit box** (`src/three/wireShapes.ts`, shared with
+Analytic geometry is **normalised into the unit box** (`src/three/wireShapes.ts`, shared with
 `ContainerLayer`), so `group.scale` IS the size in meters and the **scale gizmo edits
 dimensions natively**. Line width is screen-space, so a squashed collider stays readable.
 The **capsule** is the one ratio-dependent shape: its hemispherical caps are drawn as
-normalised *ellipses* precisely so the non-uniform node scale renders them as true
+normalised _ellipses_ precisely so the non-uniform node scale renders them as true
 hemispheres — its geometry is rebuilt when the diameter/height ratio changes.
+
+Imported hulls instead draw edges and fill from their true convex geometry. Their authored
+mesh offset is preserved, so a mesh whose centre lies away from its local origin remains
+correctly placed; the scale gizmo changes its multiplier.
 
 A SubPart-owned collider draws **once per placement** of its template (KSA has no
 per-instance collider, so every instance really does carry the shape), positioned exactly
@@ -199,21 +205,25 @@ Fitting needs world geometry, which only exists in the three.js scene — and `s
 samples (`src/three/samplePoints.ts`, shared with the container containment warnings), and
 writes back through the store. Same pattern as `$revealEntity`.
 
+Fitting and Circular Arrangement require an analytic shape. A hull's mesh cannot be inferred
+from its scale values, so the fit button is disabled for an imported hull and Circular
+Arrangement reports that restriction. Other transform and array steps preserve its mesh id.
+
 ## Validation
 
 `src/ksa/colliderValidation.ts` grades every problem the way `engineValidation` does, and
 the Export dialog renders both together:
 
-| Severity  | Rule                                                        | Why                                                     |
-| --------- | ----------------------------------------------------------- | ------------------------------------------------------- |
-| **block** | any size axis ≤ 0 or non-finite                             | degenerate/NaN Bepu shape                               |
-| **block** | a `<Tank Id>` equal to the emitted collider component id     | `<FeedsFrom Container>` could resolve to the collider   |
-| warn      | the Part has no collider at all                              | passes through terrain once anything else has one       |
-| warn      | a docking port with no collider                              | docking is resolved from the contacted collider         |
-| warn      | owner placed with a non-unit scale                           | KSA ignores placement scale for colliders               |
-| warn      | owner template no longer placed                              | dead data                                               |
-| warn      | capsule shorter than its diameter                            | it is just a sphere                                     |
-| warn      | more than ~32 colliders                                      | the compound rebuilds on every animation tick           |
+| Severity  | Rule                                                     | Why                                                   |
+| --------- | -------------------------------------------------------- | ----------------------------------------------------- |
+| **block** | any size axis ≤ 0 or non-finite                          | degenerate/NaN Bepu shape                             |
+| **block** | a `<Tank Id>` equal to the emitted collider component id | `<FeedsFrom Container>` could resolve to the collider |
+| warn      | the Part has no collider at all                          | passes through terrain once anything else has one     |
+| warn      | a docking port with no collider                          | docking is resolved from the contacted collider       |
+| warn      | owner placed with a non-unit scale                       | KSA ignores placement scale for colliders             |
+| warn      | owner template no longer placed                          | dead data                                             |
+| warn      | capsule shorter than its diameter                        | it is just a sphere                                   |
+| warn      | more than ~32 colliders                                  | the compound rebuilds on every animation tick         |
 
 ## Coverage check
 
@@ -224,7 +234,7 @@ pull in opposite directions:
 
 - **% of sample points covered** — geometry outside every collider clips through terrain
   and other vehicles. Uncovered points render as red dots in the viewport, so you can see
-  *where* the hole is rather than just that there is one.
+  _where_ the hole is rather than just that there is one.
 - **collider volume ÷ mesh-bounds volume** — bloat means invisible walls, and it inflates
   the vehicle `BoundingBoxAsmb` / `BoundingSphereRadiusBody` KSA derives from the collider
   compound. Overlap within a part is free in-game (a Bepu compound never self-collides), so
@@ -260,8 +270,8 @@ KSA XML.
 
 ## Deliberate limits
 
-- **No convex-hull colliders** — KSA accepts `<ConvexHull>` since 5261, but flexo does not model
-  it (gap S1; see the note at the top of this page).
+- **No new custom convex-hull authoring** — stock hulls are preserved and editable, but flexo
+  does not create or bundle new collision meshes (remaining gap S1).
 - **No per-placement colliders** — KSA cannot represent them. A SubPart-owned collider
   applies to every instance of that template.
 - **Placement scale is not honoured**, matching the game. flexo warns instead of silently

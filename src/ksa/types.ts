@@ -119,18 +119,27 @@ export interface Connector extends Transform {
 
 /**
  * One KSA collision primitive shape. `ColliderModule.Template`
- * (`decomp/KSA/ColliderModule.cs`) accepts EXACTLY these four child elements, each
- * mapping 1:1 onto a Bepu analytic shape — KSA has NO convex-hull / triangle-mesh
- * part collider, so a collision volume is always a handful of these primitives.
+ * (`decomp/KSA/ColliderModule.cs`) accepts four analytic shapes and a mesh-backed
+ * convex hull. There is no authorable triangle-mesh collider.
  * See scope/colliders.md.
  */
-export type ColliderShape = 'Box' | 'Sphere' | 'Cylinder' | 'Capsule';
+export type AnalyticColliderShape = 'Box' | 'Sphere' | 'Cylinder' | 'Capsule';
+export type ColliderShape = AnalyticColliderShape | 'ConvexHull';
 
 /**
  * All collider shapes, in UI order. Cylinder leads because Core uses it 66× vs
  * Box 29 / Sphere 21 / Capsule 0 across the shipped `Content/` tree.
  */
-export const COLLIDER_SHAPES: readonly ColliderShape[] = ['Cylinder', 'Box', 'Sphere', 'Capsule'];
+export const ANALYTIC_COLLIDER_SHAPES: readonly AnalyticColliderShape[] = [
+  'Cylinder',
+  'Box',
+  'Sphere',
+  'Capsule',
+];
+export const COLLIDER_SHAPES: readonly ColliderShape[] = [
+  ...ANALYTIC_COLLIDER_SHAPES,
+  'ConvexHull',
+];
 
 /** Human-facing shape labels (menus, inspector). */
 export const COLLIDER_SHAPE_LABELS: Record<ColliderShape, string> = {
@@ -138,6 +147,7 @@ export const COLLIDER_SHAPE_LABELS: Record<ColliderShape, string> = {
   Box: 'Box',
   Sphere: 'Sphere',
   Capsule: 'Capsule',
+  ConvexHull: 'Convex hull',
 };
 
 /**
@@ -150,8 +160,8 @@ export const COLLIDER_SHAPE_LABELS: Record<ColliderShape, string> = {
  *    `QuaternionEx.CreateFromXyzRadians` (`ColliderTemplate.Create`), the identical
  *    function `TransformReference.RotationValue` uses for a placement `<Rotation>`, so
  *    src/three/coords.ts's `EULER_ORDER` mapping applies verbatim.
- *  - `scale` → the collider's OUTER SIZE IN METERS, not a multiplier. KSA colliders have
- *    no scale field; storing size here is what makes every existing transform path
+ *  - `scale` → an analytic collider's OUTER SIZE IN METERS, or a convex hull's
+ *    `<Scale X Y Z>` multiplier over its referenced mesh. Storing dimensions here makes every existing transform path
  *    correct for free (the scene object holds unit-box wire geometry, so `group.scale`
  *    IS the size and the scale gizmo natively edits dimensions — exactly how
  *    ContainerLayer drives ReferenceContainer.size). See src/ksa/colliderSize.ts for
@@ -161,6 +171,8 @@ export interface PartCollider extends Transform {
   /** Document id, also emitted as the shape element's `Id`, e.g. "_collider1". */
   id: string;
   shape: ColliderShape;
+  /** `<ConvexHull><Mesh Id>`; absent on analytic primitives. References a game mesh. */
+  meshId?: string;
   /**
    * `null` ⇒ part-level: emitted under `<PartGameData>`, transform in the Part's
    * assembly frame. Otherwise a `subPartTemplateId` ⇒ emitted under that template's
@@ -474,7 +486,7 @@ export interface EditorTagDef {
 /**
  * KSA's editor-tag registry in the game's authored order (= the order of category
  * buttons in the part picker). Mirrors `CoreEditorTagsGameData.xml` as of build
- * **2026.7.6.4939**. This is a static snapshot, not a live parse: flexo only uses it for
+ * **2026.10.10.5554**. This is a static snapshot, not a live parse: flexo only uses it for
  * freeform-entry autocomplete, so a modder-defined tag simply isn't suggested (it can
  * still be typed). Keep in sync with the game file on a registry change.
  */
@@ -492,6 +504,7 @@ export const EDITOR_TAG_DEFS: readonly EditorTagDef[] = [
   { id: 'Passage', notaCategory: false },
   { id: 'Cargo', notaCategory: false },
   { id: 'Lights', notaCategory: false },
+  { id: 'Interstellar', notaCategory: false },
   { id: 'Radial', notaCategory: true },
   { id: 'NoFaceSnapping', notaCategory: true },
   { id: 'All', notaCategory: true },
@@ -555,6 +568,8 @@ export interface Tank {
    * omitted at the default); Core's RCS spheres declare `Thruster`.
    */
   roleAffinity: TankRoleAffinity;
+  /** `<Tank><MagneticTrap Value>`: true holds only magnetically contained substances. */
+  magneticTrap: boolean;
   /**
    * `<LocationAsmb X Y Z>` inside the shape element — the tank's mass offset in the
    * assembly frame (`AsmbTransformTemplate.LocationAsmb`). Omitted at (0,0,0).
@@ -792,7 +807,7 @@ export type ReactionCategory =
 export interface KnownReaction {
   id: string;
   name: string;
-  kind: 'Fixed' | 'Mixture';
+  kind: 'Fixed' | 'Mixture' | 'Thermal';
   category: ReactionCategory;
   /** `<DefaultMixtureRatio>` (mixtures only). */
   defaultMixtureRatio?: number;
@@ -803,9 +818,8 @@ export interface KnownReaction {
 
 /**
  * Static snapshot of the combustor-drivable reactions shipped in Core's
- * `Reactions.xml` (build 2026.7.5.4892) — the fallback suggestions when the live
- * catalog is absent. `ThermalReaction`s are excluded: they need a thermal core,
- * which no part template provides yet (KSA's own designer refuses them).
+ * `Reactions.xml` (build 5554) — fallback suggestions when the live catalog is absent.
+ * Thermal reactions are offered only for ThermalCore authoring.
  */
 export const KNOWN_REACTIONS: readonly KnownReaction[] = [
   // prettier-ignore
@@ -822,6 +836,13 @@ export const KNOWN_REACTIONS: readonly KnownReaction[] = [
   { id: 'MMH_NTO', name: 'MMH + NTO', kind: 'Mixture', category: 'Hypergolic', defaultMixtureRatio: 1.65, ratioMin: 0.249640560569234, ratioMax: 49.92811211384679 },
   { id: 'HTPDecomposition', name: 'HTP', kind: 'Fixed', category: 'Monopropellant' },
   { id: 'HydrazineDecomposition', name: 'Hydrazine', kind: 'Fixed', category: 'Monopropellant' },
+  { id: 'ThermalH2', name: 'Hydrogen', kind: 'Thermal', category: 'Thermal' },
+  { id: 'ThermalH2O', name: 'Water', kind: 'Thermal', category: 'Thermal' },
+  { id: 'ThermalCH4', name: 'Methane', kind: 'Thermal', category: 'Thermal' },
+  { id: 'ThermalNH3', name: 'Ammonia', kind: 'Thermal', category: 'Thermal' },
+  { id: 'ThermalCO2', name: 'Carbon Dioxide', kind: 'Thermal', category: 'Thermal' },
+  { id: 'ThermalN2', name: 'Nitrogen', kind: 'Thermal', category: 'Thermal' },
+  { id: 'FusionH2', name: 'Hydrogen Plasma', kind: 'Thermal', category: 'Thermal' },
   { id: 'APCP', name: 'APCP', kind: 'Fixed', category: 'Solid' },
   { id: 'DoubleBase', name: 'Double-Base', kind: 'Fixed', category: 'Solid' },
 ];
@@ -967,6 +988,88 @@ export interface Combustor {
   minimumThrottle: number;
   /** `<MinimumPulseTime Seconds>` minimum firing duration; null ⇒ omit (KSA default 0.001 s). */
   minimumPulseTimeS: number | null;
+}
+
+/** KSA ThermalCoreTemplate: externally heated propellant, with a temperature-indexed LUT. */
+export interface ThermalCore {
+  id: string;
+  reactionId: string;
+  coreTemperatureK: number;
+  maxPressurePa: number;
+  thermalEfficiency: number;
+  minimumThrottle: number;
+  minimumPulseTimeS: number | null;
+  feeds: FeedSource[];
+  plumbing: PlumbingClass;
+}
+
+/** KSA AntimatterRamCoreTemplate. Scoop inputs come from the assembled vehicle at runtime. */
+export interface AntimatterRamCore {
+  id: string;
+  jetPowerW: number;
+  annihilationEfficiency: number;
+  carriedExhaustFractionOfLight: number;
+  antimatterId: string;
+  reactionMassId: string;
+  minimumThrottle: number;
+  minimumPulseTimeS: number | null;
+  feeds: FeedSource[];
+}
+
+/** KSA MagneticScoopTemplate: the vehicle collects this substance phase. */
+export interface MagneticScoop {
+  id: string;
+  captureRadiusM: number;
+  collectsId: string;
+}
+
+/** Magnetic nozzle has only visual diameter and the RocketNozzleTemplate exhaust fields. */
+export type MagneticNozzle = Omit<
+  SolidMotorNozzle,
+  'exitDiameterM' | 'flowEfficiency' | 'expansionEfficiency' | 'fxExitDiameterM'
+> & { fxExitDiameterM: number };
+
+export function createThermalCore(id: string): ThermalCore {
+  return {
+    id,
+    reactionId: 'ThermalH2',
+    coreTemperatureK: 3000,
+    maxPressurePa: 5_000_000,
+    thermalEfficiency: 1,
+    minimumThrottle: 1,
+    minimumPulseTimeS: null,
+    feeds: [{ kind: 'parent' }],
+    plumbing: 'Bulk',
+  };
+}
+
+export function createAntimatterRamCore(id: string): AntimatterRamCore {
+  return {
+    id,
+    jetPowerW: 30e12,
+    annihilationEfficiency: 0.5,
+    carriedExhaustFractionOfLight: 0.4,
+    antimatterId: 'AntiH2(l)',
+    reactionMassId: 'H2(l)',
+    minimumThrottle: 0.01,
+    minimumPulseTimeS: null,
+    feeds: [{ kind: 'parent' }],
+  };
+}
+
+export function createMagneticNozzle(id: string): MagneticNozzle {
+  const { exitDiameterM, flowEfficiency, expansionEfficiency, ...fields } = createNozzle(id);
+  void exitDiameterM;
+  void flowEfficiency;
+  void expansionEfficiency;
+  // A magnetic nozzle has no area ratio or physical exit size.
+  const { areaRatio, ...common } = fields;
+  void areaRatio;
+  return { ...common, fxExitDiameterM: 1 };
+}
+
+export function createMagneticScoop(id: string): MagneticScoop {
+  return { id, captureRadiusM: 1_000_000, collectsId: 'H2(l)' };
 }
 
 /**
@@ -1342,6 +1445,10 @@ export interface PartGameData {
   rockets: Rocket[];
   /** Part-level combustors (e.g. a gas-generator chamber on the root part). */
   combustors: Combustor[];
+  thermalCores: ThermalCore[];
+  antimatterRamCores: AntimatterRamCore[];
+  magneticNozzles: MagneticNozzle[];
+  magneticScoops: MagneticScoop[];
   /** Part-level nozzles (uncommon — nozzles usually live on a SubPart). */
   nozzles: DeLavalNozzle[];
   /**
@@ -1382,6 +1489,10 @@ export interface SubPartGameData {
   solarPanels: SolarPanel[];
   /** Reusable thrust-chamber combustors that travel with this mesh. */
   combustors: Combustor[];
+  thermalCores: ThermalCore[];
+  antimatterRamCores: AntimatterRamCore[];
+  magneticNozzles: MagneticNozzle[];
+  magneticScoops: MagneticScoop[];
   /** Reusable nozzles that travel with this mesh. */
   nozzles: DeLavalNozzle[];
   /** Reusable `<Rocket>` bindings (core + nozzles) that travel with this mesh. */
@@ -1406,6 +1517,10 @@ export function isSubPartGameDataEmpty(spd: SubPartGameData): boolean {
     spd.tanks.length === 0 &&
     spd.solarPanels.length === 0 &&
     spd.combustors.length === 0 &&
+    spd.thermalCores.length === 0 &&
+    spd.antimatterRamCores.length === 0 &&
+    spd.magneticNozzles.length === 0 &&
+    spd.magneticScoops.length === 0 &&
     spd.nozzles.length === 0 &&
     spd.rockets.length === 0 &&
     spd.rocketControllers.length === 0 &&
@@ -1428,6 +1543,7 @@ export function createTank(): Tank {
     radiusTopM: 0.5,
     wallThicknessMm: 2.0,
     roleAffinity: 'Engine',
+    magneticTrap: false,
     locationAsmb: { x: 0, y: 0, z: 0 },
   };
 }
@@ -1491,6 +1607,10 @@ export function createEmptyGameData(): PartGameData {
     rocketControllers: [],
     rockets: [],
     combustors: [],
+    thermalCores: [],
+    antimatterRamCores: [],
+    magneticNozzles: [],
+    magneticScoops: [],
     nozzles: [],
     tanks: [],
     solidMotors: [],
@@ -1510,6 +1630,10 @@ export function createSubPartGameData(subPartTemplateId: string): SubPartGameDat
     tanks: [],
     solarPanels: [],
     combustors: [],
+    thermalCores: [],
+    antimatterRamCores: [],
+    magneticNozzles: [],
+    magneticScoops: [],
     nozzles: [],
     rockets: [],
     rocketControllers: [],

@@ -6,7 +6,7 @@ import { CoveragePanel } from './CoveragePanel';
 import { $part, setColliderOwner, setColliderShape } from '../../state/editorStore';
 import { requestColliderFit } from '../../state/colliderStore';
 import { colliderLocalFromWorld, colliderWorld } from '../../three/coords';
-import { COLLIDER_SHAPES, type ColliderShape, type PartCollider } from '../../ksa/types';
+import { ANALYTIC_COLLIDER_SHAPES, type ColliderShape, type PartCollider } from '../../ksa/types';
 
 /** Select key standing in for `ownerTemplateId: null` (a Select can't carry null). */
 export const PART_OWNER_KEY = '\u0000part';
@@ -71,7 +71,10 @@ export function ColliderInspector({
           isDisabled={locked}
           onChange={(key) => setColliderShape(index, key as ColliderShape)}
         >
-          {COLLIDER_SHAPES.map((shape) => (
+          {(collider.shape === 'ConvexHull'
+            ? [...ANALYTIC_COLLIDER_SHAPES, 'ConvexHull']
+            : ANALYTIC_COLLIDER_SHAPES
+          ).map((shape) => (
             <ListBoxItem key={shape} id={shape}>
               {shape}
             </ListBoxItem>
@@ -94,6 +97,11 @@ export function ColliderInspector({
           </>
         </Select>
       </div>
+      {collider.shape === 'ConvexHull' && (
+        <span className="break-all text-xs leading-snug text-fg-subtle">
+          Collision mesh: {collider.meshId}. Scale multiplies this mesh; it is not a size in metres.
+        </span>
+      )}
       {owner != null && (
         <span className="text-xs leading-snug text-fg-subtle">
           {instances === 0
@@ -112,14 +120,18 @@ export function ColliderInspector({
         transform={collider}
         entityName={collider.id}
         locked={locked}
-        third={{ kind: 'colliderSize', shape: collider.shape }}
+        third={
+          collider.shape === 'ConvexHull'
+            ? { kind: 'scale' }
+            : { kind: 'colliderSize', shape: collider.shape }
+        }
       />
 
       <div className="flex flex-col gap-0.5">
         <Button
           size="sm"
           variant="secondary"
-          isDisabled={locked}
+          isDisabled={locked || collider.shape === 'ConvexHull'}
           onPress={() => requestColliderFit(collider.shape, { kind: 'existing', index })}
         >
           Fit to Selection

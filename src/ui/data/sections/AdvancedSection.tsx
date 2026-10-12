@@ -46,7 +46,18 @@ export function AdvancedSection({ meta }: { meta: SectionMeta }) {
           Part-level combustors and nozzles are how a gas-generator cycle is authored: a part-level{' '}
           <code>&lt;Rocket&gt;</code>&rsquo;s refs may point at hardware on any SubPart instance.
         </p>
-        <ModuleCardList templateId={null} groups={['combustor', 'nozzle', 'rocket']} />
+        <ModuleCardList
+          templateId={null}
+          groups={[
+            'combustor',
+            'nozzle',
+            'thermalCore',
+            'antimatterRamCore',
+            'magneticNozzle',
+            'magneticScoop',
+            'rocket',
+          ]}
+        />
       </div>
     </DataSection>
   );

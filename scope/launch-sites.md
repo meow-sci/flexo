@@ -6,8 +6,25 @@ Full evidence: [analysis/icrp/KSA_LAUNCH_SITES_AND_MODS.md](../analysis/icrp/KSA
 and [analysis/icrp/PEBKAC_SYSTEM_MODS.md](../analysis/icrp/PEBKAC_SYSTEM_MODS.md);
 plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (L1–L9) + §Phase 7.
 
-**Baseline:** re-verified against KSA build **2026.9.22.5482** — authored schema, `SolSystem.xml`
-and `Astronomicals.xml` unchanged; see [What changed in 5482](#what-changed-in-5482).
+**Baseline:** re-verified against KSA build **2026.10.10.5554** — the existing launch-site
+contract and `SolSystem.xml` are intact; Earth adds a city and the game adds interstellar
+scenarios. See [What changed in 5554](#what-changed-in-5554).
+
+## What changed in 5554
+
+**Existing launch-site export — intact.** `Astronomicals.xml` adds only Earth city
+`<City Id="Metline"><Latitude Degrees="37.2333"/><Longitude Degrees="10.05"/></City>`;
+ICRP clones current Earth on export and naturally retains it. The miniature Earth and
+SolSystem fixtures' selected fields match 5554, so no fixture trim is required.
+`SolSystem.xml`, location/decal classes and the first-wins registry contract are unchanged.
+
+The game also adds `<Barycenter>` (`BarycenterTemplate.cs`), stellar `<Position>` /
+`<SphereOfInfluence>` / `<Orbit>`, orbit `<CentralMass>` / `<TwoBody>` / `<Barycentric>`,
+and system `<InterstellarGas AtomsPerCm3>`. These belong to new interstellar scenarios;
+ICRP exports the existing selected SolSystem with launch sites and does not author those
+scenarios. `AssetBundle`'s new Barycenter entry leaves the existing top-level body
+registration and duplicate-id rule unchanged. This extends the existing celestial scope,
+not the Part authoring contract.
 
 ## Contract facts
 

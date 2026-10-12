@@ -2,6 +2,7 @@ import { atom, computed } from 'nanostores';
 import type {
   EditingPart,
   SolidMotorNozzle,
+  MagneticNozzle,
   SubPartGameData,
   SubPartPlacement,
   Transform,
@@ -13,6 +14,8 @@ import {
   $selection,
   $toolMode,
   updateNozzle,
+  updateAdvancedEngineModule,
+  ADVANCED_ENGINE_LIST,
   updatePartNozzle,
   updatePartSolidNozzle,
   updateSubPartSolidNozzle,
@@ -100,7 +103,7 @@ export function engineEntryShortLabel(entry: EngineEntry): string {
 }
 
 /** De Laval (`<DeLavalNozzle>`) vs solid-motor (`<SolidMotorNozzle>`) — separate lists in KSA. */
-export type NozzleKind = 'delaval' | 'solid';
+export type NozzleKind = 'delaval' | 'solid' | 'magnetic';
 
 /**
  * Which of a nozzle's two placement pairs a handle/gizmo edits:
@@ -154,7 +157,7 @@ export function nozzleRefKey(ref: NozzleRef): string {
 export interface NozzleTarget {
   ref: NozzleRef;
   key: string;
-  nozzle: SolidMotorNozzle;
+  nozzle: SolidMotorNozzle | MagneticNozzle;
   /**
    * The placement whose assembly frame {@link location}/{@link direction} are expressed
    * in; **null ⇒ the Part frame** (a part-level nozzle, or a template with no placement).
@@ -193,6 +196,10 @@ export const $activeNozzleRef = atom<NozzleRef | null>(null);
 function hasEngineModules(s: SubPartGameData): boolean {
   return (
     s.combustors.length > 0 ||
+    s.thermalCores.length > 0 ||
+    s.antimatterRamCores.length > 0 ||
+    s.magneticNozzles.length > 0 ||
+    s.magneticScoops.length > 0 ||
     s.solidMotors.length > 0 ||
     s.nozzles.length > 0 ||
     s.solidNozzles.length > 0 ||
@@ -214,6 +221,10 @@ export const $engineEntries = computed([$part], (part): EngineEntry[] => {
   const g = part.gameData;
   if (
     g.combustors.length > 0 ||
+    g.thermalCores.length > 0 ||
+    g.antimatterRamCores.length > 0 ||
+    g.magneticNozzles.length > 0 ||
+    g.magneticScoops.length > 0 ||
     g.solidMotors.length > 0 ||
     g.nozzles.length > 0 ||
     g.solidNozzles.length > 0 ||
@@ -259,15 +270,17 @@ export const $resolvedNozzleTargets = computed(
       entry.kind === 'subpart'
         ? part.subPartGameData.find((s) => s.subPartTemplateId === entry.templateId)
         : undefined;
-    const groups: { kind: NozzleKind; list: readonly SolidMotorNozzle[] }[] =
+    const groups: { kind: NozzleKind; list: readonly (SolidMotorNozzle | MagneticNozzle)[] }[] =
       entry.kind === 'part'
         ? [
             { kind: 'delaval', list: part.gameData.nozzles },
             { kind: 'solid', list: part.gameData.solidNozzles },
+            { kind: 'magnetic', list: part.gameData.magneticNozzles },
           ]
         : [
             { kind: 'delaval', list: spd?.nozzles ?? [] },
             { kind: 'solid', list: spd?.solidNozzles ?? [] },
+            { kind: 'magnetic', list: spd?.magneticNozzles ?? [] },
           ];
     // One frame per instantiation. `[null]` (not `[]`) for part scope and for an unplaced
     // template: both still get exactly one handle, drawn in the Part frame.
@@ -435,6 +448,18 @@ export function cycleExhaustTarget(delta: 1 | -1): void {
  * once at drag/interaction start.
  */
 export function updateNozzleAt(ref: NozzleRef, patch: Partial<SolidMotorNozzle>): void {
+  if (ref.kind === 'magnetic') {
+    updateAdvancedEngineModule(
+      'magneticNozzle',
+      ref.scope === 'subpart' ? ref.templateId : null,
+      ref.index,
+      {
+        ...patch,
+        ...(patch.fxExitDiameterM === null ? { fxExitDiameterM: 1 } : {}),
+      } as Partial<MagneticNozzle>,
+    );
+    return;
+  }
   if (ref.scope === 'subpart') {
     if (ref.kind === 'delaval') updateNozzle(ref.templateId, ref.index, patch);
     else updateSubPartSolidNozzle(ref.templateId, ref.index, patch);
@@ -499,6 +524,8 @@ export function engineModuleCount(
         ? part.subPartGameData.find((s) => s.subPartTemplateId === entry.templateId)
         : undefined;
   if (!owner) return 0;
+  if (group in ADVANCED_ENGINE_LIST)
+    return owner[ADVANCED_ENGINE_LIST[group as keyof typeof ADVANCED_ENGINE_LIST]].length;
   switch (group) {
     case 'controller':
       return owner.rocketControllers.length;
@@ -712,6 +739,10 @@ export function toggleEngineTreeGroup(id: string): void {
 /** Which tree group each module group belongs to — the solid trio share one. */
 const TREE_GROUP_OF: Readonly<Record<EngineModuleGroup, string>> = {
   combustor: 'combustors',
+  thermalCore: 'thermal',
+  antimatterRamCore: 'ram',
+  magneticNozzle: 'magnetic',
+  magneticScoop: 'scoops',
   nozzle: 'nozzles',
   solidMotor: 'solid',
   grain: 'solid',

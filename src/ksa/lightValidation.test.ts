@@ -82,7 +82,7 @@ describe('validateLights', () => {
     expect(issues.map((i) => i.code)).toEqual(['light-range-nonpositive']);
     expect(issues[0].severity).toBe('warn');
     expect(issues[0].lightId).toBe('_light1');
-    expect(issues[0].message).toMatch(/ClusteredLightSystem\.cs:669,760/);
+    expect(issues[0].message).toMatch(/ClusteredLightSystem\.cs:899,1083/);
     // The corrected claim: the old "TileFrustum culls it" story must not come back.
     expect(issues[0].message).not.toMatch(/TileFrustum/);
   });
@@ -99,7 +99,7 @@ describe('validateLights', () => {
     const issues = validateLights(part);
     expect(issues.map((i) => i.code)).toEqual(['light-intensity-nonpositive']);
     expect(issues[0].severity).toBe('warn');
-    expect(issues[0].message).toMatch(/ClusteredLightSystem\.cs:760/);
+    expect(issues[0].message).toMatch(/ClusteredLightSystem\.cs:1083/);
   });
 
   it('stays quiet at a tiny but positive range and intensity', () => {

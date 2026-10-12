@@ -73,7 +73,12 @@ export function consumerOptionsOf(part: EditingPart): ConsumerOption[] {
     if (!id.trim()) return;
     out.push({ consumerId: id, subPartInstanceId, defersToParent, label: `${id} (${scope})` });
   };
-  for (const c of [...part.gameData.combustors, ...part.gameData.solidMotors]) {
+  for (const c of [
+    ...part.gameData.combustors,
+    ...part.gameData.solidMotors,
+    ...part.gameData.thermalCores,
+    ...part.gameData.antimatterRamCores,
+  ]) {
     push(
       c.id,
       null,
@@ -86,7 +91,12 @@ export function consumerOptionsOf(part: EditingPart): ConsumerOption[] {
       (s) => s.subPartTemplateId === placement.subPartTemplateId,
     );
     if (!spd) continue;
-    for (const c of [...spd.combustors, ...spd.solidMotors]) {
+    for (const c of [
+      ...spd.combustors,
+      ...spd.solidMotors,
+      ...spd.thermalCores,
+      ...spd.antimatterRamCores,
+    ]) {
       push(
         c.id,
         placement.instanceId,

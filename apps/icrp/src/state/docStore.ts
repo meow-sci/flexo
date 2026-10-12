@@ -714,6 +714,7 @@ export function duplicateColliderRef(ref: ColliderRef): void {
   if (!src) return;
   addColliderTo(ref.owner, {
     shape: src.shape,
+    ...(src.shape === 'ConvexHull' ? { meshId: src.meshId } : {}),
     position: { x: src.position.x + 0.5, y: src.position.y + 0.5, z: src.position.z },
     rotation: { ...src.rotation },
     scale: { ...src.scale },

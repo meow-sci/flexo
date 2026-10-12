@@ -1,3 +1,8 @@
+import {
+  ThermalCoreEditor,
+  AntimatterRamCoreEditor,
+  MagneticScoopEditor,
+} from './AdvancedPropulsionEditor';
 import { useStore } from '@nanostores/react';
 import { ChevronLeft, Crosshair, MoreVertical } from 'lucide-react';
 import {
@@ -13,7 +18,7 @@ import {
 } from '../kit';
 import { PartScopeChip, TemplateScopeChip } from '../data/ScopeChip';
 import { CombustorEditor } from './CombustorEditor';
-import { NozzleEditor, SolidNozzleEditor } from './NozzleEditor';
+import { NozzleEditor, SolidNozzleEditor, MagneticNozzleEditor } from './NozzleEditor';
 import { SolidMotorEditor } from './SolidMotorEditor';
 import { GrainSegmentEditor } from './GrainSegmentEditor';
 import { RocketEditor } from './RocketEditor';
@@ -129,6 +134,14 @@ function ModuleBody({ module, entry }: { module: EngineModuleRef; entry: EngineE
   const { group, index } = module;
 
   switch (group) {
+    case 'thermalCore':
+      return <ThermalCoreEditor templateId={templateId} index={index} />;
+    case 'antimatterRamCore':
+      return <AntimatterRamCoreEditor templateId={templateId} index={index} />;
+    case 'magneticNozzle':
+      return <MagneticNozzleEditor templateId={templateId} index={index} />;
+    case 'magneticScoop':
+      return <MagneticScoopEditor templateId={templateId} index={index} />;
     case 'combustor':
       return <CombustorEditor templateId={templateId} index={index} />;
     case 'nozzle':

@@ -23,6 +23,7 @@ import {
 import { $seatView, exitSeatView } from '../state/ivaStore';
 import { SEAT_LOCAL_UP, seatAxesFromRotation, seatRotationFromAxes } from '../ksa/ivaSeatAxes';
 import { evaluateCoverage, type PlacedCollider } from '../measure/colliderCoverage';
+import { getCollisionMeshGeometry, hullCoverage } from './CollisionMeshCache';
 import { KittenObject } from './KittenObject';
 import { LightObject } from './LightObject';
 import { planPreviewBudget } from './lightVolume';
@@ -1601,7 +1602,7 @@ export class EditorScene {
    * store because both halves — the geometry sample and the owner-frame resolution — need
    * the scene.
    */
-  private handleCoverageCheck(): void {
+  private async handleCoverageCheck(): Promise<void> {
     $coverageRequest.set(false);
     const part = $part.get();
     const points = collectWorldPoints(
@@ -1612,6 +1613,22 @@ export class EditorScene {
     // placement of its template, exactly as it exists in-game.
     const placed: PlacedCollider[] = [];
     for (const collider of part.colliders) {
+      let hull: PlacedCollider['hull'];
+      if (collider.shape === 'ConvexHull') {
+        try {
+          hull = hullCoverage(
+            await getCollisionMeshGeometry(collider.meshId ?? ''),
+            collider.scale,
+          );
+        } catch (error) {
+          toast({
+            variant: 'danger',
+            title: 'Collider coverage unavailable',
+            description: String(error),
+          });
+          return;
+        }
+      }
       const owners = this.colliderOwners(part, collider);
       const frames: Transform[] =
         owners.length > 0 ? owners.map((o) => colliderWorld(collider, o)) : [collider];
@@ -1619,10 +1636,15 @@ export class EditorScene {
         // Through coords.matrixFromTransform so the Euler convention stays in one place.
         const q = new THREE.Quaternion();
         matrixFromTransform(f).decompose(new THREE.Vector3(), q, new THREE.Vector3());
-        placed.push({ collider, position: { ...f.position }, quaternion: [q.x, q.y, q.z, q.w] });
+        placed.push({
+          collider,
+          position: { ...f.position },
+          quaternion: [q.x, q.y, q.z, q.w],
+          hull,
+        });
       }
     }
-    setCoverageReport(evaluateCoverage(points, placed));
+    if ($part.get() === part) setCoverageReport(evaluateCoverage(points, placed));
   }
 
   /** Draws (or clears) the uncovered sample points from the latest coverage report. */

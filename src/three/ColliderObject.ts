@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
-import type { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
+import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import type { ColliderShape, PartCollider, Transform, Vec3 } from '../ksa/types';
 import { applyPlacement } from './coords';
 import { applyMaterialOpacity, captureOpacityBase, type MaterialOpacityBase } from './layerOpacity';
 import { capsuleEdges, cylinderEdges, edgesGeometry, RECT_EDGES, sphereEdges } from './wireShapes';
+import { getCollisionMeshGeometry } from './CollisionMeshCache';
+import { toast } from '../ui/toast';
 
 /** Scratch vector for the per-frame resolution sync (never escapes). */
 const TMP_SIZE = new THREE.Vector2();
@@ -25,8 +27,9 @@ const FILL_OPACITY = 0.08;
  * low-alpha solid fill (which doubles as the raycast target — a bare line is fiddly
  * to click).
  *
- * **All geometry is normalised into the unit box `[-0.5, 0.5]³`, and the group's `scale`
- * is the collider's SIZE IN METERS** (see {@link PartCollider}). That is what makes the
+ * **Analytic geometry is normalised into the unit box `[-0.5, 0.5]³`, and its group's `scale`
+ * is the collider's SIZE IN METERS** (see {@link PartCollider}). Stock convex hull geometry
+ * keeps its original mesh coordinates and uses a mesh multiplier instead. That is what makes the
  * scale gizmo edit dimensions natively, and it is why the wireframe uses screen-space
  * line width — an object-space width would skew with a non-uniform size.
  *
@@ -39,6 +42,8 @@ export class ColliderObject {
   readonly id: string;
 
   private shape: ColliderShape;
+  private meshId: string | undefined;
+  private disposed = false;
   /** Diameter ÷ height the current capsule geometry was built for (`null` for other shapes). */
   private aspect: number | null = null;
 
@@ -116,10 +121,32 @@ export class ColliderObject {
     // Proportions always come from the collider's OWN size: KSA ignores the owning
     // placement's scale, so a world override never changes the shape's dimensions.
     const aspect = aspectFor(collider);
-    if (collider.shape !== this.shape || !sameAspect(aspect, this.aspect)) {
+    if (
+      collider.shape !== this.shape ||
+      !sameAspect(aspect, this.aspect) ||
+      collider.meshId !== this.meshId
+    ) {
       this.shape = collider.shape;
+      this.meshId = collider.meshId;
       this.aspect = aspect;
       this.rebuildGeometry();
+      if (collider.shape === 'ConvexHull') {
+        const meshId = collider.meshId ?? '';
+        void getCollisionMeshGeometry(meshId)
+          .then((geometry) => {
+            if (!this.disposed && this.shape === 'ConvexHull' && this.meshId === meshId) {
+              this.rebuildGeometry(geometry);
+            }
+          })
+          .catch((error: unknown) => {
+            if (!this.disposed)
+              toast({
+                variant: 'danger',
+                title: 'Could not preview collision mesh',
+                description: String(error),
+              });
+          });
+      }
     }
     applyPlacement(this.group, worldOverride ?? collider);
   }
@@ -137,19 +164,25 @@ export class ColliderObject {
     applyMaterialOpacity(this.fillMaterial, this.opacityBases[1], factor);
   }
 
-  private rebuildGeometry(): void {
-    const wire = wireGeometryFor(this.shape, this.aspect);
+  private rebuildGeometry(hull?: THREE.BufferGeometry): void {
+    const edges = hull ? new THREE.EdgesGeometry(hull) : null;
+    const wire = edges
+      ? new LineSegmentsGeometry().fromEdgesGeometry(edges)
+      : wireGeometryFor(this.shape, this.aspect);
+    edges?.dispose();
     this.wire.geometry = wire;
     this.wireGeometry.dispose();
     this.wireGeometry = wire;
 
-    const fill = fillGeometryFor(this.shape, this.aspect);
+    const fill = hull ? hull.clone() : fillGeometryFor(this.shape, this.aspect);
     this.fill.geometry = fill;
     this.fillGeometry.dispose();
     this.fillGeometry = fill;
+    this.wire.visible = this.fill.visible = this.shape !== 'ConvexHull' || hull !== undefined;
   }
 
   dispose(): void {
+    this.disposed = true;
     this.wireGeometry.dispose();
     this.wireMaterial.dispose();
     this.fillGeometry.dispose();
@@ -172,6 +205,8 @@ function sameAspect(a: number | null, b: number | null): boolean {
 
 function wireGeometryFor(shape: ColliderShape, aspect: number | null): LineSegmentsGeometry {
   switch (shape) {
+    case 'ConvexHull':
+      return new LineSegmentsGeometry();
     case 'Box':
       return edgesGeometry(RECT_EDGES);
     case 'Sphere':
@@ -185,6 +220,8 @@ function wireGeometryFor(shape: ColliderShape, aspect: number | null): LineSegme
 
 function fillGeometryFor(shape: ColliderShape, aspect: number | null): THREE.BufferGeometry {
   switch (shape) {
+    case 'ConvexHull':
+      return new THREE.BufferGeometry();
     case 'Box':
       return new THREE.BoxGeometry(1, 1, 1);
     case 'Sphere':

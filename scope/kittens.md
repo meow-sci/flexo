@@ -4,7 +4,7 @@
 > scale/placement aides (never exported) — a faithful three.js re-implementation of KSA's
 > Character rendering. The contract is a long list of asset/material/bone names + render quirks.
 
-**Baseline:** re-verified against KSA build **2026.9.22.5482** (decomp + shipped Core XML + private character binaries).
+**Baseline:** re-verified against KSA build **2026.10.10.5554** (decomp + shipped Core XML + private character binaries).
 5482 leaves `CharacterAssets.xml`, `CharacterRenderResources.cs`, `CharacterAvatar.cs`,
 `ModelTranslucent.frag` and every private character binary unchanged; `KittenRenderable.cs` changed
 only in draw plumbing (see [What changed in 5482](#what-changed-in-5482)).
@@ -19,6 +19,16 @@ clips and nothing else that flexo reads (see [What changed in 5261](#what-change
 refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code change needed.
 
 ---
+
+## What changed in 5554
+
+**Aide and bake inputs — intact.** `CharacterAssets.xml`, `KittenRenderable.cs`,
+`CharacterAvatar.cs` and all private character binaries are unchanged against 5482.
+`AnimatedRenderable.cs` computes pose bounds for shadow culling;
+`CharacterRenderResources.cs`/`ModelTranslucent.frag` reorganize descriptor bindings.
+Neither changes the body material names, Head_M/Chest_M sockets, attachment correction,
+or bind-pose geometry used by `KittenObject` and `kittenBake`. The historical retired-MMU
+limitation T4 remains, rather than being presented as a new regression or fixed.
 
 ## Flexo modules
 

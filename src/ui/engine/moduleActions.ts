@@ -1,5 +1,9 @@
+import { runCommand } from '../../state/commandStore';
 import {
   $part,
+  ADVANCED_ENGINE_LIST,
+  removeAdvancedEngineModule,
+  type AdvancedEngineGroup,
   addCombustor,
   addConsumerFeedWiring,
   addNozzle,
@@ -99,7 +103,10 @@ export function addModule(
   const templateId = entry?.kind === 'subpart' ? entry.templateId : null;
   const scope = scopeOfGroup(group, entry);
   const before = engineModuleCount($part.get(), entry, group, scope);
-  if (group === 'controller') addRocketController(kind, templateId ?? undefined);
+  if (group in ADVANCED_ENGINE_LIST) {
+    runCommand(`engine.add:${group}`, entry ?? { kind: 'part' });
+    return;
+  } else if (group === 'controller') addRocketController(kind, templateId ?? undefined);
   else if (group === 'wiring') addConsumerFeedWiring();
   else if (templateId) SUB_ADD[group]?.(templateId);
   else PART_ADD[group]?.();
@@ -156,7 +163,7 @@ export function nozzleThrustAxisOn(part: EditingPart, instanceId: string): Vec3 
   const spd = part.subPartGameData.find(
     (sp) => sp.subPartTemplateId === placement.subPartTemplateId,
   );
-  const nozzle = spd?.nozzles[0] ?? spd?.solidNozzles[0];
+  const nozzle = spd?.nozzles[0] ?? spd?.solidNozzles[0] ?? spd?.magneticNozzles[0];
   if (!nozzle) return null;
   const d = nozzle.exhaustDirection;
   if (Math.hypot(d.x, d.y, d.z) < 1e-6) return null;
@@ -186,6 +193,12 @@ export function gimbalRotationAlignedTo(current: EulerXYZ, thrust: Vec3): EulerX
 /** Removes the module a ref names, through the action family its scope belongs to. */
 export function removeModule(ref: EngineModuleRef, entry: EngineEntry | null): void {
   const part = $part.get();
+  if (ref.group in ADVANCED_ENGINE_LIST)
+    return removeAdvancedEngineModule(
+      ref.group as AdvancedEngineGroup,
+      ref.scope === 'sub' && entry?.kind === 'subpart' ? entry.templateId : null,
+      ref.index,
+    );
   if (ref.group === 'controller')
     return removeRocketController(
       ref.index,

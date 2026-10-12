@@ -576,6 +576,115 @@
       </Cylinder>
     </Collider>
   </Part>
+  <Part Id="CoreElectricalA_Prefab_MagneticScoopA">
+    <SubPart Id="CoreElectricalA_Subpart_BatteryBankBEndcapB1" InstanceOf="CoreElectricalA_Subpart_BatteryBankBEndcapB">
+      <Transform>
+        <Position X="-0.1549" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreElectricalA_Subpart_BatteryBankBEndcapA1" InstanceOf="CoreElectricalA_Subpart_BatteryBankBEndcapA">
+      <Transform>
+        <Position X="0.1505" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreElectricalA_Subpart_BatteryBankBMeshA2" InstanceOf="CoreElectricalA_Subpart_BatteryBankBMeshA" />
+    <SubPart Id="CoreElectricalA_Subpart_BatteryBankBDoor4" InstanceOf="CoreElectricalA_Subpart_BatteryBankBDoor">
+      <Transform>
+        <Position X="-0.0005" Z="-0.9723" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreElectricalA_Subpart_BatteryBankBMeshD4" InstanceOf="CoreElectricalA_Subpart_BatteryBankBMeshD">
+      <Transform>
+        <Position X="0.0165" Z="-0.6851" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreElectricalA_Subpart_BatteryBankBMeshD3" InstanceOf="CoreElectricalA_Subpart_BatteryBankBMeshD">
+      <Transform>
+        <Position X="0.0165" Z="0.6851" />
+        <Rotation X="3.1416" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreElectricalA_Subpart_BatteryBankBDoor3" InstanceOf="CoreElectricalA_Subpart_BatteryBankBDoor">
+      <Transform>
+        <Position X="-0.0005" Z="0.9723" />
+        <Rotation X="3.1416" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreElectricalA_Subpart_BatteryBankBDoor1" InstanceOf="CoreElectricalA_Subpart_BatteryBankBDoor">
+      <Transform>
+        <Position X="-0.0005" Y="-0.9723" />
+        <Rotation X="-1.5708" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreElectricalA_Subpart_BatteryBankBMeshD1" InstanceOf="CoreElectricalA_Subpart_BatteryBankBMeshD">
+      <Transform>
+        <Position X="0.0165" Y="-0.6851" />
+        <Rotation X="-1.5708" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreElectricalA_Subpart_BatteryBankBMeshD2" InstanceOf="CoreElectricalA_Subpart_BatteryBankBMeshD">
+      <Transform>
+        <Position X="0.0165" Y="0.6851" />
+        <Rotation X="1.5708" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreElectricalA_Subpart_BatteryBankBDoor2" InstanceOf="CoreElectricalA_Subpart_BatteryBankBDoor">
+      <Transform>
+        <Position X="-0.0005" Y="0.9723" />
+        <Rotation X="1.5708" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreElectricalA_Subpart_RadialBatteryB5" InstanceOf="CoreElectricalA_Subpart_RadialBatteryB">
+      <Transform>
+        <Position X="-0.0001" Z="0.663" />
+        <Rotation Y="1.5708" Z="3.1416" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreElectricalA_Subpart_RadialBatteryB4" InstanceOf="CoreElectricalA_Subpart_RadialBatteryB">
+      <Transform>
+        <Position X="-0.0001" Y="-0.663" />
+        <Rotation X="-1.5708" Z="1.5708" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreElectricalA_Subpart_RadialBatteryB3" InstanceOf="CoreElectricalA_Subpart_RadialBatteryB">
+      <Transform>
+        <Position X="-0.0001" Z="-0.663" />
+        <Rotation Y="-1.5708" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreElectricalA_Subpart_RadialBatteryB2" InstanceOf="CoreElectricalA_Subpart_RadialBatteryB">
+      <Transform>
+        <Position X="-0.0001" Y="0.663" />
+        <Rotation X="1.5708" Z="-1.5708" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreElectricalA_Subpart_PlugSocketA1" InstanceOf="CoreElectricalA_Subpart_PlugSocketA">
+      <Transform>
+        <Position X="0.1499" Y="-0.3177" Z="-0.6664" />
+      </Transform>
+    </SubPart>
+    <Connector Id="_connector15">
+      <Transform>
+        <Position X="0.1583" />
+        <Scale X="2" Y="2" Z="2" />
+      </Transform>
+    </Connector>
+    <Connector Id="_connector16">
+      <Transform>
+        <Position X="-0.1585" />
+        <Rotation Z="3.1416" />
+        <Scale X="2" Y="2" Z="2" />
+      </Transform>
+    </Connector>
+    <Collider Id="Collider1">
+      <Cylinder Id="CylinderCollider1">
+        <LocationAsmb X="0" Y="0" Z="0" />
+        <Collider2Asmb X="0" Y="0" Z="-1.5708" />
+        <LengthY M="0.32" />
+        <Radius M="1" />
+      </Cylinder>
+    </Collider>
+  </Part>
   <Part Id="CoreElectricalA_Prefab_LightSmallA">
     <SubPart Id="CoreElectricalA_Subpart_SpotlightAHinge1" InstanceOf="CoreElectricalA_Subpart_SpotlightAHinge">
       <Transform>

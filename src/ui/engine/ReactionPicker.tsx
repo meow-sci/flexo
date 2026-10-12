@@ -47,6 +47,7 @@ interface ReactionOption {
   id: string;
   name: string;
   category: ReactionCategory | null;
+  flavor: ReactionData['kind'] | null;
   defaultMixtureRatio: number | null;
   isCustom: boolean;
   /** Not in the catalog at all — kept because it is the current value. */
@@ -63,6 +64,7 @@ function fromCatalog(entry: ReactionData, customIds: ReadonlySet<string>): React
     id: entry.id,
     name: entry.name,
     category: entry.category,
+    flavor: entry.kind,
     defaultMixtureRatio: entry.kind === 'Mixture' ? entry.defaultMixtureRatio : null,
     isCustom: customIds.has(entry.id),
     isUnknown: false,
@@ -78,7 +80,7 @@ export function ReactionPicker({
   label: string;
   value: string;
   /** `combustor` excludes Solid reactions; `solid` offers ONLY Solid ones. */
-  kind: 'combustor' | 'solid';
+  kind: 'combustor' | 'solid' | 'thermal';
   onPick: (reactionId: string, defaultMixtureRatio: number | null) => void;
 }) {
   const catalog = useStore($allReactions);
@@ -92,13 +94,18 @@ export function ReactionPicker({
         id: k.id,
         name: k.name,
         category: k.category,
+        flavor: k.kind,
         defaultMixtureRatio: k.defaultMixtureRatio ?? null,
         isCustom: false,
         isUnknown: false,
       }));
 
   const offered = all.filter((o) =>
-    kind === 'solid' ? o.category === 'Solid' : o.category !== 'Solid',
+    kind === 'solid'
+      ? o.category === 'Solid'
+      : kind === 'thermal'
+        ? o.flavor === 'Thermal'
+        : o.category !== 'Solid' && o.flavor !== 'Thermal',
   );
   // The current value always stays pickable, even when it is unknown, a custom solid the
   // static snapshot has never heard of, or the wrong family for this consumer.
@@ -111,6 +118,7 @@ export function ReactionPicker({
             id: value,
             name: `${value} — not in the catalog`,
             category: null,
+            flavor: null,
             defaultMixtureRatio: null,
             isCustom: customIds.has(value),
             isUnknown: true,

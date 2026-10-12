@@ -89,7 +89,7 @@ export function fitCollider(
   frame: Quat = IDENTITY_QUAT,
   margin = 0,
 ): ColliderFit | null {
-  if (points.length === 0) return null;
+  if (points.length === 0 || shape === 'ConvexHull') return null;
 
   // Work in the frame's local space; the AABB there is the oriented box in world space.
   const inv = conjugate(frame);

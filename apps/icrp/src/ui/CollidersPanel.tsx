@@ -66,7 +66,11 @@ function ColliderInspector() {
         }
       />
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-fg-muted">Size (m) — the scale gizmo resizes too</span>
+        <span className="text-xs text-fg-muted">
+          {collider.shape === 'ConvexHull'
+            ? 'Scale (×) — multiplies the collision mesh'
+            : 'Size (m) — the scale gizmo resizes too'}
+        </span>
         <div className="flex items-center gap-1.5">
           {(['x', 'y', 'z'] as const).map((axis, i) =>
             labels[i] ? (

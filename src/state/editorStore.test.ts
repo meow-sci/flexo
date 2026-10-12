@@ -62,6 +62,10 @@ import { buildProjectExport, parseProjectImport, serializeProjectJson } from './
 import { validateEngines } from '../ksa/engineValidation';
 import {
   $part,
+  addAdvancedEngineModule,
+  removeAdvancedEngineModule,
+  updateAdvancedEngineModule,
+  ADVANCED_ENGINE_LIST,
   $activeLayerId,
   $selection,
   entityIdAt,
@@ -310,6 +314,10 @@ function emptyImportedGameData(): ImportedGameData {
     rocketControllers: [],
     rockets: [],
     combustors: [],
+    thermalCores: [],
+    antimatterRamCores: [],
+    magneticNozzles: [],
+    magneticScoops: [],
     nozzles: [],
     gimbals: [],
     tanks: [],
@@ -577,6 +585,10 @@ describe('editorStore', () => {
         rocketControllers: [],
         rockets: [],
         combustors: [],
+        thermalCores: [],
+        antimatterRamCores: [],
+        magneticNozzles: [],
+        magneticScoops: [],
         nozzles: [],
         gimbals: [],
         tanks: [],
@@ -817,6 +829,10 @@ describe('editorStore', () => {
       rocketControllers: [],
       rockets: [],
       combustors: [],
+      thermalCores: [],
+      antimatterRamCores: [],
+      magneticNozzles: [],
+      magneticScoops: [],
       nozzles: [],
       gimbals: [],
       tanks: [],
@@ -1046,6 +1062,22 @@ describe('editorStore', () => {
     expect(spd()).toBeUndefined(); // entry pruned when tanks empty
     undo();
     expect(spd()?.tanks.length).toBe(1);
+  });
+
+  it.each([null, 'TankMesh'])('undoes magnetic containment edits at owner %s', (owner) => {
+    addTank(owner);
+    const tanks = () =>
+      owner === null
+        ? $part.get().gameData.tanks
+        : $part.get().subPartGameData.find((s) => s.subPartTemplateId === owner)!.tanks;
+    expect(tanks()[0].magneticTrap).toBe(false);
+    pushUndo('tank magnetic trap', '');
+    updateTank(owner, 0, { magneticTrap: true });
+    expect(tanks()[0].magneticTrap).toBe(true);
+    undo();
+    expect(tanks()[0].magneticTrap).toBe(false);
+    redo();
+    expect(tanks()[0].magneticTrap).toBe(true);
   });
 
   it('turns a tank conical with an unchanged top radius, as one undo step', () => {
@@ -2889,6 +2921,23 @@ describe('importing a Part with IVA seats', () => {
 });
 
 describe('collider mutations', () => {
+  it('converts an imported hull to a primitive with undo restoring its mesh reference', () => {
+    const part = createEmptyPart();
+    part.colliders.push({
+      id: '_collider1',
+      shape: 'ConvexHull',
+      meshId: '_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1',
+      ownerTemplateId: null,
+      layerId: DEFAULT_LAYER_ID,
+      ...identityTransform(),
+    });
+    $part.set(part);
+    setColliderShape(0, 'Box');
+    expect($part.get().colliders[0].shape).toBe('Box');
+    expect($part.get().colliders[0].meshId).toBeUndefined();
+    undo();
+    expect($part.get().colliders[0]).toEqual(part.colliders[0]);
+  });
   it('addCollider drops a unit shape on the active layer, selects it, and is undoable', () => {
     addCollider('Cylinder');
     addCollider('Box');
@@ -4616,4 +4665,62 @@ it('edits nozzle sound and independent FX overrides without losing undo', () => 
   });
   undo();
   expect($part.get()).toEqual(before);
+});
+
+describe('KSA 5554 propulsion undo', () => {
+  it.each(['thermalCore', 'antimatterRamCore', 'magneticNozzle', 'magneticScoop'] as const)(
+    'tracks %s add, streaming edit and remove at both scopes',
+    (group) => {
+      for (const templateId of [null, 'Core.NewPropulsion']) {
+        newPart();
+        addAdvancedEngineModule(group, templateId);
+        const list = ADVANCED_ENGINE_LIST[group];
+        const owner = () =>
+          templateId === null
+            ? $part.get().gameData
+            : $part.get().subPartGameData.find((s) => s.subPartTemplateId === templateId)!;
+        expect(owner()[list]).toHaveLength(1);
+        const original = structuredClone(owner()[list][0]);
+        undo();
+        expect(
+          templateId === null
+            ? $part.get().gameData[list]
+            : ($part.get().subPartGameData.find((s) => s.subPartTemplateId === templateId)?.[
+                list
+              ] ?? []),
+        ).toHaveLength(0);
+        redo();
+        expect(owner()[list][0]).toEqual(original);
+        pushUndo('edit propulsion');
+        updateAdvancedEngineModule(group, templateId, 0, { id: 'Renamed' });
+        expect(owner()[list][0].id).toBe('Renamed');
+        undo();
+        expect(owner()[list][0].id).toBe(original.id);
+        redo();
+        removeAdvancedEngineModule(group, templateId, 0);
+        expect(
+          templateId === null
+            ? $part.get().gameData[list]
+            : ($part.get().subPartGameData.find((s) => s.subPartTemplateId === templateId)?.[
+                list
+              ] ?? []),
+        ).toHaveLength(0);
+        undo();
+        expect(owner()[list][0].id).toBe('Renamed');
+      }
+    },
+  );
+});
+
+it('keeps magnetic nozzle ids unique when adding and duplicating across both scopes', () => {
+  newPart();
+  addAdvancedEngineModule('magneticNozzle', null);
+  addAdvancedEngineModule('magneticNozzle', null);
+  addAdvancedEngineModule('magneticNozzle', 'T');
+  duplicateEngineModule({ group: 'magneticNozzle', scope: 'sub', index: 0 }, 'T');
+  const ids = [
+    ...$part.get().gameData.magneticNozzles,
+    ...$part.get().subPartGameData[0].magneticNozzles,
+  ].map((n) => n.id);
+  expect(new Set(ids).size).toBe(4);
 });

@@ -9,6 +9,34 @@ them and the mod export ships their XML automatically.
 The deep KSA reference is [`analysis/KSA_ENGINE_DETAILS.md`](../analysis/KSA_ENGINE_DETAILS.md);
 the implementation map is [`plans/KSA_ENGINE_DESIGNER_PLAN.md`](../plans/KSA_ENGINE_DESIGNER_PLAN.md).
 
+## Thermal, fusion and antimatter propulsion (KSA 5554)
+
+The Engine module tree and Data panels now author **Thermal cores**, **Antimatter ram cores**,
+**Magnetic nozzles**, and **Magnetic scoops**, at either Part or SubPart scope. The command
+palette exposes an Add command for each. Importing a built-in FPD-1 fusion torch or RAIR-1 ramjet
+opens its real core; imported geometry-side modules are normalized to GameData for export.
+
+A **Thermal core** heats a working fluid chosen from the thermal reaction catalog. Set its core
+temperature, pressure, thermal efficiency, throttle, timing and feeds, then bind it to ordinary
+De Laval nozzles with a Rocket and controller. The live readout interpolates gas properties on
+KSA's linear temperature axis and log-pressure axis, including the new `FusionH2` plasma table.
+Thermal reactions cannot drive a Combustor; preflight blocks that wrong pairing.
+
+An **Antimatter ram core** specifies jet power, annihilation efficiency, carried exhaust velocity
+as a fraction of light speed, antimatter and reaction-mass phase ids, timing, and Bulk-fluid feeds.
+Bind it to **Magnetic nozzles**, which author visual exit diameter and the familiar exhaust
+vectors/plumes/light/sound, without a physical exit area, throat or expansion ratio. The readout
+matches KSA's carried-propellant design point and divides the drive across its nozzle count.
+A magnetic nozzle bound to another core loads but produces zero thrust; preflight warns.
+
+A **Magnetic scoop** authors capture radius and collected phase id. Its collection rate needs
+vehicle velocity and an interstellar environment. The single-Part editor therefore shows the
+carried-propellant ram readout without adding hypothetical scoop flow. Antimatter storage also
+needs the tank's **Magnetic trap** setting; see the tank editor.
+
+These are additive document lists. Compatible saved projects keep loading with empty lists;
+engine mutations enroll in the same undo/redo and project/share/archive preservation as other modules.
+
 ## The model — an engine is a graph of modules
 
 An "engine" is a small graph of cooperating GameData modules (see `src/ksa/types.ts`):
@@ -27,7 +55,7 @@ An "engine" is a small graph of cooperating GameData modules (see `src/ksa/types
   Engine panel's two plume selects edit the **default** entry. The Plume entries disclosure
   edits every keyed/default row and its order; the first matching entry wins. Sound settings
   expose both SoundId and Action.
-- **`Rocket`** (`<Rocket>`) — binds one `core` (combustor) + N `nozzles` into one firing
+- **`Rocket`** (`<Rocket>`) — binds one `core` (combustor, thermal, antimatter or solid) + N `nozzles` into one firing
   unit. Refs are `SubPartIdRef` (`{ id, subPartInstanceId }`).
 - **`RocketController`** (`<RocketEngineController>` / `<RocketThrusterController>`) — what
   makes the part fire; groups rockets, receives throttle/staging (or RCS pulses).
@@ -51,12 +79,12 @@ cannot render it unless that mod defines the template.
 
 **Where they live (matches KSA's two containers):**
 
-| Module | flexo home |
-|---|---|
-| `Combustor` / `DeLavalNozzle` / `Rocket` (reusable thrust chamber, travels with a mesh) | `SubPartGameData` (next to tanks/lights) |
-| `RocketController`, `Rocket`, combustors, nozzles, solid motors and grain segments | Both `PartGameData` and `SubPartGameData`; references are relative to that owner |
-| `Gimbal`, `ConsumerFeedWiring` | `PartGameData`, referencing placement **instance ids** |
-| `CustomReaction` | `part.customReactions` (top-level) |
+| Module                                                                                  | flexo home                                                                       |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `Combustor` / `DeLavalNozzle` / `Rocket` (reusable thrust chamber, travels with a mesh) | `SubPartGameData` (next to tanks/lights)                                         |
+| `RocketController`, `Rocket`, all core/nozzle families, scoops and grain segments       | Both `PartGameData` and `SubPartGameData`; references are relative to that owner |
+| `Gimbal`, `ConsumerFeedWiring`                                                          | `PartGameData`, referencing placement **instance ids**                           |
+| `CustomReaction`                                                                        | `part.customReactions` (top-level)                                               |
 
 Two reference kinds the feature introduces — both remapped on import/paste: module→SubPart
 **instance id** (`SubPartIdRef.subPartInstanceId` → `placement.instanceId`) and the
@@ -139,8 +167,8 @@ validate closed-form identities + real-Hydrolox-at-5.5 parity (≈445 s vacuum I
 
 The propellant library (`Reactions.xml`, served under `/ksa/` alongside the part catalog)
 provides the gas LUTs the physics reads: `<FixedReaction>`s (1-D pressure LUT — monoprops,
-solids) and `<MixtureReaction>`s (2-D O/F×pressure LUT + `<DefaultMixtureRatio>`;
-`<ThermalReaction>`s are skipped — nothing can burn them yet). It is licensed Core data kept
+solids), `<MixtureReaction>`s (2-D O/F×pressure LUT + `<DefaultMixtureRatio>`), and
+`<ThermalReaction>`s (temperature × pressure LUTs for thermal cores). It is licensed Core data kept
 in the private asset tree, so it may be **absent** in the open-source build — the editor
 still authors and exports engines, just without the live thrust readout (`$hasReactionData`
 is false; a static `KNOWN_REACTIONS` snapshot backs the propellant dropdown). The designer's
@@ -164,20 +192,21 @@ the project's `customReactions` (custom wins on id).
     select, **Define new engine ▸** (Liquid rocket / RCS thruster / Solid motor / SRB preset
     (legacy)), the **module tree**, the live **Performance** card, an always-visible
     **ISSUES** section, and the **Exhaust** chips.
-    - *Define new engine* picks a **template**, not a placement: a template placed N times is
+    - _Define new engine_ picks a **template**, not a placement: a template placed N times is
       one row with an instance sub-pick that only decides which placement the controller
       references. Each kind is ONE undo step.
-    - The *module tree* has eight fixed groups — Combustors · Nozzles · Solid motor ·
-      Rockets · Controllers · Feed wiring · Gimbals · Custom propellants. Controllers include
+    - The _module tree_ has twelve fixed groups — Combustors · Thermal cores · Antimatter ram cores ·
+      Magnetic nozzles · Magnetic scoops · Nozzles · Solid motor · Rockets · Controllers ·
+      Feed wiring · Gimbals · Custom propellants. Controllers include
       both the selected template and Part, each labeled with its scope. Feed wiring, gimbals,
       and custom propellants belong to the Part. Rows
       carry a caption (a combustor's propellant, a nozzle's exit ⌀, a rocket's core) and a
       ⚠ dot when validation names them; the ⋮ menu offers Duplicate / Copy id / Remove, and
       a nozzle also offers "Show exhaust handle". Feed wiring additionally lists a synthetic
       `⚠ unwired: <consumer>` row per consumer that needs an entry, plus **Auto-wire**.
-    - *ISSUES* is always mounted and says **"no issues"** when the part is clean. Clicking a
+    - _ISSUES_ is always mounted and says **"no issues"** when the part is clean. Clicking a
       finding opens its scope, focuses its module and flashes the offending field.
-    - *Performance* aggregates over the selected `<Rocket>`'s chamber+nozzle pairs (Σ thrust,
+    - _Performance_ aggregates over the selected `<Rocket>`'s chamber+nozzle pairs (Σ thrust,
       Σ mass flow, `Isp = ΣF / (g0·Σṁ)`), with a per-pair breakdown when there is more than
       one. Opening a scope selects its first rocket; only a scope with no `<Rocket>`
       falls back to the first combustor + first nozzle. References resolve by both module
@@ -222,12 +251,12 @@ exhaust in the open engine. `$resolvedNozzleTargets` fans out over three indepen
 resolves them against `$part` on every read, so a removed nozzle or placement can never leave
 the gizmo editing the wrong one:
 
-| Axis | Why there is more than one |
-|---|---|
-| **Nozzle list** | A part or SubPart carries a `List<RocketNozzleTemplate>`. The MMU backpack authors **56**. |
-| **Flavor** | `<DeLavalNozzle>` and `<SolidMotorNozzle>` are separate lists on the same owner. |
-| **Placement** | A SubPart-owned nozzle is instantiated **once per placement of its template** — every stock RCS block is ONE `<DeLavalNozzle>` placed 4× at 4 rotations, and each is a real thruster in-game (`Part.cs:1144-1152` makes each `<SubPartRef>` its own child `Part` with its own `RocketNozzle`). |
-| **Channel** | A nozzle with an FX override gets a second, cyan handle. |
+| Axis            | Why there is more than one                                                                                                                                                                                                                                                                     |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Nozzle list** | A part or SubPart carries a `List<RocketNozzleTemplate>`. The MMU backpack authors **56**.                                                                                                                                                                                                     |
+| **Flavor**      | `<DeLavalNozzle>` and `<SolidMotorNozzle>` are separate lists on the same owner.                                                                                                                                                                                                               |
+| **Placement**   | A SubPart-owned nozzle is instantiated **once per placement of its template** — every stock RCS block is ONE `<DeLavalNozzle>` placed 4× at 4 rotations, and each is a real thruster in-game (`Part.cs:1144-1152` makes each `<SubPartRef>` its own child `Part` with its own `RocketNozzle`). |
+| **Channel**     | A nozzle with an FX override gets a second, cyan handle.                                                                                                                                                                                                                                       |
 
 - **Every handle is visible and clickable.** The gizmo's target is amber at full opacity,
   the rest are dimmed; click any handle in the viewport, or any chip under the switch, to
@@ -270,7 +299,7 @@ the gizmo editing the wrong one:
   six-decimal Euler radians (`1.570796`), so an unsnapped inverse leaves `3.27e-7` residue
   that reads as a "custom vector". When the placement is rotated at all, a note above the two
   vector fields spells out where each local axis lands in Part space (`local +X → +Y · +Y → +Z ·
-  +Z → +X`), because that rotation is why typing a local X moves the handle along Part Y. For a
++Z → +X`), because that rotation is why typing a local X moves the handle along Part Y. For a
   custom bell with its exit on local −Z, choose local −Z even though the stock game default is
   −X; to make its arrow point along Part-space −X, choose −X in the Part-axis chooser.
 - **Magnitude.** Gizmo writes keep the PHYSICS direction unit-length, because KSA applies
@@ -284,7 +313,7 @@ A drag streams through `updateNozzleAt` (which dispatches to the right scope+fla
 and pushes one undo step on drag-start — the pose-pivot precedent in `EditorScene`.
 
 > **"My bell points the wrong way and rotating the SubPart doesn't help."** Correct, and not
-> a limitation: the exhaust travels *with* the mesh, because both are composed through the
+> a limitation: the exhaust travels _with_ the mesh, because both are composed through the
 > same owner frame. Only `ExhaustDirection` expresses the bell's axis relative to its own
 > mesh. Every stock bell is modelled down **−X** in its own SubPart frame and says
 > `<ExhaustDirection X="-1"/>`; a bell authored along any other axis is fine — set the
@@ -315,11 +344,11 @@ Add `BulkFluid` for a main-engine propellant path, `SolidMotorCase` so SRB segme
 Every combustor and solid motor has a **Feeds from** list (`<FeedsFrom>`). Each entry is
 exactly one of:
 
-| Kind          | Means                                                                                      |
-| ------------- | ------------------------------------------------------------------------------------------ |
+| Kind          | Means                                                                                                         |
+| ------------- | ------------------------------------------------------------------------------------------------------------- |
 | **Parent**    | "whatever the Part that places me wires up" — resolved by layer 3. The default for a reusable thrust chamber. |
-| **Connector** | Draw across that connector (needs the matching capability at both ends).                    |
-| **Container** | Draw from a specific `<Tank Id>` / `<SolidGrainSegment Id>`, optionally scoped to a placement. |
+| **Connector** | Draw across that connector (needs the matching capability at both ends).                                      |
+| **Container** | Draw from a specific `<Tank Id>` / `<SolidGrainSegment Id>`, optionally scoped to a placement.                |
 
 A combustor also picks a **Plumbing** class: `Bulk` (main engine, needs `BulkFluid`) or
 `Service` (RCS, rides the default). `Bulk` is the schema default, so **an RCS thruster must
@@ -449,8 +478,8 @@ data when importing a Core engine (e.g. LR91 Vac). Round-trip tests live in
   (`<SolidMotor>` / `<SolidMotorNozzle>` / `<SolidGrainSegment>`), which flexo authors — see
   the SRB chapter above. The old "SRB (approximate)" liquid-tank preset is superseded by it,
   and the thrust curve is previewed live (see "Solid thrust-curve preview" below).
-- **Thermal rockets** — `<ThermalReaction>`s ship in Reactions.xml but need a thermal core,
-  which no part template provides; KSA's own designer refuses them. Not modelled.
+- **Vehicle-dependent ram collection** — scoop-assisted performance needs an assembled vehicle
+  and its current environment/velocity; the editor previews the carried-propellant design point.
 - **Custom propellant chemistry** is clone-and-remix: the gas LUT is CEA-style pre-solved
   thermodynamics, so flexo copies a shipped reaction (a mixture is baked at its default O/F
   ratio) and lets you adjust the category / mixture / rows — it does not solve combustion

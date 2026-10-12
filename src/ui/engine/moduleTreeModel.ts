@@ -18,7 +18,7 @@ import {
  * `dataNavigatorModel` is for Data mode.
  *
  * The tree answers *what is this engine made of?* for ONE open scope. Its shape is fixed:
- * eight groups in one order, never sorted or filtered, so the same module sits in the same
+ * twelve groups in one order, never sorted or filtered, so the same module sits in the same
  * place every time you come back to it.
  *
  * **Three groups are always part-level** regardless of the open scope — feed
@@ -29,8 +29,12 @@ import {
 
 export type IssueLevel = 'block' | 'warn' | null;
 
-/** The eight fixed groups. `solid` folds the motor + grain + solid-nozzle lists into one. */
+/** The twelve fixed groups. `solid` folds the motor + grain + solid-nozzle lists into one. */
 export type ModuleTreeGroupId =
+  | 'thermal'
+  | 'ram'
+  | 'magnetic'
+  | 'scoops'
   | 'combustors'
   | 'nozzles'
   | 'solid'
@@ -72,6 +76,10 @@ export interface ModuleTreeGroup {
 
 const GROUP_TITLES: Readonly<Record<ModuleTreeGroupId, string>> = {
   combustors: 'Combustors',
+  thermal: 'Thermal cores',
+  ram: 'Antimatter ram cores',
+  magnetic: 'Magnetic nozzles',
+  scoops: 'Magnetic scoops',
   nozzles: 'Nozzles',
   solid: 'Solid motor',
   rockets: 'Rockets',
@@ -87,6 +95,10 @@ const GROUP_TITLES: Readonly<Record<ModuleTreeGroupId, string>> = {
  */
 export const MODULE_GROUP_LABEL: Readonly<Record<EngineModuleGroup, string>> = {
   combustor: 'Combustor',
+  thermalCore: 'Thermal core',
+  antimatterRamCore: 'Antimatter ram core',
+  magneticNozzle: 'Magnetic nozzle',
+  magneticScoop: 'Magnetic scoop',
   nozzle: 'Nozzle',
   solidMotor: 'Solid motor',
   grain: 'Grain segment',
@@ -101,6 +113,10 @@ export const MODULE_GROUP_LABEL: Readonly<Record<EngineModuleGroup, string>> = {
 /** Which module groups each tree group draws its rows from, in row order. */
 const GROUP_SOURCES: Readonly<Record<ModuleTreeGroupId, readonly EngineModuleGroup[]>> = {
   combustors: ['combustor'],
+  thermal: ['thermalCore'],
+  ram: ['antimatterRamCore'],
+  magnetic: ['magneticNozzle'],
+  scoops: ['magneticScoop'],
   nozzles: ['nozzle'],
   solid: ['solidMotor', 'grain', 'solidNozzle'],
   rockets: ['rocket'],
@@ -113,6 +129,10 @@ const GROUP_SOURCES: Readonly<Record<ModuleTreeGroupId, readonly EngineModuleGro
 /** The fixed render order (design §B3.2 — "groups in fixed order"). */
 export const MODULE_TREE_GROUP_ORDER: readonly ModuleTreeGroupId[] = [
   'combustors',
+  'thermal',
+  'ram',
+  'magnetic',
+  'scoops',
   'nozzles',
   'solid',
   'rockets',
@@ -152,9 +172,16 @@ function captionFor(
   const reaction = (id: unknown) =>
     typeof id === 'string' ? (reactionNames.get(id) ?? (id || '(no propellant)')) : '';
   switch (group) {
+    case 'thermalCore':
     case 'combustor':
     case 'solidMotor':
       return reaction(module.reactionId);
+    case 'magneticNozzle':
+      return `FX ⌀${num(module.fxExitDiameterM as number)} m`;
+    case 'magneticScoop':
+      return `${num(module.captureRadiusM as number)} m · ${String(module.collectsId)}`;
+    case 'antimatterRamCore':
+      return `${num((module.jetPowerW as number) / 1e12)} TW`;
     case 'nozzle':
     case 'solidNozzle':
       return `⌀${num(module.exitDiameterM as number)} m`;
@@ -217,6 +244,14 @@ function listFor(
   const owner = entry?.kind === 'part' ? g : scopeData(part, entry);
   if (!owner) return [];
   switch (group) {
+    case 'thermalCore':
+      return owner.thermalCores as unknown as Record<string, unknown>[];
+    case 'antimatterRamCore':
+      return owner.antimatterRamCores as unknown as Record<string, unknown>[];
+    case 'magneticNozzle':
+      return owner.magneticNozzles as unknown as Record<string, unknown>[];
+    case 'magneticScoop':
+      return owner.magneticScoops as unknown as Record<string, unknown>[];
     case 'controller':
       return owner.rocketControllers as unknown as Record<string, unknown>[];
     case 'combustor':

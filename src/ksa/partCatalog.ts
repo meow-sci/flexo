@@ -19,6 +19,8 @@ import {
   ivaSeatsFromElement,
   parseGameDataElement,
   mergeSubPartGameDataInto,
+  engineModulesFromElement,
+  subPartEngineModulesFromRoot,
   placementsFromPartElement,
   subPartCollidersFromRoot,
   subPartGameDataFromDoc,
@@ -28,6 +30,10 @@ import type {
   Battery,
   CatalogAnimationModule,
   Combustor,
+  ThermalCore,
+  AntimatterRamCore,
+  MagneticNozzle,
+  MagneticScoop,
   Connector,
   ConnectorCapability,
   ConnectorFlag,
@@ -117,6 +123,11 @@ export interface CatalogPart {
   rocketControllers: RocketController[];
   rockets: Rocket[];
   combustors: Combustor[];
+  thermalCores: ThermalCore[];
+  antimatterRamCores: AntimatterRamCore[];
+  magneticNozzles: MagneticNozzle[];
+  magneticScoops: MagneticScoop[];
+
   nozzles: DeLavalNozzle[];
   gimbals: Gimbal[];
   /** Part-level `<Tank>`s (where Core authors its prefab tank data since KSA 2026.7.6). */
@@ -131,7 +142,14 @@ export interface CatalogPart {
   sourceFile: string;
 }
 
-export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPart[]): void {
+export function parsePartsFile(
+  doc: Document,
+  sourceFile: string,
+  out: CatalogPart[],
+  geometrySubParts: Map<string, SubPartGameData> = new Map(),
+): void {
+  for (const data of subPartEngineModulesFromRoot(doc.documentElement))
+    geometrySubParts.set(data.subPartTemplateId, data);
   for (const part of Array.from(doc.getElementsByTagName('Part'))) {
     const id = part.getAttribute('Id');
     if (!id) continue;
@@ -141,6 +159,7 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
     const placements = placementsFromPartElement(part);
     if (placements.length === 0) continue; // nothing renderable/importable
     const connectors = connectorsFromPartElement(part);
+    const engines = engineModulesFromElement(part);
     out.push({
       id,
       editorTags,
@@ -174,16 +193,23 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
       generators: [],
       solarPanels: [],
       powerConsumer: null,
-      subPartGameData: [],
-      rocketControllers: [],
-      rockets: [],
-      combustors: [],
-      nozzles: [],
+      subPartGameData: [...new Set(placements.map((p) => p.subPartTemplateId))].flatMap((id) =>
+        geometrySubParts.has(id) ? [structuredClone(geometrySubParts.get(id)!)] : [],
+      ),
+      rocketControllers: engines.rocketControllers,
+      rockets: engines.rockets,
+      combustors: engines.combustors,
+      thermalCores: engines.thermalCores,
+      antimatterRamCores: engines.antimatterRamCores,
+      magneticNozzles: engines.magneticNozzles,
+      magneticScoops: engines.magneticScoops,
+
+      nozzles: engines.nozzles,
       gimbals: applyGimbalOverlays([], gimbalOverlaysFromElement(part)),
       tanks: [],
-      solidMotors: [],
-      solidNozzles: [],
-      solidGrainSegments: [],
+      solidMotors: engines.solidMotors,
+      solidNozzles: engines.solidNozzles,
+      solidGrainSegments: engines.solidGrainSegments,
       consumerFeedWiring: [],
       sourceFile,
     });
@@ -245,6 +271,11 @@ export interface PartGameData {
   rocketControllers: RocketController[];
   rockets: Rocket[];
   combustors: Combustor[];
+  thermalCores: ThermalCore[];
+  antimatterRamCores: AntimatterRamCore[];
+  magneticNozzles: MagneticNozzle[];
+  magneticScoops: MagneticScoop[];
+
   nozzles: DeLavalNozzle[];
   gimbals: Gimbal[];
   /** Part-level tanks, solid-motor hardware and consumer feed wiring declared here. */
@@ -306,6 +337,11 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
       rocketControllers: [],
       rockets: [],
       combustors: [],
+      thermalCores: [],
+      antimatterRamCores: [],
+      magneticNozzles: [],
+      magneticScoops: [],
+
       nozzles: [],
       gimbals: [],
       tanks: [],
@@ -353,6 +389,11 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
     entry.rocketControllers.push(...parsed.gameData.rocketControllers);
     entry.rockets.push(...parsed.gameData.rockets);
     entry.combustors.push(...parsed.gameData.combustors);
+    entry.thermalCores.push(...parsed.gameData.thermalCores);
+    entry.antimatterRamCores.push(...parsed.gameData.antimatterRamCores);
+    entry.magneticNozzles.push(...parsed.gameData.magneticNozzles);
+    entry.magneticScoops.push(...parsed.gameData.magneticScoops);
+
     entry.nozzles.push(...parsed.gameData.nozzles);
     entry.gimbals.push(...parsed.gameData.gimbals);
     entry.gimbalOverlays.push(...gimbalOverlaysFromElement(gd));
@@ -405,7 +446,11 @@ async function loadGameData(): Promise<ParsedGameDataFile> {
  * flags by id, and carries coupling bindings, power modules, and the per-SubPart-template
  * data (tanks / solar panels) for whichever SubParts this Part actually places.
  */
-export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile): void {
+export function mergeGameData(
+  parts: CatalogPart[],
+  gameData: ParsedGameDataFile,
+  geometrySubParts: ReadonlyMap<string, SubPartGameData> = new Map(),
+): void {
   for (const part of parts) {
     const gd = gameData.parts.get(part.id);
     if (gd) {
@@ -436,15 +481,20 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
       part.generators = gd.generators;
       part.solarPanels = gd.solarPanels;
       part.powerConsumer = gd.powerConsumer;
-      part.rocketControllers = gd.rocketControllers;
-      part.rockets = gd.rockets;
-      part.combustors = gd.combustors;
-      part.nozzles = gd.nozzles;
+      part.rocketControllers.push(...gd.rocketControllers);
+      part.rockets.push(...gd.rockets);
+      part.combustors.push(...gd.combustors);
+      part.thermalCores.push(...gd.thermalCores);
+      part.antimatterRamCores.push(...gd.antimatterRamCores);
+      part.magneticNozzles.push(...gd.magneticNozzles);
+      part.magneticScoops.push(...gd.magneticScoops);
+
+      part.nozzles.push(...gd.nozzles);
       part.gimbals = applyGimbalOverlays(part.gimbals, gd.gimbalOverlays);
       part.tanks = gd.tanks;
-      part.solidMotors = gd.solidMotors;
-      part.solidNozzles = gd.solidNozzles;
-      part.solidGrainSegments = gd.solidGrainSegments;
+      part.solidMotors.push(...gd.solidMotors);
+      part.solidNozzles.push(...gd.solidNozzles);
+      part.solidGrainSegments.push(...gd.solidGrainSegments);
       part.consumerFeedWiring = gd.consumerFeedWiring;
       // APPEND — the geometry `<Part><Collider>` read in parsePartsFile is already here,
       // and KSA applies both (Components merge additively, no dedupe).
@@ -474,7 +524,16 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
     // for templates this Part places (deduped — many instances share one template).
     const templateIds = new Set(part.placements.map((p) => p.subPartTemplateId));
     part.subPartGameData = [...templateIds]
-      .map((tid) => gameData.subParts.get(tid))
+      .map((tid) => {
+        const geometry =
+          geometrySubParts.get(tid) ??
+          part.subPartGameData.find((s) => s.subPartTemplateId === tid);
+        const overlay = gameData.subParts.get(tid);
+        if (!geometry) return overlay;
+        const merged = structuredClone(geometry);
+        if (overlay) mergeSubPartGameDataInto(merged, overlay);
+        return merged;
+      })
       .filter((spd): spd is SubPartGameData => spd != null);
     // Same scoping for SubPart-owned colliders. NOTE: the geometry `<SubPart><Collider>`
     // of a placed built-in template is deliberately NOT pulled in — the placement keeps
@@ -500,6 +559,7 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
 /** Fetches and parses every Core asset file into a sorted Part catalog. */
 export async function loadCorePartCatalog(): Promise<CatalogPart[]> {
   const out: CatalogPart[] = [];
+  const geometrySubParts = new Map<string, SubPartGameData>();
   const [, gameData] = await Promise.all([
     Promise.all(
       ASSET_FILES.map(async (file) => {
@@ -508,12 +568,12 @@ export async function loadCorePartCatalog(): Promise<CatalogPart[]> {
           console.error(`partCatalog: required asset file ${file} not found`);
           return;
         }
-        if (r.kind === 'ok') parsePartsFile(r.doc, file, out);
+        if (r.kind === 'ok') parsePartsFile(r.doc, file, out, geometrySubParts);
       }),
     ),
     loadGameData(),
   ]);
-  mergeGameData(out, gameData);
+  mergeGameData(out, gameData, geometrySubParts);
   out.sort((a, b) => a.id.localeCompare(b.id));
   console.info(`flexo part catalog: ${out.length} Parts loaded`);
   return out;

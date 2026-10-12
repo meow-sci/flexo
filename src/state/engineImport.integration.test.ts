@@ -111,8 +111,8 @@ describe.skipIf(!hasKsaAssets)('current Core engine import → performance → m
   });
 
   it('keeps every stock rocket resolvable and its performance stable after export and reimport', async () => {
-    // Current 5402 Core census: a missing pack must not silently shrink coverage.
-    expect(parts).toHaveLength(38);
+    // Current 5554 Core census: a missing pack must not silently shrink coverage.
+    expect(parts).toHaveLength(40);
     let liquidRockets = 0;
     let solidRockets = 0;
     let solidCurves = 0;
@@ -257,11 +257,11 @@ describe.skipIf(!hasKsaAssets)('current Core engine import → performance → m
         }
       }
     }
-    expect(liquidRockets).toBe(35);
+    expect(liquidRockets).toBe(37);
     expect(solidRockets).toBe(16);
     expect(solidCurves).toBeGreaterThan(0);
     console.info(
-      `Engine round trip: ${parts.length} Core parts, ${liquidRockets} liquid rockets, ${solidRockets} solid rockets, ${solidCurves} local solid burn curves`,
+      `Engine round trip: ${parts.length} Core parts, ${liquidRockets} non-solid rockets, ${solidRockets} solid rockets, ${solidCurves} local solid burn curves`,
     );
   });
 });

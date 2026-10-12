@@ -4,7 +4,7 @@
 > data-only KSA mod that adds a celestial body with `<GroundClutter>` (cards/meshes scattered
 > on the terrain), using **no custom game code**. Reference scaffold for clutter modding.
 
-**Baseline:** re-verified against KSA build **2026.9.22.5482** (decomp + shipped Core XML).
+**Baseline:** re-verified against KSA build **2026.10.10.5554** (decomp + shipped Core XML).
 **Baseline status:** 🔴 **HISTORICAL BREAKING GAP R1 — scaffold still uses pre-5168 XML.**
 5482 adds two optional clutter knobs (`<ClutterObject AngularDamping>`,
 `<GroundClutterMaterial><KeepBackfaceNormals>`) and makes the ecotype `Name` a save key — see
@@ -16,6 +16,16 @@ contract below and [What changed in 5168](#what-changed-in-5168). This is a pre-
 scaffold limitation, not a new 5438 regression, and it does not affect the part editor.
 
 ---
+
+## What changed in 5554
+
+**Authored clutter schema — intact.** GroundClutter and ecotype/card/material/placement
+reference classes are unchanged against 5482. `GroundClutterRenderer.cs` and its shaders
+change scheduling, distance culling, synchronization and global texture descriptors;
+these do not alter `<GroundClutter>`, ecotype names or the material-count/mesh-name
+contract. `KSA.GlbImport/ClutterAssetBundler.cs` can now emit host collision atlases via
+`GlbCollisionAtlas.cs`; the cartoon-moon scaffold emits no hulls. Its historical R1 gap
+remains unchanged. Interstellar celestial definitions are outside that scaffold.
 
 ## Flexo modules
 

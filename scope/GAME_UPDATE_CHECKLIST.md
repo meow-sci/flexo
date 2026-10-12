@@ -37,6 +37,10 @@ diff -rq OLD/decomp NEW/decomp | grep -vE "Brutal|System\.|MIConvexHull|Planet" 
 Note **Only in NEW** (added) and **Only in OLD** (removed) lines specially — added schema is the
 silent-data-loss risk (see the master invariant), removed/renamed classes are the breaking risk.
 
+The broad namespace regex also matches filenames such as `ClusteredLightSystem.cs`. Keep
+the unfiltered file list and sweep all changed authored declarations before excluding runtime
+namespaces; re-check any excluded file that backs a scope contract.
+
 ## 3. Map changed files → scope docs
 
 For each changed/added/removed file, find the scope doc that lists it as an anchor (see the
@@ -125,7 +129,7 @@ against the NEW code/XML. Highest-value checks, by area:
 - **Connectors / coords / IVA** — `QuaternionEx.CreateFromXyzRadians` + `Double3Ex` axes unchanged
   (else recalibrate `EULER_ORDER`); `Part.Connector.Flag` enum + `<Flags>` schema; `PartModel.cs`
   IVA render gate + `<Internal>`/`<RayTracing>` schema.
-- **Vehicle reference orientation** (background contract, [connectors-coordinates-iva.md](connectors-coordinates-iva.md)/[analysis/HOW_UP_WORKS.md](../analysis/HOW_UP_WORKS.md)) — confirm `Control.cs`/`ControlTemplate.cs` are still empty markers (no transform/control-point field); `FlightComputer.UpdateAttitudeTrackError` still aims **Body +X** / rolls **+Z**; `Vehicle.Asmb2Cce => Body2Cce`; `VehicleEditor` still pins the **root** to identity at launch; `IsAllowedAsRootPart` rules + `EditorTagDef RootPartWhitelist`. A new `ControlPoint`/"control-from-here"/reference-transform would flip "up follows root" → "up follows selected part" (grep `controlpoint|control from here|referencetransform`).
+- **Vehicle reference orientation** (background contract, [connectors-coordinates-iva.md](connectors-coordinates-iva.md)/[analysis/HOW_UP_WORKS.md](../analysis/HOW_UP_WORKS.md)) — confirm `Control.cs`/`ControlTemplate.cs` remain empty markers; `FlightComputer.UpdateAttitudeTrackError` aims **control-frame +X** / rolls **+Z**; `VehicleEditor` pins the root to identity at launch; and `IsAllowedAsRootPart`/`EditorTagDef RootPartWhitelist` remain valid. Existing vehicle-only "Control From Here" selects a part/connector frame; its save fields are not Part-authoring fields. Look for any newly authored reference-transform schema.
 - **Light falloff/aim math** ([gamedata-modules.md](gamedata-modules.md); ports in
   `src/ksa/lightFalloff.ts` + `src/three/coords.ts` `lightWorld` family, pinned by
   `lightFalloff.test.ts`) — grep `Content/Core/Shaders/Lighting/LightPrePass.comp` for the

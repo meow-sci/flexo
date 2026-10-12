@@ -9,7 +9,7 @@
 > [docs/importing-models.md](../docs/importing-models.md),
 > [docs/texturing.md](../docs/texturing.md), [docs/asset-pipeline.md](../docs/asset-pipeline.md).
 
-**Baseline:** re-vetted against KSA build **2026.9.22.5482** (decomp + shipped Core XML and private assets).
+**Baseline:** re-vetted against KSA build **2026.10.10.5554** (decomp + shipped Core XML and private assets).
 **Baseline status:** ✅ **EXPORT CONTRACT INTACT** — 5482 moved part render state into the new
 `PartTreeRenderData.cs` with equivalent logic and fixed the ambient BRDF lookup (rev 5472), which
 changes how exported materials LOOK in game but no export requirement; see
@@ -30,6 +30,30 @@ nozzles and rockets onto shared Core templates. The tests also preserve controll
 documents; see [engines.md](engines.md) for the game-side module schema.
 
 ---
+
+## What changed in 5554
+
+**Multi-part and materials — intact.** `Mod.cs` changes only log source-line metadata;
+`ModLibrary.cs` adds generated-delegate naming noise and log-line metadata. Their bundle
+enumeration, id registration and dedupe behavior are unchanged. `AssetBundle.cs` adds
+only top-level `<Barycenter>` for interstellar systems; it does not alter the flat
+`List<SerializedId>` or the N-Part/N-atlas bundle contract. flexo emits its own mod files,
+not a full Core Assets document, so it does not drop celestial templates on Part export.
+
+`PbrMaterialReference.cs`, `MeshAtlasFileReference.cs`, `MeshReference.cs`,
+`ThumbnailRenderResources.cs` and the KTX acceptance path are unchanged. Synthetic
+Normal/ORM remain required. `RenderCore.Gltf/GltfUtils.cs:LoadImageData` now takes a
+texture debug name; geometry atlas loading still registers `meshes[i].name`.
+`PartModelRenderer.cs` adopts shared pipeline caches and viewport descriptor sets;
+`ENABLE_EMISSIVE` remains on the normal pipeline and absent from the dynamic pipeline.
+`MeshIndirect.frag`/`ModelPbr.frag` replace dedicated global samplers with bindless macros,
+preserving emissive, gamma, normal mapping and roughness formulas.
+
+Stock collision atlases use `<MeshAtlas HostOnly="true">` and named meshes inside
+collision GLB files, referenced by `<ConvexHull><Mesh Id>` and introduced by
+`KSA.GlbImport/GlbCollisionAtlas.cs`. flexo resolves those host meshes for its imported
+convex-hull colliders while render mesh lookup retains its own atlas; see
+[colliders.md](colliders.md). Private binaries and UASTC were verified against 5554.
 
 ## Flexo modules
 

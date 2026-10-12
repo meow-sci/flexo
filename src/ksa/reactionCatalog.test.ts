@@ -116,7 +116,7 @@ describe('reactionCatalog: parseReactionsFile (synthetic)', () => {
     expect(resolveReactionLut(reaction, 0.1)!.rows[0].temperature).toBeCloseTo(2000, 9);
   });
 
-  it('skips thermal reactions and reactions with no usable conditions', () => {
+  it('loads thermal reactions and skips reactions with no usable conditions', () => {
     const reactions = parse(`<Assets>
       <FixedReaction Id="Empty"><Reactant Id="X(l)" MassShare="1" /></FixedReaction>
       <ThermalReaction Id="ThermalH2" Category="Thermal">
@@ -129,18 +129,19 @@ describe('reactionCatalog: parseReactionsFile (synthetic)', () => {
         <MixtureRatioCondition Value="2">${PRESSURE_CONDITION(10, 2000)}</MixtureRatioCondition>
       </MixtureReaction>
     </Assets>`);
-    expect(reactions).toHaveLength(0);
+    expect(reactions).toHaveLength(1);
+    expect(reactions[0].kind).toBe('Thermal');
   });
 });
 
 describe('reactionCatalog: real Reactions.xml', () => {
-  it.runIf(hasKsaAssets)('loads the shipped combustor-drivable reactions', () => {
+  it.runIf(hasKsaAssets)('loads the shipped reactions', () => {
     const text = readFileSync(ksaAsset('Reactions.xml'), 'utf-8');
     const reactions = parse(text);
     const index = indexReactionCatalog(reactions);
 
-    // The 6 mixtures + 2 monoprops + 2 solids; the 6 thermals are skipped.
-    expect(reactions).toHaveLength(10);
+    // The 6 mixtures + 2 monoprops + 2 solids + 7 thermal reactions.
+    expect(reactions).toHaveLength(17);
 
     for (const id of ['Kerolox', 'Hydrolox', 'Methalox', 'Ethalox', 'Ethanol_HTP', 'MMH_NTO']) {
       const r = index.get(id);
@@ -174,6 +175,8 @@ describe('reactionCatalog: clone mixture chemistry', () => {
       <MixtureRatioCondition Value="2">${PRESSURE_CONDITION(10, 2000)}</MixtureRatioCondition>
       <MixtureRatioCondition Value="4">${PRESSURE_CONDITION(10, 3000)}</MixtureRatioCondition>
     </MixtureReaction></Assets>`);
+      expect(reaction.kind).toBe('Mixture');
+      if (reaction.kind !== 'Mixture') return;
       const custom = reactionDataToCustom(reaction, 'Clone', 'Clone');
       const baked = customToReactionData(custom);
       const ratio = Math.min(defaultRatio, 4);

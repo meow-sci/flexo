@@ -12,6 +12,7 @@ import { MODE_COMMANDS } from './modeCommands';
 import { DATA_COMMANDS } from './dataCommands';
 import { SURFACE_COMMANDS } from './surfaceCommands';
 import { ANIMATION_COMMANDS } from './animationCommands';
+import { ENGINE_COMMANDS } from './engineCommands';
 import { COMMAND_PROVIDERS } from './providers';
 
 /**
@@ -39,6 +40,7 @@ registerCommands([
   ...DATA_COMMANDS,
   ...SURFACE_COMMANDS,
   ...ANIMATION_COMMANDS,
+  ...ENGINE_COMMANDS,
 ]);
 
 for (const provider of COMMAND_PROVIDERS) {

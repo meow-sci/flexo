@@ -19,6 +19,10 @@ import type {
   CatalogAnimationModule,
   ColliderShape,
   Combustor,
+  ThermalCore,
+  AntimatterRamCore,
+  MagneticNozzle,
+  MagneticScoop,
   Connector,
   ConnectorCapability,
   ConnectorFlag,
@@ -223,7 +227,7 @@ export function collidersFromElement(
       const shape = COLLIDER_SHAPE_SET.has(shapeEl.tagName as ColliderShape)
         ? (shapeEl.tagName as ColliderShape)
         : null;
-      if (!shape) continue; // not one of the four Bepu primitives KSA accepts
+      if (!shape) continue;
       const dims = {
         lengthXM: readDistanceM(directChildren(shapeEl, 'LengthX')[0]),
         lengthYM: readDistanceM(directChildren(shapeEl, 'LengthY')[0]),
@@ -242,14 +246,23 @@ export function collidersFromElement(
             `defaulting each to ${DEFAULT_COLLIDER_SIZE_M} m.`,
         );
       }
+      const hullScale = directChildren(shapeEl, 'Scale')[0];
       out.push({
         id: shapeEl.getAttribute('Id') ?? `${shape.toLowerCase()}_collider`,
         shape,
+        ...(shape === 'ConvexHull'
+          ? { meshId: directChildren(shapeEl, 'Mesh')[0]?.getAttribute('Id') ?? '' }
+          : {}),
         ownerTemplateId,
         position: readVec3Attrs(directChildren(shapeEl, 'LocationAsmb')[0], ZERO_VEC3),
         // <Collider2Asmb> is Euler XYZ radians — the same convention as a <Rotation>.
         rotation: readVec3Attrs(directChildren(shapeEl, 'Collider2Asmb')[0], ZERO_VEC3) as EulerXYZ,
-        scale: colliderSizeFromDimensions(shape, dims),
+        scale:
+          shape === 'ConvexHull'
+            ? hullScale
+              ? readVec3Attrs(hullScale, ZERO_VEC3)
+              : { x: 1, y: 1, z: 1 }
+            : colliderSizeFromDimensions(shape, dims),
         // XML carries no layers — Default, like the placements/connectors alongside it.
         layerId: DEFAULT_LAYER_ID,
       });
@@ -490,6 +503,7 @@ function tankFromElement(wrapper: Element, shapeEl: Element, shape: TankShape): 
   const conical = shape === 'Conical';
   return {
     id: wrapper.getAttribute('Id') ?? '',
+    magneticTrap: readBoolValue(directChildren(wrapper, 'MagneticTrap')[0]) ?? false,
     locationAsmb: readVec3Attrs(directChildren(shapeEl, 'LocationAsmb')[0], { x: 0, y: 0, z: 0 }),
     shape,
     wallMaterialId: directChildren(shapeEl, 'Material')[0]?.getAttribute('Id') ?? '',
@@ -884,6 +898,10 @@ export function mergeSubPartGameDataInto(base: SubPartGameData, add: SubPartGame
   base.tanks.push(...add.tanks);
   base.solarPanels.push(...add.solarPanels);
   base.combustors.push(...add.combustors);
+  base.thermalCores.push(...add.thermalCores);
+  base.antimatterRamCores.push(...add.antimatterRamCores);
+  base.magneticNozzles.push(...add.magneticNozzles);
+  base.magneticScoops.push(...add.magneticScoops);
   base.nozzles.push(...add.nozzles);
   base.rockets.push(...add.rockets);
   base.rocketControllers.push(...add.rocketControllers);
@@ -975,6 +993,10 @@ const KNOWN_PART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
   'RocketEngineController',
   'RocketThrusterController',
   'Rocket',
+  'ThermalCore',
+  'AntimatterRamCore',
+  'MagneticNozzle',
+  'MagneticScoop',
   'Combustor',
   'DeLavalNozzle',
   'SolidMotor',
@@ -1002,6 +1024,10 @@ const KNOWN_SUBPART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
   'Rocket',
   'RocketEngineController',
   'RocketThrusterController',
+  'ThermalCore',
+  'AntimatterRamCore',
+  'MagneticNozzle',
+  'MagneticScoop',
   'Combustor',
   'DeLavalNozzle',
   'SolidMotor',
@@ -1192,7 +1218,7 @@ function readDegrees(el: Element | null | undefined): number {
 function readBoolValue(el: Element | null | undefined): boolean | null {
   const raw = el?.getAttribute('Value');
   if (raw == null) return null;
-  return raw.trim().toLowerCase() === 'true';
+  return raw.trim() === 'true' || raw.trim() === '1';
 }
 
 /**
@@ -1245,6 +1271,44 @@ function refFromElement(el: Element | null | undefined): SubPartIdRef {
 }
 
 /** Parses one `<Combustor>` element. Missing fields fall back to CombustorTemplate defaults. */
+function thermalCoreFromElement(el: Element): ThermalCore {
+  return {
+    id: el.getAttribute('Id') ?? '',
+    reactionId: directChildren(el, 'Reaction')[0]?.getAttribute('Id') ?? '',
+    coreTemperatureK: readNum(directChildren(el, 'CoreTemperature')[0], 'K') ?? Number.NaN,
+    maxPressurePa: readPressurePa(directChildren(el, 'MaxPressure')[0]) ?? 5_000_000,
+    thermalEfficiency: readNum(directChildren(el, 'ThermalEfficiency')[0], 'Value') ?? 1,
+    minimumThrottle: readNum(directChildren(el, 'MinimumThrottle')[0], 'Value') ?? 1,
+    minimumPulseTimeS: readSeconds(directChildren(el, 'MinimumPulseTime')[0]),
+    feeds: feedsFromElement(el),
+    plumbing: readPlumbing(directChildren(el, 'Plumbing')[0]),
+  };
+}
+
+function antimatterRamCoreFromElement(el: Element): AntimatterRamCore {
+  const power = directChildren(el, 'JetPower')[0];
+  const powerUnits = { W: 1, KW: 1e3, MW: 1e6, GW: 1e9, TW: 1e12 };
+  const authoredPower = power
+    ? Object.entries(powerUnits).reduce(
+        (sum, [unit, scale]) => sum + (readNum(power, unit) ?? 0) * scale,
+        0,
+      )
+    : 30e12;
+  return {
+    id: el.getAttribute('Id') ?? '',
+    jetPowerW: authoredPower,
+    annihilationEfficiency:
+      readNum(directChildren(el, 'AnnihilationEfficiency')[0], 'Value') ?? 0.5,
+    carriedExhaustFractionOfLight:
+      readNum(directChildren(el, 'CarriedExhaustFractionOfLight')[0], 'Value') ?? 0.4,
+    antimatterId: directChildren(el, 'Antimatter')[0]?.getAttribute('Id') ?? 'AntiH2(l)',
+    reactionMassId: directChildren(el, 'ReactionMass')[0]?.getAttribute('Id') ?? 'H2(l)',
+    minimumThrottle: readNum(directChildren(el, 'MinimumThrottle')[0], 'Value') ?? 0.01,
+    minimumPulseTimeS: readSeconds(directChildren(el, 'MinimumPulseTime')[0]),
+    feeds: feedsFromElement(el),
+  };
+}
+
 function combustorFromElement(el: Element): Combustor {
   const reactionEl = directChildren(el, 'Reaction')[0];
   const ratioRaw = reactionEl
@@ -1486,6 +1550,10 @@ function parseEngineModules(
   el: Element,
   target: {
     combustors: Combustor[];
+    thermalCores: ThermalCore[];
+    antimatterRamCores: AntimatterRamCore[];
+    magneticNozzles: MagneticNozzle[];
+    magneticScoops: MagneticScoop[];
     nozzles: DeLavalNozzle[];
     rockets: Rocket[];
     rocketControllers: RocketController[];
@@ -1501,6 +1569,27 @@ function parseEngineModules(
       target.rocketControllers.push(controllerFromElement(c, 'thruster'));
   }
   for (const r of directChildren(el, 'Rocket')) target.rockets.push(rocketFromElement(r));
+  for (const c of directChildren(el, 'ThermalCore'))
+    target.thermalCores.push(thermalCoreFromElement(c));
+  for (const c of directChildren(el, 'AntimatterRamCore'))
+    target.antimatterRamCores.push(antimatterRamCoreFromElement(c));
+  for (const n of directChildren(el, 'MagneticNozzle')) {
+    const { exitDiameterM, flowEfficiency, expansionEfficiency, ...common } = commonNozzleFields(n);
+    void exitDiameterM;
+    void flowEfficiency;
+    void expansionEfficiency;
+    target.magneticNozzles.push({
+      id: n.getAttribute('Id') ?? '',
+      ...common,
+      fxExitDiameterM: readDistanceM(directChildren(n, 'FxExitDiameter')[0]) ?? 1,
+    });
+  }
+  for (const c of directChildren(el, 'MagneticScoop'))
+    target.magneticScoops.push({
+      id: c.getAttribute('Id') ?? '',
+      captureRadiusM: readDistanceM(directChildren(c, 'CaptureRadius')[0]) ?? 1_000_000,
+      collectsId: directChildren(c, 'Collects')[0]?.getAttribute('Id') ?? 'H2(l)',
+    });
   for (const c of directChildren(el, 'Combustor')) target.combustors.push(combustorFromElement(c));
   for (const n of directChildren(el, 'DeLavalNozzle')) target.nozzles.push(nozzleFromElement(n));
   for (const m of directChildren(el, 'SolidMotor'))
@@ -1509,4 +1598,24 @@ function parseEngineModules(
     target.solidNozzles.push(solidNozzleFromElement(n));
   for (const s of directChildren(el, 'SolidGrainSegment'))
     target.solidGrainSegments.push(solidGrainSegmentFromElement(s));
+}
+
+/** Geometry Part/SubPart engine modules normalize to editable GameData on import. */
+export function engineModulesFromElement(el: Element): PartGameData {
+  const data = createEmptyGameData();
+  parseEngineModules(el, data);
+  return data;
+}
+
+/** Geometry SubPart templates can carry the same propulsion modules as GameData. */
+export function subPartEngineModulesFromRoot(root: Element): SubPartGameData[] {
+  const modules: SubPartGameData[] = [];
+  for (const el of directChildren(root, 'SubPart')) {
+    const id = el.getAttribute('Id');
+    if (!id) continue;
+    const data = createSubPartGameData(id);
+    parseEngineModules(el, data);
+    if (!isSubPartGameDataEmpty(data)) modules.push(data);
+  }
+  return modules;
 }

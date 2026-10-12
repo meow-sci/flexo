@@ -761,6 +761,54 @@
             <Capabilities>BulkFluid</Capabilities>
         </Connector>
     </PartGameData>
+    <PartGameData Id="CoreFuelTankA_Prefab_MagneticTrapA" DisplayName="MTT-1 Magnetic Trap Tank">
+        <EditorTag Value="Interstellar" />
+        <Diameter M="3"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-3.1411" Y="0.0022" Z="1.5708" />
+            <LengthY M="6.0681" />
+            <Radius M="1.5942" />
+          </Cylinder>
+        </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="6" />
+                <!-- true geometric radius: <OuterRadius M="1.5" /> -->
+                <OuterRadius M="3" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+            <MagneticTrap Value="true" />
+        </Tank>
+
+        <Connector Id="_connector29">
+            <Capabilities>BulkFluid</Capabilities>
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector30">
+            <Capabilities>BulkFluid</Capabilities>
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector27"/>
+            <ConnectorRef Id="_connector30"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector28"/>
+            <ConnectorRef Id="_connector29"/>
+        </Aligned>
+
+        <Connector Id="_connector27">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector28">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+    </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HB">
         <EditorTag Value="Fuel Tanks" />

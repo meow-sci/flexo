@@ -17,6 +17,24 @@
       <Mesh Id="CorePropulsionA_Subpart_EngineALargeVacAssembly_VM" />
     </MeshView>
   </SubPart>
+  <SubPart Id="CorePropulsionA_Subpart_AntimatterRamAssembly">
+    <PartModelDynamic Id="CorePropulsionA_Subpart_AntimatterRamAssembly_Model">
+      <Mesh Id="CorePropulsionA_Subpart_EngineALargeVacAssembly" />
+      <Material Id="CorePropulsionA_Material" />
+    </PartModelDynamic>
+    <MeshView>
+      <Mesh Id="CorePropulsionA_Subpart_EngineALargeVacAssembly_VM" />
+    </MeshView>
+  </SubPart>
+  <SubPart Id="CorePropulsionA_Subpart_FusionTorchAssembly">
+    <PartModelDynamic Id="CorePropulsionA_Subpart_FusionTorchAssembly_Model">
+      <Mesh Id="CorePropulsionA_Subpart_EngineALargeVacAssembly" />
+      <Material Id="CorePropulsionA_Material" />
+    </PartModelDynamic>
+    <MeshView>
+      <Mesh Id="CorePropulsionA_Subpart_EngineALargeVacAssembly_VM" />
+    </MeshView>
+  </SubPart>
   <SubPart Id="CorePropulsionA_Subpart_EngineAMedBoostAssembly">
     <PartModelDynamic Id="CorePropulsionA_Subpart_EngineAMedBoostAssembly_Model">
       <Mesh Id="CorePropulsionA_Subpart_EngineAMedBoostAssembly" />
@@ -608,6 +626,50 @@
       </Gimbal>
     </SubPart>
     <Connector Id="_connector3">
+      <Transform>
+        <Position X="1.17" />
+      </Transform>
+    </Connector>
+  </Part>
+  <Part Id="CorePropulsionA_Prefab_AntimatterRamDriveA" CrashTolerance="3e6">
+    <SubPart Id="CorePropulsionA_Subpart_EngineA1WBase4" InstanceOf="CorePropulsionA_Subpart_EngineA1WBase">
+      <Transform>
+        <Position X="0.9278" Y="-0.0966" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CorePropulsionA_Subpart_AntimatterRamAssembly1" InstanceOf="CorePropulsionA_Subpart_AntimatterRamAssembly">
+      <Transform>
+        <Position X="-0.3442" />
+      </Transform>
+      <Gimbal>
+        <Transform>
+          <Position X="1.1575" />
+        </Transform>
+      </Gimbal>
+    </SubPart>
+    <Connector Id="_connector47">
+      <Transform>
+        <Position X="1.17" />
+      </Transform>
+    </Connector>
+  </Part>
+  <Part Id="CorePropulsionA_Prefab_FusionTorchDriveA" CrashTolerance="3e6">
+    <SubPart Id="CorePropulsionA_Subpart_EngineA1WBase4" InstanceOf="CorePropulsionA_Subpart_EngineA1WBase">
+      <Transform>
+        <Position X="0.9278" Y="-0.0966" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CorePropulsionA_Subpart_FusionTorchAssembly1" InstanceOf="CorePropulsionA_Subpart_FusionTorchAssembly">
+      <Transform>
+        <Position X="-0.3442" />
+      </Transform>
+      <Gimbal>
+        <Transform>
+          <Position X="1.1575" />
+        </Transform>
+      </Gimbal>
+    </SubPart>
+    <Connector Id="_connector47">
       <Transform>
         <Position X="1.17" />
       </Transform>

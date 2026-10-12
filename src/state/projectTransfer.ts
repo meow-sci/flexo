@@ -774,6 +774,7 @@ export function mergeProjectImport(
     part.colliders.push({
       id: nextColliderId(part),
       shape: src.shape,
+      ...(src.shape === 'ConvexHull' ? { meshId: src.meshId } : {}),
       ownerTemplateId: src.ownerTemplateId ? mapTemplateId(src.ownerTemplateId) : null,
       position: vec(src.position, 0),
       rotation: vec(src.rotation, 0),
@@ -865,6 +866,14 @@ export function mergeProjectImport(
       remapConsumerFeeds(structuredClone(c), connectorIdMap, instanceIdMap),
     );
     const nozzles = (sg.nozzles ?? []).map((n) => structuredClone(n));
+    const thermalCores = sg.thermalCores.map((c) =>
+      remapConsumerFeeds(structuredClone(c), connectorIdMap, instanceIdMap),
+    );
+    const antimatterRamCores = sg.antimatterRamCores.map((c) =>
+      remapConsumerFeeds(structuredClone(c), connectorIdMap, instanceIdMap),
+    );
+    const magneticNozzles = structuredClone(sg.magneticNozzles);
+    const magneticScoops = structuredClone(sg.magneticScoops);
     const rockets = (sg.rockets ?? []).map((r) => remapRocket(r, instanceIdMap));
     const rocketControllers = sg.rocketControllers.map((c) => ({
       ...structuredClone(c),
@@ -885,6 +894,11 @@ export function mergeProjectImport(
       existing.tanks.push(...tanks);
       existing.solarPanels.push(...solarPanels);
       existing.combustors.push(...combustors);
+      existing.thermalCores.push(...thermalCores);
+      existing.antimatterRamCores.push(...antimatterRamCores);
+      existing.magneticNozzles.push(...magneticNozzles);
+      existing.magneticScoops.push(...magneticScoops);
+
       existing.nozzles.push(...nozzles);
       existing.rockets.push(...rockets);
       existing.rocketControllers.push(...rocketControllers);
@@ -898,6 +912,11 @@ export function mergeProjectImport(
       entry.tanks = tanks;
       entry.solarPanels = solarPanels;
       entry.combustors = combustors;
+      entry.thermalCores = thermalCores;
+      entry.antimatterRamCores = antimatterRamCores;
+      entry.magneticNozzles = magneticNozzles;
+      entry.magneticScoops = magneticScoops;
+
       entry.nozzles = nozzles;
       entry.rockets = rockets;
       entry.rocketControllers = rocketControllers;
@@ -1043,6 +1062,18 @@ function mergeGameData(
     ),
   );
   target.nozzles.push(...(src.nozzles ?? []).map((n) => structuredClone(n)));
+  target.thermalCores.push(
+    ...src.thermalCores.map((c) =>
+      remapConsumerFeeds(structuredClone(c), connectorIdMap, instanceIdMap),
+    ),
+  );
+  target.antimatterRamCores.push(
+    ...src.antimatterRamCores.map((c) =>
+      remapConsumerFeeds(structuredClone(c), connectorIdMap, instanceIdMap),
+    ),
+  );
+  target.magneticNozzles.push(...structuredClone(src.magneticNozzles));
+  target.magneticScoops.push(...structuredClone(src.magneticScoops));
   target.gimbals.push(
     ...(src.gimbals ?? []).map((g) => ({
       ...g,

@@ -5,9 +5,11 @@
 > other feature hangs off. Read alongside [docs/xml-io.md](../docs/xml-io.md) and
 > [docs/subpart-catalog.md](../docs/subpart-catalog.md) (the flexo-internal view).
 
-**Baseline:** KSA build **2026.9.22.5482** — `PartTemplate`, `SubPartTemplate` and the editor-tag
-registry are byte-identical; the one XML content change is `CoreFairingAGameData.xml` turning seven
-nosecones/adapters into fuel tanks, two of them with the new `<ConicalTank>` shape (modeled, see
+**Baseline:** KSA build **2026.10.10.5554** — new engine modules, stock convex-hull colliders,
+and the `Interstellar` editor category are modeled; see [What changed in 5554](#what-changed-in-5554).
+`SubPartTemplate` and `EditorTagDefinition` remain unchanged. Previously, 5482 changed
+`CoreFairingAGameData.xml` to turn seven nosecones/adapters into fuel tanks, two with the
+`<ConicalTank>` shape (modeled, see
 [gamedata-modules.md](gamedata-modules.md#what-changed-in-5482) and
 [What changed in 5482](#what-changed-in-5482)). At 5438 the crash-tolerance derivation moved to
 subtree inert mass and summed collider volume ([What changed in 5438](#what-changed-in-5438)).
@@ -44,6 +46,21 @@ see [colliders.md](colliders.md). `<IVASeat>` has likewise moved out of the pass
 [connectors-coordinates-iva.md](connectors-coordinates-iva.md).
 
 ---
+
+## What changed in 5554
+
+**Current catalog and category snapshot — refreshed.** `CoreEditorTagsGameData.xml` adds
+`<EditorTagDef Id="Interstellar" RootPartWhitelist="true" FaceSnapTargetWhitelist="true"/>`
+after `Lights`; `EDITOR_TAG_DEFS` and its order regression now match. The current stock
+fusion/antimatter/scoop/trap Parts import from the refreshed private mirror and vendored
+fixtures. `PartTemplate.cs` adds `<ThermalCore>`, `<AntimatterRamCore>`,
+`<MagneticNozzle>` and `<MagneticScoop>` lists; see [engines.md](engines.md).
+
+Geometry XML remains compatible, but stock Command/Fairing/Structural templates now
+author `<Collider><ConvexHull><Mesh Id>` and HostOnly collision atlases; that newly active
+stock loss surface is closed in [colliders.md](colliders.md). `SubPartTemplate.cs` and
+`EditorTagDefinition.cs` themselves are byte-identical. Existing U3/T2/T3/S2 limitations
+remain separate from this update.
 
 ## Flexo modules
 

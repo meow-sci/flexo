@@ -1,5 +1,6 @@
 import type {
   Combustor,
+  ThermalCore,
   DeLavalNozzle,
   EditingPart,
   Rocket,
@@ -7,8 +8,13 @@ import type {
   SubPartIdRef,
 } from '../../ksa/types';
 import type { ReactionData } from '../../ksa/reactionCatalog';
-import { resolveReactionLut } from '../../ksa/reactionCatalog';
-import { predictPerformance, G0, type EnginePerformance } from '../../ksa/enginePhysics';
+import { resolveReactionLut, resolveThermalReactionLut } from '../../ksa/reactionCatalog';
+import {
+  predictPerformance,
+  predictMagneticPerformance,
+  G0,
+  type EnginePerformance,
+} from '../../ksa/enginePhysics';
 import { FIRST_PAIR_ROCKET, type EngineEntry } from '../../state/engineStore';
 
 /**
@@ -121,13 +127,18 @@ function instanceCountOf(part: EditingPart, templateId: string | null): number {
 
 /** Runs the ported physics for one chamber + nozzle pair, or returns why it could not. */
 function predictPair(
-  combustor: Combustor,
+  combustor: Combustor | ThermalCore,
   nozzle: DeLavalNozzle,
   reactions: ReadonlyMap<string, ReactionData>,
 ): { performance: EnginePerformance; reactionName: string } | PerformanceUnavailable {
   const reaction = reactions.get(combustor.reactionId);
   if (!reaction) return { kind: 'no-catalog', reactionId: combustor.reactionId };
-  const lut = resolveReactionLut(reaction, combustor.mixtureRatio);
+  const lut =
+    'coreTemperatureK' in combustor
+      ? reaction.kind === 'Thermal'
+        ? resolveThermalReactionLut(reaction, combustor.coreTemperatureK)
+        : null
+      : resolveReactionLut(reaction, combustor.mixtureRatio);
   if (!lut) return { kind: 'no-ratio', reactionName: reaction.name };
   return {
     reactionName: reaction.name,
@@ -194,7 +205,7 @@ export function computePerformance(
       entry.kind === 'part'
         ? part.gameData
         : part.subPartGameData.find((s) => s.subPartTemplateId === entry.templateId);
-    const combustor = owner?.combustors[0];
+    const combustor = owner?.combustors[0] ?? owner?.thermalCores[0];
     const nozzle = owner?.nozzles[0];
     if (!combustor || !nozzle) return { kind: 'no-modules' };
     const predicted = predictPair(combustor, nozzle, reactions);
@@ -218,7 +229,30 @@ export function computePerformance(
   const solidCore = locate(part, entry, rocket.core, (o) => o.solidMotors) !== null;
   if (solidCore) return { kind: 'solid' };
 
-  const core = locate(part, entry, rocket.core, (o) => o.combustors);
+  const ram = locate(part, entry, rocket.core, (o) => o.antimatterRamCores);
+  if (ram) {
+    const pairs: PerformancePair[] = [];
+    for (const ref of rocket.nozzles) {
+      const nozzle = locate(part, entry, ref, (o) => o.magneticNozzles);
+      if (!nozzle) return { kind: 'no-modules' };
+      pairs.push({
+        coreId: ram.id,
+        nozzleId: nozzle.id,
+        instanceCount: instanceCountOf(part, entry.kind === 'subpart' ? entry.templateId : null),
+        performance: predictMagneticPerformance(
+          ram.jetPowerW,
+          ram.annihilationEfficiency,
+          ram.carriedExhaustFractionOfLight,
+          rocket.nozzles.length,
+        ),
+      });
+    }
+    return aggregate('Antimatter annihilation (carried propellant; no scoop input)', pairs);
+  }
+  const core = locate<Combustor | ThermalCore>(part, entry, rocket.core, (o) => [
+    ...o.combustors,
+    ...o.thermalCores,
+  ]);
   if (!core) return { kind: 'no-modules' };
 
   const pairs: PerformancePair[] = [];

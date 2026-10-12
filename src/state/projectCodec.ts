@@ -5,6 +5,10 @@ import type {
   BurnRateLaw,
   ColliderShape,
   Combustor,
+  ThermalCore,
+  AntimatterRamCore,
+  MagneticNozzle,
+  MagneticScoop,
   Connector,
   ConnectorCapability,
   ConsumerFeedWiring,
@@ -269,6 +273,7 @@ interface CCollider extends CTransform {
   i: string; // id
   l: string; // layerId
   sh: ColliderShape; // shape
+  m?: string; // ConvexHull Mesh Id
   o?: string; // ownerTemplateId (omitted ⇒ null ⇒ part-level)
 }
 
@@ -277,6 +282,7 @@ function encCollider(c: PartCollider): CCollider {
   // it at (1,1,1), which decodes back to a 1 m cube — the same shape.
   const o: CCollider = { i: c.id, l: c.layerId, sh: c.shape, ...encTransform(c) };
   if (c.ownerTemplateId) o.o = c.ownerTemplateId;
+  if (c.shape === 'ConvexHull') o.m = c.meshId;
   return o;
 }
 
@@ -284,6 +290,7 @@ function decCollider(c: CCollider): PartCollider {
   return {
     id: str(c.i),
     shape: COLLIDER_SHAPES.includes(c.sh) ? c.sh : 'Cylinder',
+    ...(c.sh === 'ConvexHull' ? { meshId: str(c.m) } : {}),
     ownerTemplateId: c.o ? str(c.o) : null,
     layerId: str(c.l),
     ...decTransform(c),
@@ -414,6 +421,10 @@ interface CGameData {
   ed?: { s?: string }; // evaDoor — presence = the hatch; s = SeatId when authored
   ct?: CController[]; // rocketControllers
   ro?: CRocket[]; // part-level rockets (gas generators)
+  thermal?: CThermalCore[];
+  ram?: CRamCore[];
+  magnetic?: CMagneticNozzle[];
+  scoops?: CMagneticScoop[];
   cb?: CCombustor[]; // part-level combustors
   nz?: CNozzle[]; // part-level nozzles
   gm?: CGimbal[]; // gimbals
@@ -458,6 +469,10 @@ function encGameData(g: PartGameData): CGameData {
   if (g.rocketControllers.length) o.ct = g.rocketControllers.map(encController);
   if (g.rockets.length) o.ro = g.rockets.map(encRocket);
   if (g.combustors.length) o.cb = g.combustors.map(encCombustor);
+  if (g.thermalCores.length) o.thermal = g.thermalCores.map(encThermalCore);
+  if (g.antimatterRamCores.length) o.ram = g.antimatterRamCores.map(encRamCore);
+  if (g.magneticNozzles.length) o.magnetic = g.magneticNozzles.map(encMagneticNozzle);
+  if (g.magneticScoops.length) o.scoops = g.magneticScoops.map(encMagneticScoop);
   if (g.nozzles.length) o.nz = g.nozzles.map(encNozzle);
   if (g.gimbals.length) o.gm = g.gimbals.map(encGimbal);
   if (g.tanks.length) o.tk = g.tanks.map(encTank);
@@ -498,6 +513,10 @@ function decGameData(c: CGameData | undefined): PartGameData {
   g.rocketControllers = arr<CController>(c.ct).map(decController);
   g.rockets = arr<CRocket>(c.ro).map(decRocket);
   g.combustors = arr<CCombustor>(c.cb).map(decCombustor);
+  g.thermalCores = arr<CThermalCore>(c.thermal).map(decThermalCore);
+  g.antimatterRamCores = arr<CRamCore>(c.ram).map(decRamCore);
+  g.magneticNozzles = arr<CMagneticNozzle>(c.magnetic).map(decMagneticNozzle);
+  g.magneticScoops = arr<CMagneticScoop>(c.scoops).map(decMagneticScoop);
   g.nozzles = arr<CNozzle>(c.nz).map(decNozzle);
   g.gimbals = arr<CGimbal>(c.gm).map(decGimbal);
   g.tanks = arr<CTank>(c.tk).map(decTank);
@@ -547,6 +566,7 @@ interface CTank {
   con?: 1; // shape: present ⇒ Conical
   rt?: number; // radiusTopM (conical tanks only)
   ra?: string; // roleAffinity (omitted at the Engine default)
+  mt?: 1; // magneticTrap (omitted when false)
   id?: string; // <Tank Id> feed-container id (omitted when unnamed)
   lo?: Triple; // locationAsmb (omitted at 0,0,0)
 }
@@ -560,6 +580,7 @@ function encTank(t: Tank): CTank {
     o.rt = round(t.radiusTopM);
   }
   if (t.roleAffinity !== 'Engine') o.ra = t.roleAffinity;
+  if (t.magneticTrap) o.mt = 1;
   if (t.id.trim()) o.id = t.id;
   if (!isZeroVec(t.locationAsmb)) o.lo = encVec(t.locationAsmb);
   return o;
@@ -582,6 +603,7 @@ function decTank(c: CTank): Tank {
     outerRadiusM: num(c.r),
     radiusTopM: c.rt != null ? num(c.rt) : createTank().radiusTopM,
     wallThicknessMm: num(c.w),
+    magneticTrap: !!c.mt,
     roleAffinity:
       c.ra != null && TANK_ROLE_AFFINITIES.has(str(c.ra))
         ? (str(c.ra) as TankRoleAffinity)
@@ -1021,6 +1043,10 @@ interface CSubPartGameData {
   t: string; // subPartTemplateId
   tk?: CTank[]; // tanks
   sp?: CSolarPanel[]; // solarPanels
+  thermal?: CThermalCore[];
+  ram?: CRamCore[];
+  magnetic?: CMagneticNozzle[];
+  scoops?: CMagneticScoop[];
   cb?: CCombustor[]; // combustors
   nz?: CNozzle[]; // nozzles
   ro?: CRocket[]; // rockets
@@ -1037,6 +1063,10 @@ function encSubPartGameData(s: SubPartGameData): CSubPartGameData {
   if (s.tanks.length) o.tk = s.tanks.map(encTank);
   if (s.solarPanels.length) o.sp = s.solarPanels.map(encSolarPanel);
   if (s.combustors.length) o.cb = s.combustors.map(encCombustor);
+  if (s.thermalCores.length) o.thermal = s.thermalCores.map(encThermalCore);
+  if (s.antimatterRamCores.length) o.ram = s.antimatterRamCores.map(encRamCore);
+  if (s.magneticNozzles.length) o.magnetic = s.magneticNozzles.map(encMagneticNozzle);
+  if (s.magneticScoops.length) o.scoops = s.magneticScoops.map(encMagneticScoop);
   if (s.nozzles.length) o.nz = s.nozzles.map(encNozzle);
   if (s.rockets.length) o.ro = s.rockets.map(encRocket);
   if (s.rocketControllers.length) o.ct = s.rocketControllers.map(encController);
@@ -1053,6 +1083,10 @@ function decSubPartGameData(c: CSubPartGameData): SubPartGameData {
   s.tanks = arr<CTank>(c.tk).map(decTank);
   s.solarPanels = arr<CSolarPanel>(c.sp).map(decSolarPanel);
   s.combustors = arr<CCombustor>(c.cb).map(decCombustor);
+  s.thermalCores = arr<CThermalCore>(c.thermal).map(decThermalCore);
+  s.antimatterRamCores = arr<CRamCore>(c.ram).map(decRamCore);
+  s.magneticNozzles = arr<CMagneticNozzle>(c.magnetic).map(decMagneticNozzle);
+  s.magneticScoops = arr<CMagneticScoop>(c.scoops).map(decMagneticScoop);
   s.nozzles = arr<CNozzle>(c.nz).map(decNozzle);
   s.rockets = arr<CRocket>(c.ro).map(decRocket);
   s.rocketControllers = arr<CController>(c.ct).map(decController);
@@ -1696,4 +1730,96 @@ export function isCompactProject(raw: unknown): raw is CompactProject {
   return (
     typeof raw === 'object' && raw !== null && (raw as { f?: unknown }).f === PROJECT_EXPORT_FORMAT
   );
+}
+
+// Thermal cores reuse the existing pressure/timing/plumbing/feed codec, never a raw document spread.
+type CThermalCore = Omit<CCombustor, 'mr'> & { t?: number };
+function encThermalCore(core: ThermalCore): CThermalCore {
+  const { mr, ...common } = encCombustor({ ...core, mixtureRatio: null });
+  void mr;
+  return { ...common, t: round(core.coreTemperatureK) };
+}
+function decThermalCore(core: CThermalCore): ThermalCore {
+  const { mixtureRatio, ...common } = decCombustor(core);
+  void mixtureRatio;
+  return { ...common, coreTemperatureK: num(core.t, 3000) };
+}
+interface CRamCore {
+  id: string;
+  p?: number;
+  e?: number;
+  v?: number;
+  a?: string;
+  r?: string;
+  mt?: number;
+  pt?: number;
+  fd?: CFeed[];
+}
+function encRamCore(core: AntimatterRamCore): CRamCore {
+  return {
+    id: core.id,
+    p: round(core.jetPowerW),
+    e: round(core.annihilationEfficiency),
+    v: round(core.carriedExhaustFractionOfLight),
+    a: core.antimatterId,
+    r: core.reactionMassId,
+    mt: round(core.minimumThrottle),
+    ...(core.minimumPulseTimeS !== null ? { pt: round(core.minimumPulseTimeS) } : {}),
+    ...(core.feeds.length ? { fd: core.feeds.map(encFeed) } : {}),
+  };
+}
+function decRamCore(core: CRamCore): AntimatterRamCore {
+  return {
+    id: str(core.id),
+    jetPowerW: num(core.p, 30e12),
+    annihilationEfficiency: num(core.e, 0.5),
+    carriedExhaustFractionOfLight: num(core.v, 0.4),
+    antimatterId: str(core.a, 'AntiH2(l)'),
+    reactionMassId: str(core.r, 'H2(l)'),
+    minimumThrottle: num(core.mt, 0.01),
+    minimumPulseTimeS: typeof core.pt === 'number' ? num(core.pt, 0.001) : null,
+    feeds: decFeeds(core.fd),
+  };
+}
+type CMagneticNozzle = Omit<CNozzle, 'ar' | 'd' | 'fe' | 'ee'>;
+function encMagneticNozzle(nozzle: MagneticNozzle): CMagneticNozzle {
+  const { ar, d, fe, ee, ...common } = encNozzle({
+    ...nozzle,
+    areaRatio: 0,
+    exitDiameterM: 0,
+    flowEfficiency: 1,
+    expansionEfficiency: 1,
+  });
+  void ar;
+  void d;
+  void fe;
+  void ee;
+  return common;
+}
+function decMagneticNozzle(nozzle: CMagneticNozzle): MagneticNozzle {
+  const { areaRatio, exitDiameterM, flowEfficiency, expansionEfficiency, ...common } = decNozzle({
+    ...nozzle,
+    ar: 0,
+    d: 0,
+  });
+  void areaRatio;
+  void exitDiameterM;
+  void flowEfficiency;
+  void expansionEfficiency;
+  return { ...common, fxExitDiameterM: num(nozzle.fx, 1) };
+}
+interface CMagneticScoop {
+  id: string;
+  r?: number;
+  c?: string;
+}
+function encMagneticScoop(scoop: MagneticScoop): CMagneticScoop {
+  return { id: scoop.id, r: round(scoop.captureRadiusM), c: scoop.collectsId };
+}
+function decMagneticScoop(scoop: CMagneticScoop): MagneticScoop {
+  return {
+    id: str(scoop.id),
+    captureRadiusM: num(scoop.r, 1e6),
+    collectsId: str(scoop.c, 'H2(l)'),
+  };
 }

@@ -24,6 +24,33 @@ function parseFixtures(): StaticCatalog {
   return parseStaticCatalog(docs);
 }
 
+it('preserves a stock Part collision hull when exporting it as static geometry', () => {
+  const out = serializeStaticAssetsXml({
+    materials: [],
+    pieces: [],
+    objects: [
+      {
+        id: 'HullObject',
+        placements: [],
+        colliders: [
+          {
+            id: 'Hull',
+            shape: 'ConvexHull',
+            meshId: '_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1',
+            ownerTemplateId: null,
+            layerId: 'default',
+            position: { x: 0, y: 0, z: 0 },
+            rotation: { x: 0, y: 0, z: 0 },
+            scale: { x: 2, y: 3, z: 4 },
+          },
+        ],
+      },
+    ],
+  });
+  expect(out).toContain('<Mesh Id="_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1"');
+  expect(out).toContain('<Scale X="2" Y="3" Z="4"');
+});
+
 /**
  * Normalizes XML for byte-faithfulness comparison against Core's bundler output:
  * whitespace-only differences (indent width, ` />` vs `/>`) are erased, structure

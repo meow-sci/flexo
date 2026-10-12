@@ -113,6 +113,10 @@ function partAdvancedCount(g: PartGameData): number {
     g.solidGrainSegments.length +
     g.rockets.length +
     g.combustors.length +
+    g.thermalCores.length +
+    g.antimatterRamCores.length +
+    g.magneticNozzles.length +
+    g.magneticScoops.length +
     g.nozzles.length
   );
 }
@@ -122,6 +126,10 @@ function templateEngineCount(spd: SubPartGameData | undefined): number {
   if (!spd) return 0;
   return (
     spd.combustors.length +
+    spd.thermalCores.length +
+    spd.antimatterRamCores.length +
+    spd.magneticNozzles.length +
+    spd.magneticScoops.length +
     spd.nozzles.length +
     spd.rockets.length +
     spd.rocketControllers.length +

@@ -4,6 +4,10 @@ import {
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
   createEmptyPart,
+  createThermalCore,
+  createAntimatterRamCore,
+  createMagneticNozzle,
+  createMagneticScoop,
   createPartLight,
   createRocketController,
   createSolidGrainSegment,
@@ -602,6 +606,18 @@ describe('projectCodec round-trip', () => {
     expect(roundTripOne(p).gameData.tanks).toEqual([cone, createTank()]);
   });
 
+  it('round-trips magnetic containment at both tank scopes and defaults it to false', () => {
+    const p = createEmptyPart();
+    p.gameData.tanks = [{ ...createTank(), magneticTrap: true }, createTank()];
+    p.subPartGameData = [
+      { ...createSubPartGameData('TankMesh'), tanks: [{ ...createTank(), magneticTrap: true }] },
+    ];
+    expect(encodeOne(p).g?.tk?.[0].mt).toBe(1);
+    expect(encodeOne(p).g?.tk?.[1]).not.toHaveProperty('mt');
+    expect(roundTripOne(p).gameData.tanks).toEqual(p.gameData.tanks);
+    expect(roundTripOne(p).subPartGameData[0].tanks).toEqual(p.subPartGameData[0].tanks);
+  });
+
   it('round-trips internalFlags and omits them when empty', () => {
     expect(encodeOne(createEmptyPart())).not.toHaveProperty('ifl');
     const p = createEmptyPart();
@@ -895,6 +911,19 @@ describe('collider codec', () => {
 });
 
 describe('layer color codec', () => {
+  it('preserves collision mesh references and non-uniform hull multipliers', () => {
+    const p = createEmptyPart();
+    p.colliders.push({
+      id: '_collider1',
+      shape: 'ConvexHull',
+      meshId: '_ColMesh_CoreFairingA_Subpart_AdapterTrussA_1',
+      ownerTemplateId: null,
+      layerId: DEFAULT_LAYER_ID,
+      ...identityTransform(),
+      scale: { x: 2, y: 3, z: 4 },
+    });
+    expect(roundTripOne(p).colliders).toEqual(p.colliders);
+  });
   it('round-trips a colored layer and omits `c` for an uncolored one', () => {
     const p = createEmptyPart();
     p.layers.push({ id: 'layer1', name: 'Engines', color: 'teal' });
@@ -1101,4 +1130,71 @@ it('round-trips template controllers including explicitly disabled RCS control m
   data.rocketControllers.push(controller);
   part.subPartGameData.push(data);
   expect(roundTripOne(part).subPartGameData).toEqual(part.subPartGameData);
+});
+
+it('preserves 5554 propulsion modules in compact share payloads at both scopes', () => {
+  const part = createEmptyPart();
+  const sub = createSubPartGameData('T');
+  for (const owner of [part.gameData, sub]) {
+    owner.thermalCores.push({
+      ...createThermalCore('Heat'),
+      coreTemperatureK: 3e6,
+      reactionId: 'FusionH2',
+    });
+    owner.antimatterRamCores.push({
+      ...createAntimatterRamCore('Ram'),
+      jetPowerW: 30e12,
+      feeds: [{ kind: 'container', containerId: 'Fuel', subPartInstanceId: 'tank_1' }],
+    });
+    owner.magneticNozzles.push({ ...createMagneticNozzle('N'), fxExitDiameterM: 4.605 });
+    owner.magneticScoops.push(createMagneticScoop('Scoop'));
+  }
+  part.subPartGameData.push(sub);
+  const decoded = roundTripOne(part);
+  for (const key of [
+    'thermalCores',
+    'antimatterRamCores',
+    'magneticNozzles',
+    'magneticScoops',
+  ] as const) {
+    expect(decoded.gameData[key]).toEqual(part.gameData[key]);
+    expect(decoded.subPartGameData[0][key]).toEqual(sub[key]);
+  }
+});
+
+it('default-fills current propulsion payloads with missing scalars, feed lists and vector components', () => {
+  const decoded = decodeProject({
+    f: PROJECT_EXPORT_FORMAT,
+    v: PROJECT_EXPORT_VERSION,
+    pts: [
+      {
+        g: {
+          thermal: [{ id: 'T' }],
+          ram: [{ id: 'R' }],
+          magnetic: [{ id: 'N', el: [3, null, null], ed: [-1, null, null], fl: [2, null, null] }],
+          scoops: [{ id: 'S' }],
+        },
+      },
+    ],
+  } as never).parts[0].data.gameData;
+  expect(decoded.thermalCores[0]).toMatchObject({
+    coreTemperatureK: 3000,
+    maxPressurePa: 5e6,
+    feeds: [],
+    plumbing: 'Bulk',
+  });
+  expect(decoded.antimatterRamCores[0]).toMatchObject({
+    jetPowerW: 30e12,
+    annihilationEfficiency: 0.5,
+    feeds: [],
+  });
+  expect(decoded.magneticNozzles[0]).toMatchObject({
+    exhaustLocation: { x: 3, y: 0, z: 0 },
+    fxExhaustLocation: { x: 2, y: 0, z: 0 },
+    fxExitDiameterM: 1,
+    reactionPlumes: [],
+    sound: null,
+  });
+  expect(decoded.magneticNozzles[0]).not.toHaveProperty('exitDiameterM');
+  expect(decoded.magneticScoops[0]).toEqual({ id: 'S', captureRadiusM: 1e6, collectsId: 'H2(l)' });
 });

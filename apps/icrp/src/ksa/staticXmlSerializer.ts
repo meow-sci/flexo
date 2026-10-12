@@ -121,6 +121,10 @@ function buildStaticColliderElement(
     const shape = el(doc, c.shape, { Id: c.id });
     shape.appendChild(vec3Attrs(doc, 'LocationAsmb', c.position));
     shape.appendChild(vec3Attrs(doc, 'Collider2Asmb', c.rotation));
+    if (c.shape === 'ConvexHull') {
+      shape.appendChild(el(doc, 'Mesh', { Id: c.meshId ?? '' }));
+      shape.appendChild(vec3Attrs(doc, 'Scale', c.scale));
+    }
     const dims = colliderDimensions(c.shape, c.scale);
     if (dims.lengthXM != null) shape.appendChild(distanceEl(doc, 'LengthX', dims.lengthXM));
     if (dims.lengthYM != null) shape.appendChild(distanceEl(doc, 'LengthY', dims.lengthYM));

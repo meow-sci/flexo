@@ -4,6 +4,10 @@ import { persistentJSON } from '@nanostores/persistent';
 import type {
   Battery,
   Combustor,
+  ThermalCore,
+  AntimatterRamCore,
+  MagneticNozzle,
+  MagneticScoop,
   Connector,
   ConnectorCapability,
   ConnectorFlag,
@@ -51,6 +55,10 @@ import {
   BUILT_IN_LAYER_IDS,
   COLLIDER_SHAPES,
   createCombustor,
+  createThermalCore,
+  createAntimatterRamCore,
+  createMagneticNozzle,
+  createMagneticScoop,
   createEmptyPart,
   createGimbal,
   createNozzle,
@@ -813,6 +821,11 @@ export interface ImportedGameData {
   rocketControllers: RocketController[];
   rockets: Rocket[];
   combustors: Combustor[];
+  thermalCores: ThermalCore[];
+  antimatterRamCores: AntimatterRamCore[];
+  magneticNozzles: MagneticNozzle[];
+  magneticScoops: MagneticScoop[];
+
   nozzles: DeLavalNozzle[];
   gimbals: Gimbal[];
   /** Part-level `<Tank>` containers carried in on import. */
@@ -878,6 +891,10 @@ function remapSubPartGameData(
       rocketRefs: c.rocketRefs.map((r) => remapSubPartRef(r, idMap)),
     })),
     combustors: spd.combustors.map((c) => remapConsumerFeeds(c, connectorIdMap, idMap)),
+    thermalCores: spd.thermalCores.map((c) => remapConsumerFeeds(c, connectorIdMap, idMap)),
+    antimatterRamCores: spd.antimatterRamCores.map((c) =>
+      remapConsumerFeeds(c, connectorIdMap, idMap),
+    ),
     solidMotors: spd.solidMotors.map((m) => remapConsumerFeeds(m, connectorIdMap, idMap)),
   };
 }
@@ -996,6 +1013,14 @@ function applyImportedGameData(
   );
   game.rockets.push(...src.rockets.map((r) => remapRocket(r, idMap)));
   game.combustors.push(...src.combustors.map((c) => remapConsumerFeeds(c, connectorIdMap, idMap)));
+  game.thermalCores.push(
+    ...src.thermalCores.map((c) => remapConsumerFeeds(c, connectorIdMap, idMap)),
+  );
+  game.antimatterRamCores.push(
+    ...src.antimatterRamCores.map((c) => remapConsumerFeeds(c, connectorIdMap, idMap)),
+  );
+  game.magneticNozzles.push(...src.magneticNozzles);
+  game.magneticScoops.push(...src.magneticScoops);
   game.nozzles.push(...src.nozzles);
   game.gimbals.push(
     ...src.gimbals.map((gimbal) => ({
@@ -1282,10 +1307,11 @@ export function addCollider(
 export function setColliderShape(index: number, shape: ColliderShape): void {
   const current = $part.get();
   const c = current.colliders[index];
-  if (!c || c.shape === shape || !COLLIDER_SHAPES.includes(shape)) return;
+  if (!c || c.shape === shape || !COLLIDER_SHAPES.includes(shape) || shape === 'ConvexHull') return;
   pushUndo('collider shape', `${c.id} → ${shape}`);
   const part = clone(current);
   part.colliders[index].shape = shape;
+  delete part.colliders[index].meshId;
   part.colliders[index].scale = normalizeColliderSize(shape, c.scale);
   $part.set(part);
 }
@@ -3194,16 +3220,22 @@ export function allEngineModuleIds(part: EditingPart): {
   const containers: string[] = [];
   for (const spd of part.subPartGameData) {
     for (const c of spd.combustors) combustors.push(c.id);
+    for (const c of spd.antimatterRamCores) combustors.push(c.id);
+    for (const c of spd.thermalCores) combustors.push(c.id);
     for (const m of spd.solidMotors) combustors.push(m.id);
     for (const noz of spd.nozzles) nozzles.push(noz.id);
+    for (const noz of spd.magneticNozzles) nozzles.push(noz.id);
     for (const noz of spd.solidNozzles) nozzles.push(noz.id);
     for (const r of spd.rockets) rockets.push(r.id);
     for (const t of spd.tanks) containers.push(t.id);
     for (const g of spd.solidGrainSegments) containers.push(g.id);
   }
   for (const c of part.gameData.combustors) combustors.push(c.id);
+  for (const c of part.gameData.antimatterRamCores) combustors.push(c.id);
+  for (const c of part.gameData.thermalCores) combustors.push(c.id);
   for (const m of part.gameData.solidMotors) combustors.push(m.id);
   for (const noz of part.gameData.nozzles) nozzles.push(noz.id);
+  for (const noz of part.gameData.magneticNozzles) nozzles.push(noz.id);
   for (const noz of part.gameData.solidNozzles) nozzles.push(noz.id);
   for (const r of part.gameData.rockets) rockets.push(r.id);
   for (const t of part.gameData.tanks) containers.push(t.id);
@@ -3224,7 +3256,14 @@ export function allEngineModuleIds(part: EditingPart): {
 
 function hasSubPartItem(
   subPartTemplateId: string,
-  key: 'combustors' | 'nozzles' | 'rockets' | 'solidMotors' | 'solidNozzles' | 'solidGrainSegments',
+  key:
+    | 'combustors'
+    | 'nozzles'
+    | 'rockets'
+    | 'solidMotors'
+    | 'solidNozzles'
+    | 'solidGrainSegments'
+    | 'magneticNozzles',
   index: number,
 ): boolean {
   const spd = $part.get().subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId);
@@ -4155,6 +4194,10 @@ export function addSrbEngine(subPartTemplateId: string, instanceId: string | nul
  */
 export type EngineModuleGroup =
   | 'combustor'
+  | 'thermalCore'
+  | 'antimatterRamCore'
+  | 'magneticNozzle'
+  | 'magneticScoop'
   | 'nozzle'
   | 'solidMotor'
   | 'grain'
@@ -4176,7 +4219,7 @@ export interface EngineModuleRef {
 /** Names ONE nozzle across both flavors and both scopes (`templateId: null` ⇒ part-level). */
 export interface NozzleLocator {
   templateId: string | null;
-  kind: 'delaval' | 'solid';
+  kind: 'delaval' | 'solid' | 'magnetic';
   index: number;
 }
 
@@ -4217,6 +4260,10 @@ export function duplicateEngineModule(
 
   const listKey = {
     combustor: 'combustors',
+    thermalCore: 'thermalCores',
+    antimatterRamCore: 'antimatterRamCores',
+    magneticNozzle: 'magneticNozzles',
+    magneticScoop: 'magneticScoops',
     nozzle: 'nozzles',
     solidMotor: 'solidMotors',
     grain: 'solidGrainSegments',
@@ -4226,6 +4273,13 @@ export function duplicateEngineModule(
   } as const satisfies Record<string, keyof SubPartGameData & keyof PartGameData>;
   const pool = {
     combustor: ids.combustors,
+    thermalCore: ids.combustors,
+    antimatterRamCore: ids.combustors,
+    magneticNozzle: ids.nozzles,
+    magneticScoop: [
+      ...current.gameData.magneticScoops,
+      ...current.subPartGameData.flatMap((s) => s.magneticScoops),
+    ].map((s) => s.id),
     nozzle: ids.nozzles,
     // Solid motors share the `<Core Id>` namespace with combustors and solid nozzles the
     // `<Nozzle Id>` namespace with De Laval ones — a `<Rocket>` ref may name either family.
@@ -4271,14 +4325,24 @@ export function updateReactionPlumes(
 ): void {
   const plumes = reactionPlumes.map((p) => ({ ...p }));
   if (ref.templateId === null) {
-    const list = ref.kind === 'delaval' ? 'nozzles' : 'solidNozzles';
+    const list =
+      ref.kind === 'delaval'
+        ? 'nozzles'
+        : ref.kind === 'magnetic'
+          ? 'magneticNozzles'
+          : 'solidNozzles';
     if (ref.index < 0 || ref.index >= $part.get().gameData[list].length) return;
     commitGameData('edit plume entries', '', (g) => {
       g[list][ref.index] = { ...g[list][ref.index], reactionPlumes: plumes };
     });
     return;
   }
-  const list = ref.kind === 'delaval' ? 'nozzles' : 'solidNozzles';
+  const list =
+    ref.kind === 'delaval'
+      ? 'nozzles'
+      : ref.kind === 'magnetic'
+        ? 'magneticNozzles'
+        : 'solidNozzles';
   if (!hasSubPartItem(ref.templateId, list, ref.index)) return;
   commitSubPartData('edit plume entries', '', ref.templateId, (s) => {
     s[list][ref.index] = { ...s[list][ref.index], reactionPlumes: plumes };
@@ -4863,4 +4927,88 @@ export function increaseRotateStep(): void {
 /** Decreases the rotate step by 15°, clamped at {@link MIN_ROTATE_STEP} (`[`). */
 export function decreaseRotateStep(): void {
   $rotateStep.set(Math.max(MIN_ROTATE_STEP, $rotateStep.get() - ROTATE_STEP_INCREMENT));
+}
+
+/** The four propulsion modules added in KSA 5554 share both authoring scopes. */
+export interface AdvancedEngineModules {
+  thermalCore: ThermalCore;
+  antimatterRamCore: AntimatterRamCore;
+  magneticNozzle: MagneticNozzle;
+  magneticScoop: MagneticScoop;
+}
+export type AdvancedEngineGroup = keyof AdvancedEngineModules;
+export const ADVANCED_ENGINE_LIST = {
+  thermalCore: 'thermalCores',
+  antimatterRamCore: 'antimatterRamCores',
+  magneticNozzle: 'magneticNozzles',
+  magneticScoop: 'magneticScoops',
+} as const;
+const ADVANCED_ENGINE_CREATE = {
+  thermalCore: createThermalCore,
+  antimatterRamCore: createAntimatterRamCore,
+  magneticNozzle: createMagneticNozzle,
+  magneticScoop: createMagneticScoop,
+} as const;
+
+/** Discrete: create one current-build propulsion module. */
+export function addAdvancedEngineModule(
+  group: AdvancedEngineGroup,
+  templateId: string | null,
+): void {
+  const key = ADVANCED_ENGINE_LIST[group];
+  const part = $part.get();
+  const pool =
+    group === 'magneticNozzle'
+      ? allEngineModuleIds(part).nozzles
+      : group === 'magneticScoop'
+        ? [
+            ...part.gameData.magneticScoops,
+            ...part.subPartGameData.flatMap((s) => s.magneticScoops),
+          ].map((s) => s.id)
+        : allEngineModuleIds(part).combustors;
+  const id = uniqueModuleId(group, pool);
+  const add = (owner: PartGameData | SubPartGameData) =>
+    (owner[key] as unknown[]).push(ADVANCED_ENGINE_CREATE[group](id));
+  if (templateId === null) commitGameData('add propulsion module', id, add);
+  else commitSubPartData('add propulsion module', id, templateId, add);
+}
+
+/** Discrete: remove one current-build propulsion module. */
+export function removeAdvancedEngineModule(
+  group: AdvancedEngineGroup,
+  templateId: string | null,
+  index: number,
+): void {
+  const key = ADVANCED_ENGINE_LIST[group];
+  const current = $part.get();
+  const owner =
+    templateId === null
+      ? current.gameData
+      : current.subPartGameData.find((s) => s.subPartTemplateId === templateId);
+  if (!owner?.[key][index]) return;
+  const remove = (data: PartGameData | SubPartGameData) => data[key].splice(index, 1);
+  if (templateId === null) commitGameData('remove propulsion module', '', remove);
+  else commitSubPartData('remove propulsion module', '', templateId, remove);
+}
+
+/** Streaming: caller pushes undo at interaction start, as for existing engine field editors. */
+export function updateAdvancedEngineModule<K extends AdvancedEngineGroup>(
+  group: K,
+  templateId: string | null,
+  index: number,
+  patch: Partial<AdvancedEngineModules[K]>,
+): void {
+  const key = ADVANCED_ENGINE_LIST[group];
+  const current = $part.get();
+  const owner =
+    templateId === null
+      ? current.gameData
+      : current.subPartGameData.find((s) => s.subPartTemplateId === templateId);
+  if (!owner?.[key][index]) return;
+  const update = (data: PartGameData | SubPartGameData) => {
+    const list = data[key] as unknown[];
+    list[index] = { ...data[key][index], ...patch };
+  };
+  if (templateId === null) mutateGameData(update);
+  else mutateSubPartData(templateId, update);
 }

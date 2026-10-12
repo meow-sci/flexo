@@ -501,6 +501,76 @@ const ZERO_ENGINE_PERFORMANCE: EnginePerformance = {
   areaRatio: 0,
 };
 
+/** AntimatterRamCore.ComputeDrive (5554), including its carried-flow bisection. */
+export function computeRamDrive(
+  throttle: number,
+  jetPowerW: number,
+  annihilationEfficiency: number,
+  carriedExhaustVelocity: number,
+  scoopedMassFlowRate = 0,
+  speed = 0,
+  speedAlongThrust = 0,
+): { thrustN: number; antimatterMassFlowRate: number; carriedMassFlowRate: number } {
+  throttle = Math.min(Math.max(throttle, 0), 1);
+  if (!(throttle > 0 && jetPowerW > 0 && annihilationEfficiency > 0 && carriedExhaustVelocity > 0))
+    return { thrustN: 0, antimatterMassFlowRate: 0, carriedMassFlowRate: 0 };
+  const thrustN = (throttle * 2 * jetPowerW) / carriedExhaustVelocity;
+  const conversion = 2 * annihilationEfficiency * 299792458 ** 2;
+  if (!(scoopedMassFlowRate > 0))
+    return {
+      thrustN,
+      antimatterMassFlowRate: (throttle * jetPowerW) / conversion,
+      carriedMassFlowRate: thrustN / carriedExhaustVelocity,
+    };
+  const ramThrust = (power: number) =>
+    scoopedMassFlowRate *
+    ((power > 0 ? Math.sqrt(speed ** 2 + (2 * power) / scoopedMassFlowRate) : speed) -
+      speedAlongThrust);
+  if (ramThrust(jetPowerW) >= thrustN) {
+    const exhaustVelocity = speedAlongThrust + thrustN / scoopedMassFlowRate;
+    const power = Math.max(
+      0.5 * scoopedMassFlowRate * (exhaustVelocity ** 2 - speed ** 2),
+      0.01 * jetPowerW,
+    );
+    return { thrustN, antimatterMassFlowRate: power / conversion, carriedMassFlowRate: 0 };
+  }
+  let lower = 0;
+  let upper = thrustN / carriedExhaustVelocity;
+  for (let i = 0; i < 40; i++) {
+    const midpoint = 0.5 * (lower + upper);
+    const power = jetPowerW - 0.5 * midpoint * carriedExhaustVelocity ** 2;
+    if (ramThrust(power) + midpoint * carriedExhaustVelocity >= thrustN) upper = midpoint;
+    else lower = midpoint;
+  }
+  return { thrustN, antimatterMassFlowRate: jetPowerW / conversion, carriedMassFlowRate: upper };
+}
+
+/** MagneticNozzle.ComputePerformance at the design point, without vehicle scoop input. */
+export function predictMagneticPerformance(
+  jetPowerW: number,
+  efficiency: number,
+  exhaustFraction: number,
+  nozzleCount: number,
+): EnginePerformance {
+  const drive = computeRamDrive(1, jetPowerW, efficiency, exhaustFraction * 299792458);
+  const massFlowRate = drive.carriedMassFlowRate / Math.max(nozzleCount, 1);
+  const thrust = drive.thrustN / Math.max(nozzleCount, 1);
+  const exhaustVelocity =
+    drive.carriedMassFlowRate > 0 ? drive.thrustN / drive.carriedMassFlowRate : 0;
+  return {
+    ...ZERO_ENGINE_PERFORMANCE,
+    thrustSLN: thrust,
+    thrustVacN: thrust,
+    massFlowRate,
+    ispSL: exhaustVelocity / G0,
+    ispVac: exhaustVelocity / G0,
+    exhaustVelocityVac: exhaustVelocity,
+    chamberPressurePa: 100000,
+    chamberTemperatureK: 1,
+    exitTemperatureK: 1,
+  };
+}
+
 /**
  * Predicts sea-level + vacuum thrust and Isp for an engine, reproducing the exact
  * evaluation EngineDesigner.cs performs: build the combustor/nozzle conditions at

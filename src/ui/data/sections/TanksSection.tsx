@@ -5,6 +5,7 @@ import {
   ItemCard,
   ListBoxItem,
   Select,
+  Switch,
   TextField,
   cn,
 } from '../../kit';
@@ -170,6 +171,19 @@ function TankCard({ owner, tank, index }: { owner: TankOwner; tank: Tank; index:
         </Field>
 
         <DisclosureSection title="Advanced">
+          <Switch
+            isSelected={tank.magneticTrap}
+            onChange={(magneticTrap) => {
+              pushUndo('tank magnetic trap', '');
+              patch({ magneticTrap });
+            }}
+          >
+            Magnetic containment (antimatter only)
+          </Switch>
+          <span className="text-xs text-fg-subtle">
+            Magnetic tanks hold substances requiring magnetic containment; ordinary tanks hold the
+            other propellants.
+          </span>
           <Field label="Role affinity (which consumer kind this tank prefers to feed)">
             <Select
               size="sm"

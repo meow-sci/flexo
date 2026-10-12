@@ -19,6 +19,7 @@ import { FlashField, VecLabel } from './FlashField';
 import { $part, pushUndo } from '../../state/editorStore';
 import {
   updateNozzle,
+  updateAdvancedEngineModule,
   updatePartNozzle,
   updatePartSolidNozzle,
   updateReactionPlumes,
@@ -46,6 +47,7 @@ import {
   type ReactionPlume,
   type RocketSoundAction,
   type SolidMotorNozzle,
+  type MagneticNozzle,
   type Vec3,
   type Transform,
 } from '../../ksa/types';
@@ -163,6 +165,43 @@ export function SolidNozzleEditor({
   );
 }
 
+export function MagneticNozzleEditor({
+  templateId,
+  index,
+}: {
+  templateId: string | null;
+  index: number;
+}) {
+  const part = useStore($part);
+  const nozzle = ownerOf(part, templateId)?.magneticNozzles[index];
+  if (!nozzle) return null;
+  return (
+    <NozzleBody
+      nozzle={{ ...nozzle, exitDiameterM: 0, flowEfficiency: 1, expansionEfficiency: 1 }}
+      kind="magnetic"
+      templateId={templateId}
+      index={index}
+      instanceCount={instanceCountOf(part, templateId)}
+      onUpdate={(patch) => {
+        const { exitDiameterM, flowEfficiency, expansionEfficiency, ...common } = patch;
+        void exitDiameterM;
+        void flowEfficiency;
+        void expansionEfficiency;
+        updateAdvancedEngineModule('magneticNozzle', templateId, index, {
+          ...common,
+          ...(common.fxExitDiameterM === null ? { fxExitDiameterM: 1 } : {}),
+        } as Partial<MagneticNozzle>);
+      }}
+      throat={
+        <p className="text-[11px] text-fg-subtle">
+          Magnetic nozzles use the AntimatterRamCore's drive performance and have no throat, exit
+          area or expansion efficiency.
+        </p>
+      }
+    />
+  );
+}
+
 function NozzleBody({
   nozzle,
   kind,
@@ -222,37 +261,43 @@ function NozzleBody({
 
   return (
     <div className="flex flex-col gap-2">
-      <Field label="Exit diameter (m)">
-        <PreciseNumberInput
-          aria-label="Exit diameter in meters"
-          value={nozzle.exitDiameterM}
-          min={0}
-          step={0.1}
-          onInteractionStart={begin}
-          onCommit={(m) => onUpdate({ exitDiameterM: m })}
-        />
-      </Field>
-      {throat}
-      <Field label="Flow efficiency (%)">
-        <PreciseNumberInput
-          aria-label="Flow efficiency percent"
-          value={nozzle.flowEfficiency * 100}
-          min={0}
-          max={100}
-          onInteractionStart={begin}
-          onCommit={(pct) => onUpdate({ flowEfficiency: clamp01(pct / 100) })}
-        />
-      </Field>
-      <Field label="Expansion efficiency (%)">
-        <PreciseNumberInput
-          aria-label="Expansion efficiency percent"
-          value={nozzle.expansionEfficiency * 100}
-          min={0}
-          max={100}
-          onInteractionStart={begin}
-          onCommit={(pct) => onUpdate({ expansionEfficiency: clamp01(pct / 100) })}
-        />
-      </Field>
+      {kind !== 'magnetic' ? (
+        <>
+          <Field label="Exit diameter (m)">
+            <PreciseNumberInput
+              aria-label="Exit diameter in meters"
+              value={nozzle.exitDiameterM}
+              min={0}
+              step={0.1}
+              onInteractionStart={begin}
+              onCommit={(m) => onUpdate({ exitDiameterM: m })}
+            />
+          </Field>
+          {throat}
+          <Field label="Flow efficiency (%)">
+            <PreciseNumberInput
+              aria-label="Flow efficiency percent"
+              value={nozzle.flowEfficiency * 100}
+              min={0}
+              max={100}
+              onInteractionStart={begin}
+              onCommit={(pct) => onUpdate({ flowEfficiency: clamp01(pct / 100) })}
+            />
+          </Field>
+          <Field label="Expansion efficiency (%)">
+            <PreciseNumberInput
+              aria-label="Expansion efficiency percent"
+              value={nozzle.expansionEfficiency * 100}
+              min={0}
+              max={100}
+              onInteractionStart={begin}
+              onCommit={(pct) => onUpdate({ expansionEfficiency: clamp01(pct / 100) })}
+            />
+          </Field>
+        </>
+      ) : (
+        throat
+      )}
 
       {instanceCount > 1 && (
         <div className={cn(noteBox, 'text-[11px] leading-snug')}>
@@ -448,7 +493,7 @@ function NozzleBody({
         </div>
       )}
 
-      <Field label="FX exit diameter (m, 0 = match exit — visual only)">
+      <Field label="FX exit diameter (m; visual only)">
         <PreciseNumberInput
           aria-label="FX exit diameter in meters"
           value={nozzle.fxExitDiameterM ?? 0}

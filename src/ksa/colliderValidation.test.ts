@@ -39,6 +39,13 @@ function placed(
 const codes = (part: EditingPart) => validateColliders(part).map((i) => i.code);
 
 describe('validateColliders', () => {
+  it('blocks a hull without a mesh and accepts a stock mesh reference', () => {
+    const part = createEmptyPart();
+    part.colliders.push(collider({ shape: 'ConvexHull' }));
+    expect(codes(part)).toContain('collider-mesh-missing');
+    part.colliders[0].meshId = '_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1';
+    expect(validateColliders(part)).toEqual([]);
+  });
   it('is silent for a healthy part-level collider', () => {
     const part = createEmptyPart();
     part.placements.push(placed('T'));

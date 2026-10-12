@@ -6,11 +6,51 @@
 > [part-and-subpart-xml.md](part-and-subpart-xml.md) (which owns the surrounding `<Part>` /
 > `<PartGameData>` document structure).
 
-**Baseline:** re-verified against KSA build **2026.9.22.5482** (`decomp/` + shipped `Content/Core`)
+**Baseline:** re-verified against KSA build **2026.10.10.5554** (`decomp/` + shipped `Content/Core`)
 and the real GLB meshes in `flexo-private-assets/assets/Meshes`.
-**Baseline status:** 🟡 **MODELED, one primitive short.** The four analytic shapes are fully modeled
-(closing the 4939 geometry-template `<Collider>` gap **E**), but 5261 added a **fifth**,
-`<ConvexHull>` — gap **S1**, see [What changed in 5261](#what-changed-in-5261).
+**Baseline status:** 🟡 **MODELED; custom hull authoring remains unavailable.** The four analytic
+shapes and stock mesh-backed `<ConvexHull>` references import, preview, persist and export
+faithfully. Gap **S1** is narrowed to creating/exporting new custom collision meshes, rather than
+dropping the stock hulls introduced in 5554.
+
+## What changed in 5554
+
+**Stock Parts now require convex hull preservation.** `Content/Core/CoreCommandAAssets.xml`,
+`CoreFairingAAssets.xml` and `CoreStructuralAAssets.xml` add three
+`<MeshAtlas Path="Meshes/*_CollisionAtlas.glb" HostOnly="true"/>` declarations and six
+`<Collider><ConvexHull Id>` blocks, covering the medium capsule, interstage bridge, three
+nosecones and large radial decoupler. Each hull names a `_ColMesh_<ownerId>_1` through `<Mesh Id>`;
+two nosecones also author `<Scale X Y Z>`. These assets are in the private mirror.
+
+`decomp/KSA.GlbImport/GlbColliders.cs:BuildList` recognises `_ColMesh` alongside `_ColPrim_Hull`
+and copies hull geometry into `GlbCollisionAtlas.Add`. `GlbCollisionAtlas.Emit` adds the host-only
+atlas, and `Write` serializes `meshes[]` and binary accessors without `nodes`/`scenes`. The current
+writer also emits null optional fields and `accessor.type="Vec3"`; the ordinary three.js
+`GLTFLoader` cannot decode that representation. `src/three/CollisionMeshCache.ts` therefore reads
+the first primitive's FLOAT position accessor directly, then builds its convex envelope, just
+as `MeshColliderTemplate.ScaledPoints` and `ConvexHullColliderTemplate.EnsureBaseHull` do.
+
+`decomp/KSA/ColliderTemplate.cs:Create` now calls `Resolve()` before evaluating the shape offset.
+`MeshColliderTemplate.Resolve` replaces `<Mesh Id>` references with loaded host meshes. Hull
+centroid recentering and the compensated position from 5482 remain unchanged: flexo previews
+the original mesh coordinates at `<LocationAsmb>` and applies `<Scale>` before the owner-frame
+composition, which yields the same visible volume.
+
+The fix adds `PartCollider.meshId` and the `ConvexHull` shape. Analytic `scale` remains outer size
+in metres; hull `scale` is the mesh multiplier. XML, compact-project codec, undo, inherited
+SubPart variants, ICRP static export and coverage all preserve that distinction. Core already
+registers these mesh ids globally, so exported mods reference them without copying the stock
+atlas. This is additive to the document model and neither project version changes.
+
+Primitive fitting and Circular Arrangement remain restricted to analytic shapes; they cannot
+derive a mesh-backed hull from dimensions. New hull creation is unavailable. Tests cover the
+5554 capsule XML, host-only atlas selection, a node-less nullable GLB, the real capsule binary,
+scaled hull containment/volume, codec retention, variant/static emission and conversion undo.
+
+`StaticObjectAssetBundler` now uses the same collision-atlas pipeline. Current launch-pad XML
+still authors only analytic shapes; ICRP's shared parser/visuals and its serializer nevertheless
+preserve stock Part hulls imported as static geometry. Collider primitives, four-site loading,
+owner transforms, vehicle fallback and docking-by-contact contracts remain intact.
 
 ## What changed in 5482
 
@@ -125,7 +165,7 @@ records.
 - **Who authors it:** only `Content/Core/GroundClutter/GenericRockAssets.xml` today (the rocks'
   collision hulls). No `<Part>`/`<PartGameData>` in Core uses one.
 
-**flexo impact (gap S1, 📋 OPEN).** `ColliderShape` in `src/ksa/types.ts:127` is a four-member union
+**Historical flexo impact at 5261 (resolved for stock references in 5554).** `ColliderShape` in `src/ksa/types.ts:127` was a four-member union
 and `COLLIDER_SHAPES` a four-element list, so a part authoring `<ConvexHull>` parses to nothing and
 the element is dropped on export — colliders are MODELED, so the `RawXmlNode` passthrough does not
 cover them. Supporting it is real work rather than a field addition: it needs a mesh reference
@@ -171,49 +211,50 @@ already models.
 
 ## Flexo modules
 
-| Path                                         | Role                                                                                                                                         |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/ksa/types.ts`                           | `ColliderShape`, `COLLIDER_SHAPES`, `PartCollider`, `EditingPart.colliders` (a collider sits on an ordinary editor layer — `LayerableKind`). |
-| `src/ksa/colliderSize.ts`                    | **The only place that knows the size ↔ `<LengthX\|Y\|Z>`/`<Radius>` mapping** and the per-shape `normalizeColliderSize` constraints.         |
-| `src/ksa/partXmlParser.ts`                   | `collidersFromElement` (serves all four authoring sites) + `subPartCollidersFromRoot`; `'Collider'` in both `KNOWN_*_GAMEDATA_CHILDREN`.     |
-| `src/ksa/partXmlSerializer.ts`               | `buildColliderElement` + `collidersByOwner`; owner grouping inside `serializeGameDataXml`. `COLLIDER_COMPONENT_ID`.                          |
-| `src/ksa/catalog.ts`                         | `CatalogSubPart.colliders` — geometry `<SubPart><Collider>`, used ONLY for the export-variant carry-forward.                                 |
-| `src/ksa/partCatalog.ts`                     | `CatalogPart.colliders` — geometry `<Part><Collider>` + `<PartGameData><Collider>` + the `<SubPartGameData><Collider>` of placed templates.  |
-| `src/ksa/modExport.ts`                       | `hasSubPartGameData` counts colliders (forces a variant); `ExportVariant.colliders`.                                                         |
-| `src/ksa/assetsXmlSerializer.ts`             | Re-declares an inherited built-in collider on a `ReferenceSubPartPlan` (`INHERITED_COLLIDER_COMPONENT_ID`).                                  |
-| `src/state/editorStore.ts`                   | `ImportedGameData.colliders`; fresh `_colliderN` ids on import.                                                                              |
-| `src/state/projectCodec.ts` / `-Transfer.ts` | `CCollider` (`cl`) wire form; additive paste with fresh ids.                                                                                 |
-| `src/three/ColliderObject.ts`                | Unit-normalised wireframe + fill; `group.scale` IS the size in meters.                                                                       |
-| `src/three/wireShapes.ts`                    | Shared unit outlines (incl. the ratio-dependent capsule), also used by `ContainerLayer`.                                                     |
-| `src/three/coords.ts`                        | `colliderWorld` / `colliderLocalFromWorld` — the owner-frame composition, mirroring `ColliderModule.cs:38-42`.                               |
-| `src/ksa/colliderFit.ts`                     | Pure primitive fitting around sampled points (`src/three/samplePoints.ts`).                                                                  |
-| `src/ksa/colliderValidation.ts`              | The block/warn rules, each citing the game-side member it mirrors.                                                                           |
-| `src/measure/colliderCoverage.ts`            | `pointInCollider` (Bepu shape semantics again, as a containment test) + the gap/bloat readout.                                               |
+| Path                                                            | Role                                                                                                                                         |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/ksa/types.ts`                                              | `ColliderShape`, `COLLIDER_SHAPES`, `PartCollider`, `EditingPart.colliders` (a collider sits on an ordinary editor layer — `LayerableKind`). |
+| `src/ksa/colliderSize.ts`                                       | **The only place that knows the size ↔ `<LengthX\|Y\|Z>`/`<Radius>` mapping** and the per-shape `normalizeColliderSize` constraints.         |
+| `src/ksa/partXmlParser.ts`                                      | `collidersFromElement` (serves all four authoring sites) + `subPartCollidersFromRoot`; `'Collider'` in both `KNOWN_*_GAMEDATA_CHILDREN`.     |
+| `src/ksa/partXmlSerializer.ts`                                  | `buildColliderElement` + `collidersByOwner`; owner grouping inside `serializeGameDataXml`. `COLLIDER_COMPONENT_ID`.                          |
+| `src/ksa/catalog.ts`                                            | `CatalogSubPart.colliders` — geometry `<SubPart><Collider>`, used ONLY for the export-variant carry-forward.                                 |
+| `src/ksa/partCatalog.ts`                                        | `CatalogPart.colliders` — geometry `<Part><Collider>` + `<PartGameData><Collider>` + the `<SubPartGameData><Collider>` of placed templates.  |
+| `src/ksa/modExport.ts`                                          | `hasSubPartGameData` counts colliders (forces a variant); `ExportVariant.colliders`.                                                         |
+| `src/ksa/assetsXmlSerializer.ts`                                | Re-declares an inherited built-in collider on a `ReferenceSubPartPlan` (`INHERITED_COLLIDER_COMPONENT_ID`).                                  |
+| `src/state/editorStore.ts`                                      | `ImportedGameData.colliders`; fresh `_colliderN` ids on import.                                                                              |
+| `src/state/projectCodec.ts` / `-Transfer.ts`                    | `CCollider` (`cl`) wire form; additive paste with fresh ids.                                                                                 |
+| `src/three/ColliderObject.ts`                                   | Analytic unit-normalised wireframe + fill; imported hulls use the real collision geometry and a mesh multiplier.                             |
+| `src/ksa/collisionAtlas.ts` / `src/three/CollisionMeshCache.ts` | Resolve `<ConvexHull><Mesh Id>` through host-only atlases and decode their scene-less position data.                                         |
+| `src/three/wireShapes.ts`                                       | Shared unit outlines (incl. the ratio-dependent capsule), also used by `ContainerLayer`.                                                     |
+| `src/three/coords.ts`                                           | `colliderWorld` / `colliderLocalFromWorld` — the owner-frame composition, mirroring `ColliderModule.cs:38-42`.                               |
+| `src/ksa/colliderFit.ts`                                        | Pure primitive fitting around sampled points (`src/three/samplePoints.ts`).                                                                  |
+| `src/ksa/colliderValidation.ts`                                 | The block/warn rules, each citing the game-side member it mirrors.                                                                           |
+| `src/measure/colliderCoverage.ts`                               | `pointInCollider` (Bepu shape semantics again, as a containment test) + the gap/bloat readout.                                               |
 
 ---
 
 ## 1. KSA has no triangle-mesh colliders for parts
 
-> **Superseded in part since 5261:** `<Collider>` also accepts `<ConvexHull>` (a hull built from a
-> GLB mesh, gap **S1**, not modeled by flexo); Core authors it only on ground clutter
-> (`GroundClutter/GenericRockAssets.xml`). The four analytic shapes below remain the whole of what
-> flexo models, and there is still no triangle-soup collider.
+`<Collider>` also accepts `<ConvexHull>` (a hull built from a GLB mesh), modeled for stock mesh
+references since 5554. Core authors hulls on Parts as well as ground-clutter rocks. There is
+still no triangle-soup collider.
 
 KSA's part collision volume is a list of **analytic Bepu primitives** (plus, since 5261, convex
-hulls). There is no triangle-soup collider and no "collision mesh" asset for parts.
+hulls). There is no triangle-soup collider; mesh-backed hulls use host-only collision atlases.
 
 `ColliderModule.Template` (`decomp/KSA/ColliderModule.cs:11-27`) accepts these analytic child
 element types (plus `<ConvexHull>`), each mapping 1:1 onto a Bepu shape:
 
-| XML          | C# template                   | Bepu shape                    |
-| ------------ | ----------------------------- | ----------------------------- |
-| `<Box>`      | `BoxColliderTemplate.cs`      | `BepuPhysics.Collidables.Box` |
-| `<Sphere>`   | `SphereColliderTemplate.cs`   | `Sphere`                      |
-| `<Cylinder>` | `CylinderColliderTemplate.cs` | `Cylinder`                    |
-| `<Capsule>`  | `CapsuleColliderTemplate.cs`  | `Capsule`                     |
+| XML            | C# template                     | Bepu shape                                                             |
+| -------------- | ------------------------------- | ---------------------------------------------------------------------- |
+| `<Box>`        | `BoxColliderTemplate.cs`        | `BepuPhysics.Collidables.Box`                                          |
+| `<Sphere>`     | `SphereColliderTemplate.cs`     | `Sphere`                                                               |
+| `<Cylinder>`   | `CylinderColliderTemplate.cs`   | `Cylinder`                                                             |
+| `<Capsule>`    | `CapsuleColliderTemplate.cs`    | `Capsule`                                                              |
+| `<ConvexHull>` | `ConvexHullColliderTemplate.cs` | `ConvexHull`, built from `<Mesh Id>` positions with optional `<Scale>` |
 
-When this section was written (before 5261) a grep of the whole shipped `Content/` tree found **zero** mesh/hull colliders (5482: 55
-`<ConvexHull>`s, all on clutter rocks). Triangle-mesh
+Before 5261 the shipped `Content/` tree had no mesh/hull colliders; 5482 had 55 on clutter rocks,
+and 5554 adds six on Parts. Triangle-mesh
 collision exists only for _terrain_ (`BepuHandles.CreateTerrainPatch` builds a `BigCompound` of
 `Triangle`s) — engine-internal, not authorable part data.
 
@@ -414,7 +455,7 @@ SubPart-level puck rides the animated foot.
 
 ## 8. What to re-check on a game update
 
-- `decomp/KSA/ColliderModule.cs` — a **fifth** `[XmlElement]` shape would be silently dropped by
+- `decomp/KSA/ColliderModule.cs` — a **sixth** `[XmlElement]` shape would be silently dropped by
   `collidersFromElement` (it skips unrecognised children). Adding one means a new
   `ColliderShape` + a `colliderSize.ts` mapping + a `wireShapes.ts` outline.
 - The four `*ColliderTemplate.cs` `CreateShapeInto` bodies — an argument-order or

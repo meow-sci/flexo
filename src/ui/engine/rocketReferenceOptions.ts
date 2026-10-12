@@ -18,9 +18,14 @@ export function referenceModuleIds(
   if (!owner) return [];
   const modules =
     kind === 'core'
-      ? [...owner.combustors, ...owner.solidMotors]
+      ? [
+          ...owner.combustors,
+          ...owner.solidMotors,
+          ...owner.thermalCores,
+          ...owner.antimatterRamCores,
+        ]
       : kind === 'nozzle'
-        ? [...owner.nozzles, ...owner.solidNozzles]
+        ? [...owner.nozzles, ...owner.solidNozzles, ...owner.magneticNozzles]
         : owner.rockets;
   return [...new Set(modules.map((m) => m.id))];
 }

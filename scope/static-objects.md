@@ -6,9 +6,24 @@ Full evidence with decomp citations: [analysis/icrp/KSA_STATIC_OBJECTS.md](../an
 and [analysis/icrp/STATIC_ASSET_INVENTORY.md](../analysis/icrp/STATIC_ASSET_INVENTORY.md);
 plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (facts F1–F14).
 
-**Baseline:** re-verified against KSA build **2026.9.22.5482** — static schema, renderer and
-nearest-pad collider selection intact; the shared PBR ambient lookup was fixed (fact 12); see
-[What changed in 5482](#what-changed-in-5482).
+**Baseline:** re-verified against KSA build **2026.10.10.5554** — static schema and nearest-pad
+selection intact; imported vessel hulls serialize correctly. See
+[What changed in 5554](#what-changed-in-5554). The earlier BRDF observation in fact 12
+still requires in-game re-verification.
+
+## What changed in 5554
+
+**ICRP schema — intact, imported vessel hulls preserved.** StaticObject/SubObject
+template classes, `LocationReference`, `ConstraintSim`, and the shipped launch-pad XML
+are unchanged against 5482. `StaticObjectRenderer.cs`/`StaticObject.frag` move global
+texture bindings and pipeline caches without new render buckets. The game's
+planet Hapke phase-angle/normalization changes also affect terrain shading; they do not
+change static XML or vessel PBR channel conventions. The upstream
+`StaticObjectAssetBundler.cs` now shares `GlbCollisionAtlas` with the Part/clutter importer;
+stock static XML authors no `<ConvexHull>`. ICRP's vessel-derived pieces can nevertheless
+import the new Command/Fairing/Structural hulls, so its serializer now emits their
+`<ConvexHull><Mesh Id>` and optional `<Scale>` correctly through the shared collider model.
+Primitive authoring and collider dimension semantics remain unchanged.
 
 ## Contract facts ICRP bakes in
 

@@ -401,16 +401,18 @@ function CloneMenuBody() {
   const catalog = useStore($allReactions);
   return (
     <Menu aria-label="Clone a shipped propellant">
-      {catalog.map((reaction) => (
-        <MenuItem
-          key={reaction.id}
-          density="dense"
-          textValue={reaction.name}
-          onAction={() => cloneShippedPropellant(reaction, catalog)}
-        >
-          {reaction.name}
-        </MenuItem>
-      ))}
+      {catalog
+        .filter((reaction) => reaction.kind !== 'Thermal')
+        .map((reaction) => (
+          <MenuItem
+            key={reaction.id}
+            density="dense"
+            textValue={reaction.name}
+            onAction={() => cloneShippedPropellant(reaction, catalog)}
+          >
+            {reaction.name}
+          </MenuItem>
+        ))}
     </Menu>
   );
 }
@@ -497,12 +499,20 @@ function RowMenu({ row, entry }: { row: ModuleTreeRow; entry: EngineEntry | null
 
 function RowMenuBody({ row, entry }: { row: ModuleTreeRow; entry: EngineEntry | null }) {
   const targets = useStore($resolvedNozzleTargets);
-  const isNozzle = row.ref.group === 'nozzle' || row.ref.group === 'solidNozzle';
+  const isNozzle =
+    row.ref.group === 'nozzle' ||
+    row.ref.group === 'solidNozzle' ||
+    row.ref.group === 'magneticNozzle';
   const handle = isNozzle
     ? targets.find(
         (t) =>
           t.ref.index === row.ref.index &&
-          t.ref.kind === (row.ref.group === 'nozzle' ? 'delaval' : 'solid') &&
+          t.ref.kind ===
+            (row.ref.group === 'nozzle'
+              ? 'delaval'
+              : row.ref.group === 'magneticNozzle'
+                ? 'magnetic'
+                : 'solid') &&
           t.ref.channel === 'physics',
       )
     : undefined;

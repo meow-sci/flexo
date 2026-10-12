@@ -18,6 +18,16 @@
     </Battery>
   </PartGameData>
 
+  <PartGameData Id="CoreElectricalA_Prefab_MagneticScoopA" DisplayName="MRS-1 Magnetic Scoop">
+    <SolidCylinderMass><Mass Kg="5000"/><Length M="0.32"/><Radius M="1"/></SolidCylinderMass>
+    <EditorTag Value="Interstellar" />
+    <EditorTag Value="NoFaceSnapping" />
+    <MagneticScoop Id="Scoop">
+      <CaptureRadius Km="1000" />
+      <Collects Id="H2(l)" />
+    </MagneticScoop>
+  </PartGameData>
+
   <PartGameData Id="CoreElectricalA_Prefab_LightSmallA">
     <SolidCuboidMass><Mass Kg="5"/><LengthX M="0.5"/><LengthY M="0.5"/><LengthZ M="0.5"/></SolidCuboidMass>
     <EditorTag Value="Lights" />

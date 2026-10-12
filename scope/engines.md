@@ -5,6 +5,70 @@
 > **BREAKING** for the live thrust/Isp readout. Read alongside [docs/engines.md](../docs/engines.md)
 > and [analysis/KSA_ENGINE_DETAILS.md](../analysis/KSA_ENGINE_DETAILS.md).
 
+**Baseline:** re-vetted against KSA build **2026.10.10.5554** (decomp @ 5554 + shipped Core XML).
+**Baseline status:** ✅ **CURRENT** — new thermal/fusion and antimatter propulsion modules are modeled,
+imported, authored, validated and exported at both scopes. Thermal and carried-propellant ram
+readouts follow current game math. Existing chemical and solid-motor formulas are unchanged;
+see [What changed in 5554](#what-changed-in-5554). Additive lists preserve compatible saved projects.
+
+## What changed in 5554
+
+**Verdict: MISSING-CAPABILITY and dropped geometry schema, fixed.** Reviewed **5482 → 5554**;
+the supplied previous decomp is 5541, so source comparison uses the verified 5482 git snapshot.
+
+- `decomp/KSA/PartTemplate.cs:RocketCores`, `RocketNozzles`, and `MagneticScoops` add
+  `<ThermalCore>`, `<AntimatterRamCore>`, `<MagneticNozzle>`, and `<MagneticScoop>`. These are
+  legal on geometry `<Part>` / `<SubPart>` and their GameData overlays. flexo models distinct
+  lists on both owners; geometry modules are normalized into GameData on catalog import.
+  Import/paste remap each core's `<FeedsFrom>` connector and placement references. The engine
+  navigator, shared Data editors, rocket binding options, validation and magnetic exhaust
+  handles understand every new list. Four `engine.add:*` commands expose authoring in the palette.
+- `decomp/KSA/ThermalCoreTemplate.cs:CreateConfig/Create` authors `Id`, `<Reaction Id>`,
+  `<Plumbing>`, `<CoreTemperature K>`, `<MaxPressure>`, `<ThermalEfficiency Value>`,
+  `<MinimumThrottle Value>`, `<MinimumPulseTime>`, and inherited `<FeedsFrom>`. `Create`
+  throws unless the reference resolves to a `ThermalReaction`; flexo blocks that mismatch.
+  `ThermalCoreConfig.ComputeConditions` looks up gas at the constant core temperature and
+  throttle-scaled pressure, then uses existing `CombustorConfig.ComputeConditions`.
+  `ThermalReactionTable.SliceAt` / `ThermalReaction.AtCoreTemperature` clamp and interpolate
+  on the **linear temperature axis**; flexo's `resolveThermalReactionLut` follows them before
+  using its unchanged De Laval port. `Content/Core/Reactions.xml` adds `FusionH2`; all seven
+  current thermal tables are now parsed. Custom propellant cloning still authors FixedReaction,
+  so thermal tables are not offered in that chemical clone menu.
+- `decomp/KSA/AntimatterRamCoreTemplate.cs:Create` authors `<JetPower W|KW|MW|GW|TW>`,
+  `<AnnihilationEfficiency Value>`, `<CarriedExhaustFractionOfLight Value>`, `<Antimatter Id>`,
+  `<ReactionMass Id>`, timing and inherited feeds. Default power is 30 TW, efficiency 0.5,
+  exhaust speed 0.4 × 299792458 m/s, phases `AntiH2(l)`/`H2(l)`, minimum throttle 0.01.
+  `AntimatterRamCore.ComputeDrive` is ported, including 40 carried-flow bisections for mixed
+  ram/carried operation. The single-Part readout deliberately uses zero scooped flow and
+  zero vehicle velocity. Runtime scoop inputs and resource consumption remain vehicle-level.
+  `AnnihilationReaction` is synthesized by the template, not a new XML reaction element.
+- `decomp/KSA/MagneticNozzleTemplate.cs` adds only `<FxExitDiameter>` to inherited exhaust
+  vectors/plumes/light/sound. It has **no** `<ExitDiameter>`, `<AreaRatio>`, `<FlowEfficiency>`,
+  or `<ExpansionEfficiency>`; flexo emits none. `MagneticNozzle.ComputePerformance` works
+  only with an `AntimatterRamCore`, shares carried mass flow and thrust across its rocket's
+  nozzle count, and ignores ambient pressure. A mismatched core/nozzle loads with zero thrust,
+  so preflight warns rather than claiming KSA throws.
+- `decomp/KSA/MagneticScoopTemplate.cs` has `Id`, `<CaptureRadius M|Km>` (default 1e6 m),
+  and `<Collects Id>` (default `H2(l)`). flexo preserves and authors those fields. The stock
+  MRS-1 uses `<CaptureRadius Km="1000">` in `Content/Core/CoreElectricalAGameData.xml`.
+- `Content/Core/CorePropulsionAGameData.xml` adds FPD-1 (`FusionCore` / `FusionH2`, 3e6 K,
+  1000 bar) and RAIR-1 (`RamCore` / magnetic `Nozzle`, 30 TW). Production catalog/import/export
+  tests now cover **40 stock engine parts**, **37 non-solid rocket definitions**, and **16
+  solid rocket definitions**, preserving every readout after G6 XML export/reimport.
+- `Combustor` moves resource plumbing to new `PlumbedCore` and stores its fixed mix there.
+  `RocketCore.Reaction` broadens from `FixedReaction` to `Reaction`; SolidMotor stores its
+  burn limits and condensed fraction directly with the same values. These are runtime type
+  refactors: chemical and solid math, schema, feed rules and preview numbers remain intact.
+  `RocketTemplate`, `RocketControllerTemplate`, `RocketNozzleReference`, and `RocketNozzle`
+  changes otherwise only move logged source lines. `Constants` only adds shadow constants.
+- `Content/Core/PlumeTrailAssets.xml` changes `DefaultPlumeTrail` lifetime 1200 → 420 seconds.
+  flexo references the unchanged template id, so no authoring change is needed.
+- Persistence adds empty lists in current constructors and compact export keys; neither project
+  schema nor project wire version changes. Regression tests cover default filling, both scopes,
+  undo/redo, XML shape, thermal interpolation, ram branches and compact transfer round trips.
+
+## Previous audit history
+
 **Baseline:** re-vetted against KSA build **2026.9.22.5482** (decomp @ 5482 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — 5482 leaves every ported class and every engine data file
 byte-identical; rev 5464's `RocketControllerData.ComputeFromCores` refactor (not ported) gives the
@@ -268,8 +332,10 @@ Transform.RotationValue` (`decomp/KSA/GimbalReference.cs:36-46`); the commanded 
 - `<MixtureReaction>` (Core bipropellants; parse-only via the catalog, flexo never authors one):
   adds `<DefaultMixtureRatio>` (text) and wraps the pressure rows in `<MixtureRatioCondition Value>`
   rows (2-D LUT: O/F ratio × lnP, rectangular, exactly 2 reactants = fuel then oxidizer).
-- `<ThermalReaction>`: skipped by flexo — needs a thermal core, and no `RocketCoreTemplate`
-  subclass provides one yet (KSA's own designer refuses them: "Thermal reactions need a thermal core").
+- `<ThermalReaction>`: parsed as `<TemperatureCondition K>` rows containing `<PressureCondition>`
+  columns with `<LnPressure Value>`, `<Gamma Value>`, and `<MolarMass GPerMol|KgPerMol>`.
+  ThermalCore consumes the temperature × log-pressure LUT; the exact new module schema is
+  documented in the 5554 audit above.
 
 **Numeric defaults**: Combustor `maxPressurePa 5e6`, `thermalEfficiency 1`, `minimumThrottle 1`; Nozzle `exitDiameterM 1`, `flow/expansionEfficiency 1`, `exhaustDirection (−1,0,0)`, `exhaustLight true`, `AreaRatio` NaN-in-KSA (flexo defaults + validates); Gimbal `constrainToCircle true`.
 

@@ -357,6 +357,7 @@ function appendPartGameData(
   for (const controller of game.rocketControllers)
     gd.appendChild(buildControllerElement(doc, controller));
   for (const rocket of game.rockets) gd.appendChild(buildRocketElement(doc, rocket));
+  appendAdvancedEngines(doc, gd, game);
   for (const combustor of game.combustors) gd.appendChild(buildCombustorElement(doc, combustor));
   for (const motor of game.solidMotors) gd.appendChild(buildSolidMotorElement(doc, motor));
   for (const nozzle of game.nozzles) gd.appendChild(buildNozzleElement(doc, nozzle));
@@ -421,6 +422,7 @@ function appendPartGameData(
     for (const controller of spd.rocketControllers)
       spdEl.appendChild(buildControllerElement(doc, controller));
     for (const rocket of spd.rockets) spdEl.appendChild(buildRocketElement(doc, rocket));
+    appendAdvancedEngines(doc, spdEl, spd);
     for (const combustor of spd.combustors)
       spdEl.appendChild(buildCombustorElement(doc, combustor));
     for (const motor of spd.solidMotors) spdEl.appendChild(buildSolidMotorElement(doc, motor));
@@ -496,6 +498,12 @@ export function buildColliderElement(
     el.setAttribute('Id', c.id);
     el.appendChild(buildVec3Attrs(doc, 'LocationAsmb', c.position));
     el.appendChild(buildVec3Attrs(doc, 'Collider2Asmb', c.rotation));
+    if (c.shape === 'ConvexHull') {
+      const mesh = doc.createElement('Mesh');
+      mesh.setAttribute('Id', c.meshId ?? '');
+      el.appendChild(mesh);
+      el.appendChild(buildVec3Attrs(doc, 'Scale', c.scale));
+    }
     const dims = colliderDimensions(c.shape, c.scale);
     if (dims.lengthXM != null) el.appendChild(buildDistanceElement(doc, 'LengthX', dims.lengthXM));
     if (dims.lengthYM != null) el.appendChild(buildDistanceElement(doc, 'LengthY', dims.lengthYM));
@@ -620,6 +628,7 @@ function buildTankWrapperElement(doc: XmlDocument, tank: Tank): XmlElement {
   const wrapper = doc.createElement('Tank');
   if (tank.id.trim()) wrapper.setAttribute('Id', tank.id);
   wrapper.appendChild(buildTankShapeElement(doc, tank));
+  if (tank.magneticTrap) wrapper.appendChild(elWithAttr(doc, 'MagneticTrap', 'Value', 'true'));
   return wrapper;
 }
 
@@ -763,6 +772,79 @@ function buildFeedElements(doc: XmlDocument, feeds: readonly FeedSource[]): XmlE
 }
 
 /** <Combustor Id><FeedsFrom/><Plumbing/><Reaction Id><MixtureRatio/></Reaction><MaxPressure Bar/>… — omits efficiency/throttle at their defaults. */
+function appendAdvancedEngines(
+  doc: XmlDocument,
+  owner: XmlElement,
+  modules: Pick<
+    PartGameData,
+    'thermalCores' | 'antimatterRamCores' | 'magneticNozzles' | 'magneticScoops'
+  >,
+): void {
+  for (const c of modules.thermalCores) {
+    const el = doc.createElement('ThermalCore');
+    el.setAttribute('Id', c.id);
+    for (const f of buildFeedElements(doc, c.feeds)) el.appendChild(f);
+    if (c.plumbing === 'Service') {
+      const pl = doc.createElement('Plumbing');
+      pl.appendChild(doc.createTextNode('Service'));
+      el.appendChild(pl);
+    }
+    el.appendChild(elWithAttr(doc, 'Reaction', 'Id', c.reactionId));
+    el.appendChild(elWithAttr(doc, 'CoreTemperature', 'K', formatG6(c.coreTemperatureK)));
+    el.appendChild(elWithAttr(doc, 'MaxPressure', 'Bar', formatG6(c.maxPressurePa / 1e5)));
+    el.appendChild(elWithAttr(doc, 'ThermalEfficiency', 'Value', formatG6(c.thermalEfficiency)));
+    appendCoreTiming(doc, el, c);
+    owner.appendChild(el);
+  }
+  for (const c of modules.antimatterRamCores) {
+    const el = doc.createElement('AntimatterRamCore');
+    el.setAttribute('Id', c.id);
+    for (const f of buildFeedElements(doc, c.feeds)) el.appendChild(f);
+    el.appendChild(elWithAttr(doc, 'JetPower', 'W', formatG6(c.jetPowerW)));
+    el.appendChild(
+      elWithAttr(doc, 'AnnihilationEfficiency', 'Value', formatG6(c.annihilationEfficiency)),
+    );
+    el.appendChild(
+      elWithAttr(
+        doc,
+        'CarriedExhaustFractionOfLight',
+        'Value',
+        formatG6(c.carriedExhaustFractionOfLight),
+      ),
+    );
+    el.appendChild(elWithAttr(doc, 'Antimatter', 'Id', c.antimatterId));
+    el.appendChild(elWithAttr(doc, 'ReactionMass', 'Id', c.reactionMassId));
+    appendCoreTiming(doc, el, c);
+    owner.appendChild(el);
+  }
+  for (const n of modules.magneticNozzles)
+    owner.appendChild(
+      buildRocketNozzleElement(doc, 'MagneticNozzle', {
+        ...n,
+        exitDiameterM: 0,
+        flowEfficiency: 1,
+        expansionEfficiency: 1,
+      }),
+    );
+  for (const scoop of modules.magneticScoops) {
+    const el = doc.createElement('MagneticScoop');
+    el.setAttribute('Id', scoop.id);
+    el.appendChild(buildDistanceElement(doc, 'CaptureRadius', scoop.captureRadiusM));
+    el.appendChild(elWithAttr(doc, 'Collects', 'Id', scoop.collectsId));
+    owner.appendChild(el);
+  }
+}
+
+function appendCoreTiming(
+  doc: XmlDocument,
+  el: XmlElement,
+  c: { minimumThrottle: number; minimumPulseTimeS: number | null },
+): void {
+  el.appendChild(elWithAttr(doc, 'MinimumThrottle', 'Value', formatG6(c.minimumThrottle)));
+  if (c.minimumPulseTimeS !== null)
+    el.appendChild(elWithAttr(doc, 'MinimumPulseTime', 'Seconds', formatG6(c.minimumPulseTimeS)));
+}
+
 function buildCombustorElement(doc: XmlDocument, c: Combustor): XmlElement {
   const el = doc.createElement('Combustor');
   el.setAttribute('Id', c.id);
@@ -827,13 +909,14 @@ function buildSolidNozzleElement(doc: XmlDocument, n: SolidMotorNozzle): XmlElem
  */
 function buildRocketNozzleElement(
   doc: XmlDocument,
-  tag: 'DeLavalNozzle' | 'SolidMotorNozzle',
+  tag: 'DeLavalNozzle' | 'SolidMotorNozzle' | 'MagneticNozzle',
   n: SolidMotorNozzle,
   afterExitDiameter?: (el: XmlElement) => void,
 ): XmlElement {
   const el = doc.createElement(tag);
   el.setAttribute('Id', n.id);
-  el.appendChild(buildDistanceElement(doc, 'ExitDiameter', n.exitDiameterM));
+  if (tag !== 'MagneticNozzle')
+    el.appendChild(buildDistanceElement(doc, 'ExitDiameter', n.exitDiameterM));
   if (n.fxExitDiameterM != null) {
     el.appendChild(buildDistanceElement(doc, 'FxExitDiameter', n.fxExitDiameterM));
   }

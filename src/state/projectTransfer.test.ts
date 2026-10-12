@@ -5,6 +5,8 @@ import {
   KITTEN_LAYER_ID,
   createEmptyPart,
   createCombustor,
+  createThermalCore,
+  createAntimatterRamCore,
   createPartLight,
   createSolidMotor,
   createSubPartGameData,
@@ -1110,6 +1112,24 @@ describe('envelopeToParts', () => {
 });
 
 describe('collider merge', () => {
+  it('keeps a stock collision mesh reference when merging a transferred Part', () => {
+    const src = createEmptyPart();
+    src.colliders.push({
+      id: '_collider1',
+      shape: 'ConvexHull',
+      meshId: '_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1',
+      ownerTemplateId: null,
+      layerId: DEFAULT_LAYER_ID,
+      ...identityTransform(),
+      scale: { x: 2, y: 3, z: 4 },
+    });
+    const { part } = mergeProjectImport(createEmptyPart(), oneEntry(src, 'S'));
+    expect(part.colliders[0]).toMatchObject({
+      shape: 'ConvexHull',
+      meshId: src.colliders[0].meshId,
+      scale: { x: 2, y: 3, z: 4 },
+    });
+  });
   it('appends colliders with fresh _colliderN ids on their mirrored source layer', () => {
     const src = createEmptyPart();
     src.colliders.push({
@@ -1519,4 +1539,43 @@ describe('project transfer carries per-channel easings + the CubicSpline flag (P
     undo();
     expect($part.get().animations).toHaveLength(0);
   });
+});
+
+it('remaps thermal and antimatter core feed references on project paste at both scopes', () => {
+  const source = sourcePart();
+  const connectorId = source.connectors[0].id;
+  const instanceId = source.placements[0].instanceId;
+  const template = createSubPartGameData(source.placements[0].subPartTemplateId);
+  for (const owner of [source.gameData, template]) {
+    owner.thermalCores.push({
+      ...createThermalCore('Heat'),
+      feeds: [{ kind: 'connector', connectorId }],
+    });
+    owner.antimatterRamCores.push({
+      ...createAntimatterRamCore('Ram'),
+      feeds: [{ kind: 'container', containerId: 'Fuel', subPartInstanceId: instanceId }],
+    });
+  }
+  source.subPartGameData.push(template);
+  const destination = sourcePart();
+  const merged = mergeProjectImport(destination, oneEntry(source, 'Propulsion')).part;
+  const importedConnector = merged.connectors[destination.connectors.length].id;
+  const importedInstance = merged.placements[destination.placements.length].instanceId;
+  expect(importedConnector).not.toBe(connectorId);
+  expect(importedInstance).not.toBe(instanceId);
+  expect(merged.gameData.thermalCores[0].feeds).toEqual([
+    { kind: 'connector', connectorId: importedConnector },
+  ]);
+  expect(merged.gameData.antimatterRamCores[0].feeds).toEqual([
+    { kind: 'container', containerId: 'Fuel', subPartInstanceId: importedInstance },
+  ]);
+  const sub = merged.subPartGameData.find(
+    (s) => s.subPartTemplateId === template.subPartTemplateId,
+  )!;
+  expect(sub.thermalCores[0].feeds).toEqual([
+    { kind: 'connector', connectorId: importedConnector },
+  ]);
+  expect(sub.antimatterRamCores[0].feeds).toEqual([
+    { kind: 'container', containerId: 'Fuel', subPartInstanceId: importedInstance },
+  ]);
 });

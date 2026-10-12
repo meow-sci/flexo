@@ -4,7 +4,7 @@
 > lets the user edit them, and re-exports animation GLBs that KSA's `KeyframeAnimationModule`
 > loads. The load-bearing integration is the **animation-GLB node-structure convention**.
 
-**Baseline:** re-verified against KSA build **2026.9.22.5482** (decomp + shipped Core XML + private animation GLBs);
+**Baseline:** re-verified against KSA build **2026.10.10.5554** (decomp + shipped Core XML + private animation GLBs);
 contract established at **2026.7.10.5056** and unchanged since.
 **Baseline status:** ✅ **INTACT** — but 5056 rewrote KSA's own GLB loader (rev 5034) to the
 semantics flexo already implemented, and in doing so made the scene ROOT node's transform
@@ -12,6 +12,15 @@ load-bearing for the first time. See [What changed in 5056](#what-changed-in-505
 GameData schema (`KeyframeAnimationModule`) and the bone/transform math are unchanged.
 
 ---
+
+## What changed in 5554
+
+**Loader, schema and binary clips — intact.** `KeyframeAnimationData.cs`,
+`KeyframeAnimationModule.cs`, `Skeleton.cs` and all ten part animation GLBs are unchanged
+against 5482. `SolarTrackingExtension.cs`, `SolarTracker.cs` and `SolarPanel.cs` now
+query the vessel's closest star instead of the system's original star; no
+`<SolarTracking DegreesPerSecond SubPart>` or `<ExcludeSubPart>` form changes.
+This is runtime tracking, not a new authoring field or a new GLB rest convention.
 
 ## Flexo modules
 

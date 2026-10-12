@@ -314,6 +314,8 @@ function colliderExtent(t: PlacementTransform, shape: ColliderShape, direction: 
       return r * Math.hypot(local.x, local.z) + (Math.abs(local.y) * s.y) / 2;
     case 'Capsule':
       return r + (Math.abs(local.y) * (s.y - s.x)) / 2;
+    case 'ConvexHull':
+      throw new Error('Circular arrangement requires analytic colliders');
   }
 }
 
@@ -494,6 +496,9 @@ export function evalChain(
     if (error !== null) return errorResult(error);
     if (op.kind === 'circular-array' && colliderShapes?.length !== seeds.length) {
       return errorResult('Circular arrangement requires collider seeds');
+    }
+    if (op.kind === 'circular-array' && colliderShapes?.includes('ConvexHull')) {
+      return errorResult('Circular arrangement requires analytic colliders');
     }
   }
 

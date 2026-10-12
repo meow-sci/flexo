@@ -30,10 +30,11 @@ mirrors space-tape's `PartXmlSerializer.cs`, one `<Part>` element per entry:
 ```
 
 The geometry `<Part>` carries **only** SubPart placements and connectors (transform
-+ `<Flags>`), plus one root attribute: `CrashTolerance` (Pa), emitted when
-`gameData.crashTolerancePa` is set and `> 0`. Editor tags, display name, mass, tanks, power and
-coupling all live on the separate `<PartGameData>` document (below) — matching KSA's split.
-(Connector `<Flags>` are emitted in **both** documents, mirroring space-tape's two serializers.)
+
+- `<Flags>`), plus one root attribute: `CrashTolerance` (Pa), emitted when
+  `gameData.crashTolerancePa` is set and `> 0`. Editor tags, display name, mass, tanks, power and
+  coupling all live on the separate `<PartGameData>` document (below) — matching KSA's split.
+  (Connector `<Flags>` are emitted in **both** documents, mirroring space-tape's two serializers.)
 
 `CrashTolerance` (KSA 2026.9.7.5402's part-failure model) is the one GameData-shaped value that
 must NOT go on `<PartGameData>`: `PartTemplate.CrashTolerance` is a geometry-template field that
@@ -49,6 +50,7 @@ Core authors `3e6` on the CorePropulsionA engines. The stored override remains P
 runtime formula change needs no project-schema bump.
 
 Rules (verified against Core XML + the C# serializer):
+
 - `<Transform>` is **omitted** when position=0 ∧ rotation=0 ∧ scale=1.
 - Each of `<Position>/<Rotation>/<Scale>` is omitted when equal to its default
   (0 / 0 / 1) within `EPSILON = 1e-9`.
@@ -66,7 +68,7 @@ Mirrors space-tape's `GameDataXmlSerializer.cs`. The popup-only metadata
 ```xml
 <Assets>
     <PartGameData Id="..." DisplayName="My Tank">   <!-- DisplayName omitted when blank -->
-        <EditorTag Value="Tanks"/>
+        <EditorTag Value="Fuel Tanks"/>
         <CustomMass><Mass Kg="250"/></CustomMass>   <!-- omitted unless > 0 -->
         <Tank Id="Fuel">                            <!-- Id omitted when unnamed -->
             <CylindricalTank>
@@ -98,6 +100,13 @@ gas-generator `<Rocket>`/`<Combustor>` + `<SubPart Id><Gimbal>` overlays, and to
 `<FixedReaction>` for custom propellants — all round-tripped by the parser. See
 [engines.md](engines.md) for the schema, units, and default-omission rules.
 
+KSA 5554 adds `<ThermalCore>`, `<AntimatterRamCore>`, `<MagneticNozzle>` and `<MagneticScoop>`
+at both scopes. Geometry `<Part>` / `<SubPart>` declarations normalize to the same editable
+GameData lists, including templates defined in a different asset pack. Magnetic nozzles emit
+only visual diameter and inherited exhaust fields; they never emit De Laval geometry or
+efficiency elements. Thermal cores preserve `<CoreTemperature K>` and the reaction class;
+the catalog reads all seven current `<ThermalReaction>` temperature/pressure tables.
+
 A gimbal's pivot position and axis rotation are preserved from the geometry
 `<SubPart><Gimbal><Transform>` declaration, merged with any explicitly authored GameData
 transform fields, and emitted back on that declaration. The angle limits remain in the
@@ -120,7 +129,7 @@ its own declared export variant so exported GameData cannot modify the shared Co
 
 A project holds **N parts** and exports all the included ones into the same two files, as
 siblings under one `<Assets>` root — legal because KSA's `AssetBundle` is a flat
-`List<SerializedId>` (`scope/part-and-subpart-xml.md` ▸ *Multi-part export*). Both entry
+`List<SerializedId>` (`scope/part-and-subpart-xml.md` ▸ _Multi-part export_). Both entry
 points take the same `Array<{ part, remap }>` and emit in entry order:
 
 - `serializePartsXml(entries)` — N `<Part Id>` siblings, each with its placements then its
@@ -190,6 +199,16 @@ mapping absent / non-numeric / `NaN` / `≤ 0` to `null` — exactly the inputs 
 `serializeGameDataXml` for ONE part: it returns the `<PartGameData Id=partId>` block as
 `{ editorTags, connectorFlags: Map<id, ConnectorFlag[]>, gameData: PartGameData }`
 (or `null` if absent), and underpins the serialize→parse round-trip tests.
+
+### Magnetic containment
+
+KSA 5554's `MTT-1 Magnetic Trap Tank` carries `<MagneticTrap Value="true"/>` directly
+inside `<Tank>`, beside its shape. flexo preserves it as `Tank.magneticTrap` at both Part
+and SubPart scope. Data mode → Tanks → Advanced exposes the setting with undo support.
+False is the game's default and omits the element. In game, magnetic tanks accept only
+substances whose `<RequiresMagneticContainment Value="true"/>` is set, such as
+antihydrogen; ordinary tanks accept the remaining propellants. The flag is additive project
+data with a false constructor default, so existing compatible projects stay valid.
 
 ## Part catalog & GameData merge — `src/ksa/partCatalog.ts`
 
@@ -296,7 +315,7 @@ builders (the single-source invariant).
 the button press is the user gesture) and then `writeModToFolder`, whose semantics are
 untouched: existing XML is never overwritten (`-N` suffixing), binaries are overwritten,
 `mod.toml` is rebuilt from the folder listing. Success posts a status flash plus a sticky
-*rich* "Export complete" notification listing the written files and the pre-flight counts at
+_rich_ "Export complete" notification listing the written files and the pre-flight counts at
 export time; failure posts a `danger` notification with the full, untruncated message.
 `Download mod zip` needs no permission at all and is promoted to the primary button on a
 browser without the File System Access API (iOS), where the folder button is hidden entirely.
@@ -313,6 +332,7 @@ deep-link to Settings ▸ Import & Export with a `returnTo`, so glancing at a pr
 this dialog instead of losing it.
 
 ## Tests
+
 - `partXmlSerializer.test.ts` — transform/axis omission + G6 formatting; tags on
   PartGameData (not Part); full GameData (mass, tanks, power, connectors+flags,
   coupling); empty-default omission.
@@ -397,7 +417,7 @@ Rules that differ from the rest of this document:
 
 - ⚠️ **Element-absent and attribute-absent are DIFFERENT defaults.** An entirely absent
   element takes the C# field initializer (`ForwardAxis = (1,0,0)`, `UpAxis = (0,0,-1)`), but a
-  *present* element defaults each missing **attribute** to `0` — so `<ForwardAxis/>` is a
+  _present_ element defaults each missing **attribute** to `0` — so `<ForwardAxis/>` is a
   **zero look direction** that NaNs the in-game camera. There is therefore **no omit-at-default
   for a seat's vectors**: `buildIvaSeatElement` writes all three axes of all three elements via
   `buildVec3Attrs` (the shared all-axes writer, also used for the collider frame vectors),

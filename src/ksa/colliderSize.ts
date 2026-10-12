@@ -71,6 +71,7 @@ export function normalizeColliderSize(shape: ColliderShape, size: Vec3): Vec3 {
   const z = clampDim(size.z);
   switch (shape) {
     case 'Box':
+    case 'ConvexHull':
       return { x, y, z };
     case 'Sphere': {
       const d = Math.max(x, y, z);
@@ -91,6 +92,8 @@ export function normalizeColliderSize(shape: ColliderShape, size: Vec3): Vec3 {
 export function colliderDimensions(shape: ColliderShape, size: Vec3): ColliderDimensions {
   const s = normalizeColliderSize(shape, size);
   switch (shape) {
+    case 'ConvexHull':
+      return { lengthXM: null, lengthYM: null, lengthZM: null, radiusM: null };
     case 'Box':
       return { lengthXM: s.x, lengthYM: s.y, lengthZM: s.z, radiusM: null };
     case 'Sphere':
@@ -115,6 +118,8 @@ export function colliderSizeFromDimensions(
   const len = (v: number | null | undefined) => (v == null ? DEFAULT_COLLIDER_SIZE_M : v);
   const dia = (v: number | null | undefined) => (v == null ? DEFAULT_COLLIDER_SIZE_M : v * 2);
   switch (shape) {
+    case 'ConvexHull':
+      return { x: 1, y: 1, z: 1 };
     case 'Box':
       return normalizeColliderSize(shape, {
         x: len(dims.lengthXM),
@@ -141,6 +146,8 @@ export function colliderSizeFromDimensions(
 /** The dimension element names a shape MUST carry (KSA NaNs any it omits). */
 export function colliderDimensionNames(shape: ColliderShape): readonly string[] {
   switch (shape) {
+    case 'ConvexHull':
+      return [];
     case 'Box':
       return ['LengthX', 'LengthY', 'LengthZ'];
     case 'Sphere':
@@ -171,6 +178,7 @@ export function colliderSizeLabels(
   const height: ColliderSizeLabel = { short: 'H', full: 'Height' };
   switch (shape) {
     case 'Box':
+    case 'ConvexHull':
       return [
         { short: 'X', full: 'Length X' },
         { short: 'Y', full: 'Length Y' },
@@ -206,6 +214,7 @@ export function setColliderSizeAxis(
   const next: Vec3 = { ...size, [axis]: value };
   switch (shape) {
     case 'Box':
+    case 'ConvexHull':
       break;
     case 'Sphere':
       // One diameter, whichever field carried it.

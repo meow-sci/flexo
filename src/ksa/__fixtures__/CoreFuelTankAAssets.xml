@@ -928,6 +928,57 @@
       </Transform>
     </Connector>
   </Part>
+  <Part Id="CoreFuelTankA_Prefab_MagneticTrapA">
+    <SubPart Id="CoreFuelTankA_Subpart_Skin3W6HA1" InstanceOf="CoreFuelTankA_Subpart_Skin3W6HA" />
+    <SubPart Id="CoreFuelTankA_Subpart_EndcapLF3WA" InstanceOf="CoreFuelTankA_Subpart_EndcapLF3WA">
+      <Transform>
+        <Position X="2.7285" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreFuelTankA_Subpart_EndcapLF3WA3" InstanceOf="CoreFuelTankA_Subpart_EndcapLF3WA">
+      <Transform>
+        <Position X="-2.7285" />
+        <Rotation X="3.1416" Z="3.1416" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreFuelTankA_Subpart_Raceway3W6HA" InstanceOf="CoreFuelTankA_Subpart_Raceway3W6HA">
+      <Transform>
+        <Position Z="-1.5354" />
+      </Transform>
+    </SubPart>
+    <SubPart Id="CoreFuelTankA_Subpart_Raceway3W6HA1" InstanceOf="CoreFuelTankA_Subpart_Raceway3W6HA">
+      <Transform>
+        <Position Z="1.5354" />
+        <Rotation X="-3.1416" />
+      </Transform>
+    </SubPart>
+    <Connector Id="_connector27">
+      <Transform>
+        <Position X="3" />
+        <Scale X="3" Y="3" Z="3" />
+      </Transform>
+    </Connector>
+    <Connector Id="_connector28">
+      <Transform>
+        <Position X="-3" />
+        <Rotation Z="3.1416" />
+        <Scale X="3" Y="3" Z="3" />
+      </Transform>
+    </Connector>
+    <Connector Id="_connector29">
+      <Transform>
+        <Position X="-2.7553" />
+        <Rotation Z="3.1416" />
+        <Scale X="2" Y="2" Z="2" />
+      </Transform>
+    </Connector>
+    <Connector Id="_connector30">
+      <Transform>
+        <Position X="2.7553" />
+        <Scale X="2" Y="2" Z="2" />
+      </Transform>
+    </Connector>
+  </Part>
   <Part Id="CoreFuelTankA_Prefab_LF3W6HB">
     <SubPart Id="CoreFuelTankA_Subpart_Skin3W6HB1" InstanceOf="CoreFuelTankA_Subpart_Skin3W6HB" />
     <SubPart Id="CoreFuelTankA_Subpart_EndcapLF3WA" InstanceOf="CoreFuelTankA_Subpart_EndcapLF3WA">

@@ -10,8 +10,7 @@
  *  - `<MixtureReaction>`  — a 2-D O/F-ratio × pressure LUT; the combustor picks
  *    the ratio (`<MixtureRatio>`) and KSA bakes a 1-D slice at load
  *    (`MixtureReaction.AtMixtureRatio` → `MixtureReactionTable.SliceAt`).
- *  - `<ThermalReaction>`  — needs a thermal core, which no part template provides
- *    yet (KSA's own designer refuses them) — flexo skips them.
+ *  - `<ThermalReaction>`  — a temperature × log-pressure gas table for thermal cores.
  *
  * Mirrors `ReactionTemplate.Create()` (decomp): reactant mass shares are
  * normalized to mass fractions, and each `<PressureCondition>` becomes one LUT row
@@ -46,7 +45,14 @@ export interface ReactionReactant {
 }
 
 /** A parsed reaction: identity, mixture, and its gas LUT(s) for the physics. */
-export type ReactionData = FixedReactionData | MixtureReactionData;
+export type ReactionData = FixedReactionData | MixtureReactionData | ThermalReactionData;
+
+/** ThermalReactionTable's temperature axis and pressure columns. */
+export interface ThermalReactionData extends ReactionDataBase {
+  kind: 'Thermal';
+  temperatures: number[];
+  slices: CombustionLut[];
+}
 
 interface ReactionDataBase {
   /** Reaction element `Id`, e.g. "Hydrolox" / "HTPDecomposition". */
@@ -154,11 +160,12 @@ function readReactants(el: Element): ReactionReactant[] {
 }
 
 /** `<PressureCondition>` children → sorted 1-D LUT rows (ReactionTemplate.FillRow units). */
-function readPressureConditions(el: Element): CombustionLutRow[] {
+function readPressureConditions(el: Element, fixedTemperature?: number): CombustionLutRow[] {
   const rows: CombustionLutRow[] = [];
   for (const cond of directChildren(el, 'PressureCondition')) {
     const lnPressure = readAttrNum(directChildren(cond, 'LnPressure')[0], 'Value');
-    const temperature = sumUnits(directChildren(cond, 'Temperature')[0], { K: 1 });
+    const temperature =
+      fixedTemperature ?? sumUnits(directChildren(cond, 'Temperature')[0], { K: 1 });
     const gamma = readAttrNum(directChildren(cond, 'Gamma')[0], 'Value');
     // MolarMassReference: GPerMol×0.001 + KgPerMol×1 → kg/mol.
     const molarMassKgPerMol = sumUnits(directChildren(cond, 'MolarMass')[0], {
@@ -189,12 +196,35 @@ function readPressureConditions(el: Element): CombustionLutRow[] {
 
 /**
  * Parses every `<FixedReaction>` / `<MixtureReaction>` in a Reactions.xml document,
- * appending to `out`. `<ThermalReaction>`s are skipped (no thermal core exists to
- * burn them — see the module doc).
+ * and `<ThermalReaction>` tables into `out`.
  */
 export function parseReactionsFile(doc: Document, out: ReactionData[]): void {
   const root = doc.documentElement;
   if (!root) return;
+
+  for (const el of directChildren(root, 'ThermalReaction')) {
+    const id = el.getAttribute('Id');
+    if (!id) continue;
+    const rows = directChildren(el, 'TemperatureCondition')
+      .map((condition) => {
+        const temperature = readAttrNum(condition, 'K');
+        return { temperature, lut: { rows: readPressureConditions(condition, temperature) } };
+      })
+      .filter((row) => Number.isFinite(row.temperature) && row.lut.rows.length > 0)
+      .sort((a, b) => a.temperature - b.temperature);
+    if (rows.length === 0 || rows.some((row) => row.lut.rows.length !== rows[0].lut.rows.length))
+      continue;
+    out.push({
+      kind: 'Thermal',
+      id,
+      name: directChildren(el, 'Name')[0]?.getAttribute('Value')?.trim() || id,
+      description: directChildren(el, 'Description')[0]?.getAttribute('Value') ?? '',
+      category: readCategory(el, 'Thermal'),
+      reactants: readReactants(el),
+      temperatures: rows.map((row) => row.temperature),
+      slices: rows.map((row) => row.lut),
+    });
+  }
 
   for (const el of directChildren(root, 'FixedReaction')) {
     const id = el.getAttribute('Id');
@@ -288,6 +318,7 @@ export function resolveReactionLut(
   mixtureRatio: number | null,
 ): CombustionLut | null {
   if (reaction.kind === 'Fixed') return reaction.lut;
+  if (reaction.kind === 'Thermal') return null;
   if (mixtureRatio == null || !Number.isFinite(mixtureRatio)) return null;
   return sliceLutAtMixtureRatio(reaction.mixtureLut, mixtureRatio);
 }
@@ -346,7 +377,7 @@ export function customToReactionData(custom: CustomReaction): FixedReactionData 
  * the authored form is always a `<FixedReaction>`. Used by the custom-propellant editor.
  */
 export function reactionDataToCustom(
-  data: ReactionData,
+  data: FixedReactionData | MixtureReactionData,
   newId: string,
   newName: string,
 ): CustomReaction {
@@ -393,4 +424,36 @@ export function mixtureRatioBounds(reaction: ReactionData): { min: number; max: 
   if (reaction.kind !== 'Mixture') return null;
   const ratios = reaction.mixtureLut.ratios;
   return { min: ratios[0], max: ratios[ratios.length - 1] };
+}
+
+/** ThermalReactionTable.SliceAt: interpolate gas properties on the LINEAR temperature axis. */
+export function resolveThermalReactionLut(
+  reaction: ThermalReactionData,
+  temperatureK: number,
+): CombustionLut {
+  const temperature = Math.min(
+    Math.max(temperatureK, reaction.temperatures[0]),
+    reaction.temperatures[reaction.temperatures.length - 1],
+  );
+  let upper = reaction.temperatures.findIndex((value) => value >= temperature);
+  if (upper < 0) upper = reaction.temperatures.length - 1;
+  const lower = Math.max(upper - 1, 0);
+  const fraction =
+    lower === upper
+      ? 0
+      : (temperature - reaction.temperatures[lower]) /
+        (reaction.temperatures[upper] - reaction.temperatures[lower]);
+  return {
+    rows: reaction.slices[lower].rows.map((row, index) => {
+      const other = reaction.slices[upper].rows[index];
+      return {
+        ...row,
+        temperature,
+        gamma: row.gamma + (other.gamma - row.gamma) * fraction,
+        specificGasConstant:
+          row.specificGasConstant +
+          (other.specificGasConstant - row.specificGasConstant) * fraction,
+      };
+    }),
+  };
 }

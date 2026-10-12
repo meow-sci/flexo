@@ -7,8 +7,10 @@
 > `<Internal>` flag) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
-**Baseline:** re-vetted against KSA build **2026.9.22.5482** (decomp @ 5482 + shipped Core XML).
-**Baseline status:** ✅ **INTACT** — 5482 changed no connector, seat, coordinate or `<Internal>`
+**Baseline:** re-vetted against KSA build **2026.10.10.5554** (decomp @ 5482 + shipped Core XML).
+**Baseline status:** ✅ **INTACT** — 5554 retains connector/seat/coordinate/IVA forms;
+vehicle-relative camera precision and TVC changes need no authoring changes. See
+[What changed in 5554](#what-changed-in-5554). Previously, 5482 changed no connector, seat, coordinate or `<Internal>`
 schema; the seat keys survived the input-binding refactor and the render gate moved without
 changing its condition (see [What changed in 5482](#what-changed-in-5482)). Earlier, the coordinate calibration survived rev 5067's deletion of
 `Double3Ex.Up/Forward/Right` (the vectors moved to `Camera.ForwardView`/`RightView`/`UpView` with
@@ -36,6 +38,21 @@ with its `<ConnectorRef>` ids remapped through the regenerated connector ids on 
   the definitions; the exporter omits IVA sources while `PartGameData.ivaEnabled` is false.
 
 ---
+
+## What changed in 5554
+
+**Coordinates, connector schema and seats — intact.** `Double3Ex.cs` adds matrix
+products for TVC; `QuaternionEx.CreateFromXyzRadians`, connector flags/capabilities,
+`IVASeatTemplate`, `EVADoorTemplate`, `ControlTemplate` and `PartModelModule` are unchanged.
+`IVAController.OnFrame` now assigns vehicle-relative `Camera.PositionCce` rather than
+adding the vehicle position into `PositionEcl`, fixing distant-camera precision; seat
+axes, both view clamps and seat order are unchanged. `<PartModelGlass>` still gains no
+`<Internal>` field, so the existing interior flag restriction stands.
+
+The existing vehicle-only **Control From Here** selection remains intact (introduced
+at 5168, documented below). `FlightComputer.UpdateAttitudeTrackError` still aims control
+frame +X and rolls +Z; new LQI integrals and adaptive TVC timing do not introduce authored
+Part control fields. `VehicleEditor` still sets the root to identity at launch.
 
 ## Flexo modules
 

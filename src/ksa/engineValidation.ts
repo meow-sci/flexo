@@ -16,6 +16,9 @@
 import { isCustomReactionExportable, KNOWN_REACTIONS, VOLUMETRIC_EXHAUST_IDS } from './types';
 import type {
   Combustor,
+  ThermalCore,
+  AntimatterRamCore,
+  MagneticNozzle,
   EditingPart,
   FeedSource,
   ReactionCategory,
@@ -47,6 +50,10 @@ export interface EngineIssueSource {
   /** The SubPart template that owns the module; `null` ⇒ part-level (`<PartGameData>`). */
   templateId: string | null;
   module?:
+    | 'thermalCore'
+    | 'antimatterRamCore'
+    | 'magneticNozzle'
+    | 'magneticScoop'
     | 'combustor'
     | 'nozzle'
     | 'solidMotor'
@@ -72,7 +79,7 @@ export interface EngineIssue {
 
 /** What a reaction lookup needs to answer; a subset of {@link ReactionData}. */
 interface ReactionFacts {
-  kind: 'Fixed' | 'Mixture';
+  kind: 'Fixed' | 'Mixture' | 'Thermal';
   reactantPhaseIds?: string[];
   hasBurnRate?: boolean;
   category: ReactionCategory;
@@ -144,6 +151,8 @@ interface LocatedConsumer {
   /** Combustors only — solid motors have no `<Plumbing>` (they feed from grain). */
   combustor: Combustor | null;
   solidMotor: SolidMotor | null;
+  thermalCore: ThermalCore | null;
+  ramCore: AntimatterRamCore | null;
 }
 
 /** Every combustor + solid motor on the part, part-level and per placed SubPart. */
@@ -155,17 +164,23 @@ function locateConsumers(part: EditingPart): LocatedConsumer[] {
     templateId: string | null,
     combustor: Combustor | null,
     solidMotor: SolidMotor | null,
+    thermalCore: ThermalCore | null = null,
+    ramCore: AntimatterRamCore | null = null,
   ) => {
     out.push({
       id,
       subPartInstanceId: scope,
       subPartTemplateId: templateId,
       isSolid: solidMotor != null,
-      feeds: (combustor ?? solidMotor)!.feeds,
+      feeds: (combustor ?? solidMotor ?? thermalCore ?? ramCore)!.feeds,
       combustor,
       solidMotor,
+      thermalCore,
+      ramCore,
     });
   };
+  for (const c of part.gameData.thermalCores) add(c.id, null, null, null, null, c);
+  for (const c of part.gameData.antimatterRamCores) add(c.id, null, null, null, null, null, c);
   for (const c of part.gameData.combustors) add(c.id, null, null, c, null);
   for (const m of part.gameData.solidMotors) add(m.id, null, null, null, m);
   for (const placement of part.placements) {
@@ -173,6 +188,10 @@ function locateConsumers(part: EditingPart): LocatedConsumer[] {
       (s) => s.subPartTemplateId === placement.subPartTemplateId,
     );
     if (!spd) continue;
+    for (const c of spd.thermalCores)
+      add(c.id, placement.instanceId, spd.subPartTemplateId, null, null, c);
+    for (const c of spd.antimatterRamCores)
+      add(c.id, placement.instanceId, spd.subPartTemplateId, null, null, null, c);
     for (const c of spd.combustors) add(c.id, placement.instanceId, spd.subPartTemplateId, c, null);
     for (const m of spd.solidMotors)
       add(m.id, placement.instanceId, spd.subPartTemplateId, null, m);
@@ -187,8 +206,19 @@ function locateConsumers(part: EditingPart): LocatedConsumer[] {
  */
 function locateNozzleModules(
   part: EditingPart,
-): { nozzle: SolidMotorNozzle; scope: string; source: EngineIssueSource }[] {
-  const out: { nozzle: SolidMotorNozzle; scope: string; source: EngineIssueSource }[] = [];
+): { nozzle: SolidMotorNozzle | MagneticNozzle; scope: string; source: EngineIssueSource }[] {
+  const out: {
+    nozzle: SolidMotorNozzle | MagneticNozzle;
+    scope: string;
+    source: EngineIssueSource;
+  }[] = [];
+  part.gameData.magneticNozzles.forEach((n, index) =>
+    out.push({
+      nozzle: n,
+      scope: part.partId,
+      source: { templateId: null, module: 'magneticNozzle', index },
+    }),
+  );
   part.gameData.nozzles.forEach((n, index) =>
     out.push({
       nozzle: n,
@@ -204,6 +234,13 @@ function locateNozzleModules(
     }),
   );
   for (const spd of part.subPartGameData) {
+    spd.magneticNozzles.forEach((n, index) =>
+      out.push({
+        nozzle: n,
+        scope: spd.subPartTemplateId,
+        source: { templateId: spd.subPartTemplateId, module: 'magneticNozzle', index },
+      }),
+    );
     spd.nozzles.forEach((n, index) =>
       out.push({
         nozzle: n,
@@ -424,6 +461,13 @@ export function validateEngines(
         );
       }
       referencedNozzles.add(nozzle);
+      if (core && (core.ramCore !== null) !== (nozzle.source.module === 'magneticNozzle')) {
+        warn(
+          'magnetic-nozzle-core-mismatch',
+          `Rocket ${rocket.id}: magnetic nozzles produce thrust only with an AntimatterRamCore.`,
+          source,
+        );
+      }
       if (core && core.isSolid !== nozzle.isSolid) {
         block(
           'rocket-mixes-solid-and-liquid',
@@ -514,7 +558,13 @@ export function validateEngines(
   for (const c of consumers) {
     const source: EngineIssueSource = {
       templateId: c.subPartTemplateId,
-      module: c.isSolid ? 'solidMotor' : 'combustor',
+      module: c.isSolid
+        ? 'solidMotor'
+        : c.thermalCore
+          ? 'thermalCore'
+          : c.ramCore
+            ? 'antimatterRamCore'
+            : 'combustor',
     };
     if (!referencedCores.has(c)) {
       warn(
@@ -569,6 +619,37 @@ export function validateEngines(
       );
     }
   });
+
+  // ThermalCoreTemplate.Create throws unless the referenced reaction is ThermalReaction.
+  for (const [templateId, owner] of [
+    [null, part.gameData],
+    ...part.subPartGameData.map((s) => [s.subPartTemplateId, s] as const),
+  ] as const) {
+    owner.thermalCores.forEach((core, index) => {
+      const source: EngineIssueSource = { templateId, module: 'thermalCore', index };
+      const facts = reactionFacts(core.reactionId, part, reactions);
+      if (facts && facts.kind !== 'Thermal')
+        block(
+          'thermal-core-needs-thermal-reaction',
+          `KSA throws: Thermal core ${core.id} requires a ThermalReaction.`,
+          source,
+        );
+      if (!(core.coreTemperatureK > 0) || !Number.isFinite(core.coreTemperatureK))
+        warn(
+          'thermal-core-temperature-invalid',
+          `Thermal core ${core.id} needs a finite positive CoreTemperature.`,
+          source,
+        );
+    });
+    owner.combustors.forEach((core, index) => {
+      if (reactionFacts(core.reactionId, part, reactions)?.kind === 'Thermal')
+        block(
+          'combustor-thermal-reaction',
+          `KSA throws: combustor ${core.id} cannot burn a ThermalReaction; use a ThermalCore.`,
+          { templateId, module: 'combustor', index },
+        );
+    });
+  }
 
   // CombustorTemplate.ResolveReaction requires an explicit ratio for mixture reactions.
   for (const consumer of consumers) {
@@ -744,7 +825,11 @@ export function validateEngines(
     const spd = part.subPartGameData.find(
       (sp) => sp.subPartTemplateId === placement.subPartTemplateId,
     );
-    const nozzles = [...(spd?.nozzles ?? []), ...(spd?.solidNozzles ?? [])];
+    const nozzles = [
+      ...(spd?.nozzles ?? []),
+      ...(spd?.solidNozzles ?? []),
+      ...(spd?.magneticNozzles ?? []),
+    ];
     if (nozzles.length === 0) {
       warn(
         'gimbal-vectors-nothing',
@@ -807,7 +892,13 @@ export function validateEngines(
     // PART's `<ConsumerFeedWiring>` list, so it points there instead.
     const feedSource: EngineIssueSource = {
       templateId: c.subPartTemplateId,
-      module: c.isSolid ? 'solidMotor' : 'combustor',
+      module: c.isSolid
+        ? 'solidMotor'
+        : c.thermalCore
+          ? 'thermalCore'
+          : c.ramCore
+            ? 'antimatterRamCore'
+            : 'combustor',
     };
     for (const f of c.feeds) {
       if (f.kind === 'container') {
@@ -834,7 +925,12 @@ export function validateEngines(
         // A connection carries a resource only when BOTH ends declare the capability
         // (ConnectorCapabilityExtensions.Intersect). Bulk needs BulkFluid; Service rides
         // the implicit default, so only Bulk is checked here.
-        if (c.combustor?.plumbing === 'Bulk' && !connector.capabilities.includes('BulkFluid')) {
+        if (
+          (c.combustor?.plumbing === 'Bulk' ||
+            c.thermalCore?.plumbing === 'Bulk' ||
+            c.ramCore !== null) &&
+          !connector.capabilities.includes('BulkFluid')
+        ) {
           warn(
             'feed-connector-missing-bulkfluid',
             `Add BulkFluid to connector ${f.connectorId} or combustor ${c.id} gets no propellant ` +

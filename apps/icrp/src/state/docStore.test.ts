@@ -5,6 +5,8 @@ import {
   $selection,
   addLayer,
   addPlacement,
+  addColliderTo,
+  duplicateColliderRef,
   importStockPart,
   removeLayer,
   resetProject,
@@ -17,6 +19,23 @@ import {
 beforeEach(() => {
   resetProject();
   $activeLayerId.set(DEFAULT_LAYER_ID);
+});
+
+it('duplicates a stock collision hull with its mesh reference intact and one undo step', () => {
+  const ref = addColliderTo(null, {
+    shape: 'ConvexHull',
+    meshId: '_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1',
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 2, z: 3 },
+  })!;
+  duplicateColliderRef(ref);
+  expect($activeObject.get().objectColliders[1].meshId).toBe(
+    '_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1',
+  );
+  expect($activeObject.get().objectColliders[1].scale).toEqual({ x: 1, y: 2, z: 3 });
+  undo();
+  expect($activeObject.get().objectColliders).toHaveLength(1);
 });
 
 describe('layers', () => {

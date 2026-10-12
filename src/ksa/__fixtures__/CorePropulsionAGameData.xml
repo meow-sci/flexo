@@ -29,6 +29,56 @@
     </DeLavalNozzle>
   </SubPartGameData>
 
+  <SubPartGameData Id="CorePropulsionA_Subpart_FusionTorchAssembly">
+    <Rocket Id="Engine">
+      <Core Id="FusionCore" />
+      <Nozzle Id="Nozzle" />
+    </Rocket>
+    <ThermalCore Id="FusionCore">
+      <FeedsFrom Parent="true" />
+      <Reaction Id="FusionH2" />
+      <CoreTemperature K="3000000" />
+      <MaxPressure Bar="1000" />
+      <ThermalEfficiency Value="0.95" />
+      <MinimumThrottle Value="0.01" />
+    </ThermalCore>
+    <DeLavalNozzle Id="Nozzle">
+      <ExitDiameter M="8.0" />
+      <FxExitDiameter M="4.605" />
+      <AreaRatio Value="200" />
+      <FlowEfficiency Value="1" />
+      <ExpansionEfficiency Value="1" />
+      <ExhaustLocation X="-1.23" Y="0.0" Z="0.0" />
+      <ExhaustDirection X="-1" Y="0" Z="0" />
+      <ReactionPlume Default="true">
+        <VolumetricExhaust Id="EngineALarge" />
+      </ReactionPlume>
+      <SoundEvent Action="On" SoundId="DefaultEngineSoundBehavior" />
+    </DeLavalNozzle>
+  </SubPartGameData>
+
+  <SubPartGameData Id="CorePropulsionA_Subpart_AntimatterRamAssembly">
+    <Rocket Id="Engine">
+      <Core Id="RamCore" />
+      <Nozzle Id="Nozzle" />
+    </Rocket>
+    <AntimatterRamCore Id="RamCore">
+      <FeedsFrom Parent="true" />
+      <JetPower TW="30" />
+      <AnnihilationEfficiency Value="0.5" />
+      <CarriedExhaustFractionOfLight Value="0.4" />
+      <Antimatter Id="AntiH2(l)" />
+      <ReactionMass Id="H2(l)" />
+      <MinimumThrottle Value="0.01" />
+    </AntimatterRamCore>
+    <MagneticNozzle Id="Nozzle">
+      <FxExitDiameter M="4.605" />
+      <ExhaustLocation X="-1.23" Y="0.0" Z="0.0" />
+      <ExhaustDirection X="-1" Y="0" Z="0" />
+      <SoundEvent Action="On" SoundId="DefaultEngineSoundBehavior" />
+    </MagneticNozzle>
+  </SubPartGameData>
+
   <SubPartGameData Id="CorePropulsionA_Subpart_EngineAMedBoostAssembly">
     <Rocket Id="Engine">
       <Core Id="ThrustChamber" />
@@ -220,6 +270,98 @@
     <SolidSphereMass>
       <Mass Kg="200" />
       <Radius M="0.25" />
+    </SolidSphereMass>
+
+    <Collider Id="Collider1">
+      <Cylinder Id="CylinderCollider1">
+        <LocationAsmb X="0.6" Y="0" Z="0" />
+        <Collider2Asmb X="0" Y="0" Z="1.57" />
+        <LengthY M="1.1728" />
+        <Radius M="0.5" />
+      </Cylinder>
+      <Sphere Id="SphereCollider1">
+        <LocationAsmb X="-0.6" Y="0" Z="0" />
+        <Collider2Asmb X="0" Y="0" Z="0" />
+        <Radius M="0.6" />
+      </Sphere>
+      <Cylinder Id="CylinderCollider2">
+        <LocationAsmb X="-1.5" Y="0" Z="0" />
+        <Collider2Asmb X="0" Y="0" Z="1.57" />
+        <LengthY M="0.1" />
+        <Radius M="0.75" />
+      </Cylinder>
+    </Collider>
+  </PartGameData>
+
+  <PartGameData Id="CorePropulsionA_Prefab_AntimatterRamDriveA" DisplayName="RAIR-1 Antimatter Ramjet">
+    <EditorTag Value="Interstellar" />
+    <EditorTag Value="NoFaceSnapping" />
+    <Diameter M="1"/>
+    <RocketEngineController Id="RAIR-1">
+      <RocketReference Id="Engine" SubPartId="CorePropulsionA_Subpart_AntimatterRamAssembly1" />
+    </RocketEngineController>
+    <ConsumerFeedWiring Id="RamCore" SubPartId="CorePropulsionA_Subpart_AntimatterRamAssembly1">
+      <FeedsFrom Connector="_connector47" />
+    </ConsumerFeedWiring>
+    <Connector Id="_connector47">
+      <Capabilities>BulkFluid</Capabilities>
+    </Connector>
+    <SubPart Id="CorePropulsionA_Subpart_AntimatterRamAssembly1">
+      <Gimbal>
+        <MaxAngleY Degrees="2" />
+        <MaxAngleZ Degrees="2" />
+        <ConstrainToCircle Value="false" />
+      </Gimbal>
+    </SubPart>
+    <SolidSphereMass>
+      <Mass Kg="20000" />
+      <Radius M="0.5" />
+    </SolidSphereMass>
+
+    <Collider Id="Collider1">
+      <Cylinder Id="CylinderCollider1">
+        <LocationAsmb X="0.6" Y="0" Z="0" />
+        <Collider2Asmb X="0" Y="0" Z="1.57" />
+        <LengthY M="1.1728" />
+        <Radius M="0.5" />
+      </Cylinder>
+      <Sphere Id="SphereCollider1">
+        <LocationAsmb X="-0.6" Y="0" Z="0" />
+        <Collider2Asmb X="0" Y="0" Z="0" />
+        <Radius M="0.6" />
+      </Sphere>
+      <Cylinder Id="CylinderCollider2">
+        <LocationAsmb X="-1.5" Y="0" Z="0" />
+        <Collider2Asmb X="0" Y="0" Z="1.57" />
+        <LengthY M="0.1" />
+        <Radius M="0.75" />
+      </Cylinder>
+    </Collider>
+  </PartGameData>
+
+  <PartGameData Id="CorePropulsionA_Prefab_FusionTorchDriveA" DisplayName="FPD-1 Torch">
+    <EditorTag Value="Interstellar" />
+    <EditorTag Value="NoFaceSnapping" />
+    <Diameter M="1"/>
+    <RocketEngineController Id="FPD-1">
+      <RocketReference Id="Engine" SubPartId="CorePropulsionA_Subpart_FusionTorchAssembly1" />
+    </RocketEngineController>
+    <ConsumerFeedWiring Id="FusionCore" SubPartId="CorePropulsionA_Subpart_FusionTorchAssembly1">
+      <FeedsFrom Connector="_connector47" />
+    </ConsumerFeedWiring>
+    <Connector Id="_connector47">
+      <Capabilities>BulkFluid</Capabilities>
+    </Connector>
+    <SubPart Id="CorePropulsionA_Subpart_FusionTorchAssembly1">
+      <Gimbal>
+        <MaxAngleY Degrees="2" />
+        <MaxAngleZ Degrees="2" />
+        <ConstrainToCircle Value="false" />
+      </Gimbal>
+    </SubPart>
+    <SolidSphereMass>
+      <Mass Kg="20000" />
+      <Radius M="0.5" />
     </SolidSphereMass>
 
     <Collider Id="Collider1">

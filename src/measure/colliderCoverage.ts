@@ -20,6 +20,11 @@
 
 import type { PartCollider, Vec3 } from '../ksa/types';
 
+export interface HullCoverage {
+  planes: { normal: Vec3; constant: number }[];
+  volumeM3: number;
+}
+
 /** A collider placed in the space the sample points are expressed in. */
 export interface PlacedCollider {
   /** The document entity (for `id` / `shape` / `scale` — its own transform is ignored). */
@@ -28,6 +33,7 @@ export interface PlacedCollider {
   position: Vec3;
   /** Shape orientation as a quaternion `[x, y, z, w]` in that space. */
   quaternion: readonly [number, number, number, number];
+  hull?: HullCoverage;
 }
 
 export interface CoverageReport {
@@ -92,6 +98,13 @@ export function pointInCollider(point: Vec3, placed: PlacedCollider): boolean {
   const hy = collider.scale.y / 2;
   const hz = collider.scale.z / 2;
   switch (collider.shape) {
+    case 'ConvexHull':
+      return (
+        placed.hull?.planes.every(
+          ({ normal, constant }) =>
+            normal.x * d.x + normal.y * d.y + normal.z * d.z + constant <= EPS,
+        ) ?? false
+      );
     case 'Box':
       return Math.abs(d.x) <= hx + EPS && Math.abs(d.y) <= hy + EPS && Math.abs(d.z) <= hz + EPS;
     case 'Sphere':
@@ -108,10 +121,12 @@ export function pointInCollider(point: Vec3, placed: PlacedCollider): boolean {
 }
 
 /** Outer volume (m³) of one primitive, from its outer size. */
-export function colliderVolumeM3(collider: PartCollider): number {
+export function colliderVolumeM3(collider: PartCollider, hull?: HullCoverage): number {
   const { x, y } = collider.scale;
   const r = x / 2;
   switch (collider.shape) {
+    case 'ConvexHull':
+      return hull?.volumeM3 ?? 0;
     case 'Box':
       return collider.scale.x * collider.scale.y * collider.scale.z;
     case 'Sphere':
@@ -153,7 +168,7 @@ export function evaluateCoverage(
 
   const meshBoundsVolumeM3 =
     points.length > 0 ? (max.x - min.x) * (max.y - min.y) * (max.z - min.z) : 0;
-  const volume = colliders.reduce((sum, c) => sum + colliderVolumeM3(c.collider), 0);
+  const volume = colliders.reduce((sum, c) => sum + colliderVolumeM3(c.collider, c.hull), 0);
   return {
     sampled: points.length,
     covered,

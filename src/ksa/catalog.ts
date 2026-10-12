@@ -13,11 +13,13 @@ import { assetBase } from '../assetBase';
 import {
   collidersFromElement,
   mergeSubPartGameDataInto,
+  engineModulesFromElement,
   subPartCollidersFromRoot,
   subPartGameDataFromDoc,
   subPartLightsFromRoot,
 } from './partXmlParser';
 import type { PartCollider, PartLight, SubPartGameData } from './types';
+import { createSubPartGameData, isSubPartGameDataEmpty } from './types';
 
 export interface CatalogSubPart {
   /** SubPart template id, e.g. "CoreStructuralA_Subpart_TrussBarA". */
@@ -261,6 +263,21 @@ export function parseAssetsFile(
       shadowCasterText === undefined ? undefined : shadowCasterText.toLowerCase() === 'true';
 
     const colliders = collidersFromElement(sub, id);
+    const engines = engineModulesFromElement(sub);
+    const data = {
+      ...createSubPartGameData(id),
+      combustors: engines.combustors,
+      thermalCores: engines.thermalCores,
+      antimatterRamCores: engines.antimatterRamCores,
+      magneticNozzles: engines.magneticNozzles,
+      magneticScoops: engines.magneticScoops,
+      solidMotors: engines.solidMotors,
+      solidNozzles: engines.solidNozzles,
+      solidGrainSegments: engines.solidGrainSegments,
+      nozzles: engines.nozzles,
+      rockets: engines.rockets,
+      rocketControllers: engines.rocketControllers,
+    };
 
     out.push({
       id,
@@ -276,6 +293,9 @@ export function parseAssetsFile(
       shadowCaster,
       colliders: colliders.length > 0 ? colliders : undefined,
       sourceFile,
+      data: isSubPartGameDataEmpty(data)
+        ? undefined
+        : { gameData: data, colliders: [], lights: [] },
     });
   }
 }
@@ -332,7 +352,10 @@ export function attachSubPartGameData(entries: CatalogSubPart[], docs: Document[
     lights.push(...subPartLightsFromRoot(doc.documentElement));
   }
   for (const entry of entries) {
-    const gameData = byId.get(entry.id);
+    const overlay = byId.get(entry.id);
+    const geometry = entry.data?.gameData;
+    if (geometry && overlay) mergeSubPartGameDataInto(geometry, overlay);
+    const gameData = geometry ?? overlay;
     const ownedColliders = colliders.filter((c) => c.ownerTemplateId === entry.id);
     const ownedLights = lights.filter((l) => l.ownerTemplateId === entry.id);
     if (gameData || ownedColliders.length || ownedLights.length)

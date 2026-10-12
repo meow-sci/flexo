@@ -1583,6 +1583,42 @@ describe('buildMultiCustomBundle — imported glTF SubParts', () => {
 });
 
 describe('export variants carry the built-in template’s own colliders forward', () => {
+  it('keeps a collision mesh reference when redeclaring a built-in template', () => {
+    const hull: PartCollider = {
+      id: 'ConvexHullCollider1',
+      shape: 'ConvexHull',
+      ownerTemplateId: SPOTLIGHT,
+      meshId: '_ColMesh_CoreFairingA_Prefab_NoseconeA_1',
+      layerId: DEFAULT_LAYER_ID,
+      ...identityTransform(),
+      scale: { x: 2, y: 3, z: 4 },
+    };
+    const catalog = lightCatalog();
+    catalog.set(SPOTLIGHT, { ...catalog.get(SPOTLIGHT)!, colliders: [hull] });
+    const variant = buildExportVariantMap(partWithBuiltinLight(), catalog, 'MyLight', LIGHT_NS).get(
+      SPOTLIGHT,
+    )!;
+    expect(variant.colliders).toEqual([hull]);
+    const xml = serializeAssets([
+      {
+        subParts: [],
+        referenceSubParts: [
+          {
+            subPartId: variant.variantId,
+            meshId: SPOTLIGHT,
+            materialId: `${SPOTLIGHT}_Material`,
+            colliders: variant.colliders,
+            internal: false,
+            rayTracing: null,
+            shadowCaster: null,
+          },
+        ],
+      },
+    ]);
+    expect(xml).toContain('<ConvexHull Id="ConvexHullCollider1">');
+    expect(xml).toContain('<Mesh Id="_ColMesh_CoreFairingA_Prefab_NoseconeA_1"');
+    expect(xml).toContain('<Scale X="2" Y="3" Z="4"');
+  });
   const BUILT_IN_BOX: PartCollider = {
     id: 'BoxCollider1',
     shape: 'Box',

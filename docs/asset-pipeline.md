@@ -6,6 +6,7 @@ production build (`pnpm build`).
 ## How assets are addressed
 
 All runtime code fetches game assets from the `/ksa/` URL prefix, e.g.:
+
 - catalog XML: `/ksa/CoreStructuralAAssets.xml`
 - meshes: `/ksa/Meshes/CoreStructuralA_MeshAtlas.glb`
 - textures: `/ksa/Textures/CoreStructuralA_TextureAtlas_Diffuse.ktx2`
@@ -27,7 +28,7 @@ The main app never sets `VITE_ASSET_BASE`, so there `assetBase() ≡ BASE_URL` a
 changed. The **second consumer** is the `apps/partpreview/` mini app (see
 [wiki-part-preview.md](./wiki-part-preview.md)), whose own base is
 `/flexo/apps/partpreview/`: its build `define`s `VITE_ASSET_BASE` to `'/flexo/'` so it
-downloads the *main* app's copy of these assets. `dist/apps/partpreview/` therefore
+downloads the _main_ app's copy of these assets. `dist/apps/partpreview/` therefore
 contains **no `ksa/`, `hdr/` or `basis/` copy at all** — its config omits the
 `ksaAssets()` plugin on build and sets `publicDir: false`. In dev the mini app serves
 them itself under its own base (plugin included, `publicDir` pointed at the repo's
@@ -74,24 +75,37 @@ That directory holds a self-contained, pre-pruned asset tree (catalog XML at the
 
 ### Producing `KSA_ASSETS_DIR`: the copy script
 
-`scripts/copy-ksa-assets-to-private-repo.ts` (a Bun script) builds that tree from the
-upstream `thirdparty/ksa/Content/Core` checkout. It does the selective pruning so the
-Vite plugin doesn't have to:
+`copy-assets.ts` in the **private assets repo** (a Bun script) builds that tree from
+the installed game's `Content/Core`. Its `CONTENT_DIR` names the game installation;
+its output is the private repo's `assets/` directory. Run it on the machine with the
+installed game. It does the selective pruning so the Vite plugin doesn't have to:
 
-1. Scans `Content/Core/**/*.xml` and keeps the ones that are a `<Assets>` catalog
-   **and** contain `<Part>`/`<SubPart>` elements — dynamically discovering the part
-   catalog (no hard-coded filename list).
+1. Scans `Content/Core/**/*.xml` and discovers `<Assets>` catalogs containing
+   `<Part>`/`<SubPart>`, static objects, reactions, grain geometries, or solid
+   propellants (no hard-coded part-catalog filename list).
 2. Copies each catalog XML plus its `*GameData.xml` sibling (when present).
 3. Parses every catalog + GameData XML for `Path="..."` references to `.glb`, `.gltf`,
    `.ktx2`, and `.dds` files and copies each one, preserving its `Meshes/…` /
    `Textures/…` layout. Referenced files missing on disk are warned + skipped.
 
+4. Copies the self-contained `Characters/` and `Textures/Characters/` directories,
+   the terrain-decal textures, `Astronomicals.xml`, `SolSystem.xml`, and the latest
+   game `version.json`.
+
 This avoids the huge unrelated planet/cloud assets in `Content/Core/Meshes`+`Textures`
-(a wholesale copy is multi-GB). Run it with:
+(a wholesale copy is multi-GB). From the private assets repo, run:
 
 ```
-bun run scripts/copy-ksa-assets-to-private-repo.ts --target <private-assets-dir>
+bun copy-assets.ts
+python3 tools/reencode-textures-uastc.py assets/Textures
 ```
+
+The second command is required after copying textures: game SubPart atlases use
+desktop BCn formats, while flexo serves UASTC so browsers can transcode them for
+their GPU. The re-encoder skips already-UASTC files and leaves `Textures/Characters/`
+in its shipped BC1/BC7 formats so exported kitten meshes retain game-compatible
+textures. Collision atlases referenced by `<MeshAtlas HostOnly="true">` travel
+through the same binary-path scan as rendering atlases.
 
 ## Dev + Build: `vite/ksaAssets.ts` plugin
 
@@ -115,6 +129,7 @@ The app ships under **`/flexo/`** (`base: '/flexo/'` in `vite.config.ts`), e.g.
 respect the shared-asset base (`assetBase()` above, which for the main app is
 `import.meta.env.BASE_URL`), so they resolve to `/flexo/ksa/…`, `/flexo/hdr/…` and
 `/flexo/basis/…`:
+
 - `src/ksa/catalog.ts` (`toUrl`, used by all catalog/mesh/texture URLs),
 - `src/three/textureSupport.ts` (KTX2 transcoder path),
 - `src/three/SceneEnvironment.ts` (HDR environments),
@@ -131,6 +146,7 @@ the heavyweight assets.
 
 `.github/workflows/deploy.yml` builds and deploys to **GitHub Pages** on every push
 to `main`. The `build` job:
+
 1. checks out flexo and the private assets repo (into `.tmp/flexo-private-assets`,
    via an SSH deploy key),
 2. sets `KSA_ASSETS_DIR=$GITHUB_WORKSPACE/.tmp/flexo-private-assets/assets`,
@@ -144,12 +160,14 @@ as-is (no nesting). Requires a `FLEXO_PRIVATE_ASSETS_SSH_KEY` repo secret (the
 private half of a read-only Deploy Key on `meow-sci/flexo-private-assets`).
 
 ## Other considerations
+
 - **Size:** all category atlases ship up front. To shrink, split per-category and
   lazy-load, or convert textures offline (see `plans/FLEXO_TEXTURING.md` appendix).
 - **Cache headers / CDN:** atlases are large and content-stable — serve with long
   cache lifetimes.
 
 ## Verifying a production build
+
 ```
 pnpm build
 # dist/ksa/ mirrors $KSA_ASSETS_DIR:
@@ -166,6 +184,7 @@ pnpm preview   # serves ALL of dist/ at /flexo/; add a SubPart and confirm it re
 ```
 
 ## Current status
+
 - ✅ Dev (`pnpm dev`): `/ksa/*` served from `KSA_ASSETS_DIR`; `/basis/*` from `public/`.
 - ✅ Build (`pnpm build`): `/basis/*` from `public/`; `/ksa/*` emitted by the
   `writeBundle` hook (full `KSA_ASSETS_DIR` tree copied into `dist/ksa/`).

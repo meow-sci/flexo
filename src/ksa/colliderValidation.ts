@@ -43,6 +43,12 @@ export function validateColliders(part: EditingPart): ColliderIssue[] {
   const placedTemplates = new Set(part.placements.map((p) => p.subPartTemplateId));
 
   for (const c of part.colliders) {
+    if (c.shape === 'ConvexHull' && !c.meshId?.trim()) {
+      block(
+        'collider-mesh-missing',
+        `Convex hull "${c.id}" must name a collision mesh. KSA rejects a <ConvexHull> without <Mesh Id>.`,
+      );
+    }
     // Checks the RAW document size, not the emitted dimensions: `colliderDimensions`
     // clamps, so reading through it would mask exactly the corruption this catches (a
     // hand-edited payload, or a decode that produced NaN). KSA feeds the value straight

@@ -24,7 +24,7 @@ catalog: it abstracts the two game snapshots as inputs and gives you the consoli
 matrix and step order so a review can be done end-to-end.
 
 > **`scope/` outranks this file.** The matrix in §5 is a routing table — area → flexo modules →
-> tests → high-value checks. The *contract itself* (every assumption, with game-side citations and
+> tests → high-value checks. The _contract itself_ (every assumption, with game-side citations and
 > a per-build verdict) lives in the linked `scope/*.md`, which is updated on every contract change
 > and is therefore always fresher. If they disagree, believe `scope/` and fix the matrix row.
 
@@ -42,8 +42,8 @@ baseline examples — treat those as illustrative, not as inputs to this skill).
 There are also **two KSA decompiled sources the caller provides**. Do not assume, guess or reuse
 absolute machine paths; treat the refs in `AGENTS.md` as illustrative and not inputs to this skill.
 
-| Placeholder  | Meaning                                                                      |
-| ------------ | ---------------------------------------------------------------------------- |
+| Placeholder  | Meaning                                                                       |
+| ------------ | ----------------------------------------------------------------------------- |
 | `<CURRENT>`  | The **just-shipped** KSA build being vetted (the one flexo must catch up to). |
 | `<PREVIOUS>` | The **last-vetted** KSA build flexo is currently known-good against.          |
 
@@ -65,7 +65,7 @@ build ids back to the caller before proceeding.
 
 **Then read the "Baseline game version" table at the top of
 [`scope/FULL_SCOPE.md`](../../../scope/FULL_SCOPE.md#baseline-game-version)** — it names the build
-flexo is *actually* verified against, plus any newer-but-unvetted build already sitting in the
+flexo is _actually_ verified against, plus any newer-but-unvetted build already sitting in the
 working dirs and the areas its changelog already flags. If the caller's `<PREVIOUS>` is NOT that
 verified baseline, say so: the review must span baseline → `<CURRENT>`, not just the caller's two
 directories, and the older deltas are recoverable from `ksa-game-assemblies` git history (the
@@ -204,7 +204,7 @@ Before flagging any `.cs` as changed, read the hunk. Known noise this codebase h
   — freshly copied SubPart atlases are BCn and flexo requires UASTC for universal device support.
 - **Re-sync the vendored test fixtures** if any vendored file's structure changed: `src/ksa/__fixtures__/`
   holds byte-identical Core XML (the only real-data check in OSS CI). Run `cd scripts && bun run
-  sync-fixtures` (the `scripts/` workspace still runs *that* legacy script on Bun; new scripts there
+sync-fixtures` (the `scripts/` workspace still runs _that_ legacy script on Bun; new scripts there
   are vanilla Node — see `scripts/CLAUDE.md`), then update the affected parser/catalog code + tests
   in the same change. The drift test in `src/ksa/partCatalog.test.ts` fails on mismatch whenever the
   private tree is present.
@@ -241,7 +241,7 @@ outliner (`src/ui/outliner/`), the project manager and `.flexo.tar.gz` archives
 action chains (`src/ui/chain/`, `src/three/chainEval.ts`), layers, measurements, snapping, ghosts
 (`src/three/GhostPartsLayer.ts`), and the kitten aide.
 
-A KSA change only reaches these if it moves a *contract* they render. Judge by the matrix, not by
+A KSA change only reaches these if it moves a _contract_ they render. Judge by the matrix, not by
 which files a feature happens to touch.
 
 ---
@@ -328,8 +328,10 @@ the regression tests, and the highest-value checks. Each row's deep contract is 
   `AreaRatio` (NaN = required), `FxExitDiameter` (visual-only). Confirm the `<Reaction Id>` +
   `<MixtureRatio>` combustor form and the Mixture-2D-LUT-sliced-at-load vs Fixed-1D split still
   match `reactionCatalog.ts`. Confirm `<ReactionPlume Reaction Default>` is still a repeatable
-  element (flexo models `reactionPlumes[]`, not two scalars). Electric engines remain impossible
-  data-only — if the game added a data path, that's a MISSING-CAPABILITY to note.
+  element (flexo models `reactionPlumes[]`, not two scalars). Since 5554, also verify
+  `ThermalCoreTemplate`/`ThermalCoreConfig`, `ThermalReactionTable`, `AntimatterRamCore`,
+  `MagneticNozzle`, `MagneticScoop`, and `<Tank><MagneticTrap Value>`; these are authored data
+  paths. The antimatter design preview uses carried propellant; scoop inputs are vehicle runtime.
 
 ### D. Animation — keyframe import/export — [`scope/animation.md`](../../../scope/animation.md) · [`docs/animation-editor.md`](../../../docs/animation-editor.md)
 
@@ -357,7 +359,7 @@ the regression tests, and the highest-value checks. Each row's deep contract is 
 - **Check:** `CharacterAssets.xml` hash + the gltf material names (`Kitty_Suit`, `KittyHead_mt`,
   `M_CHA_Kitten_Head`, `KittyEye_mt`, `Eyes_KittySklera_mt`); socket bones (`Head_M`, `Chest_M`) +
   the `ATTACHMENT_CORRECTION` derivation; the embedded-`DefaultORM.png` redirect. A changed asset
-  path / material name **degrades the editor aide only** — kittens are never exported *as kittens*,
+  path / material name **degrades the editor aide only** — kittens are never exported _as kittens_,
   so severity is lower than an export-path break. Exception: "Make Kitten Mesh" bakes a kitten into
   real SubParts, so a mesh/bone change also reaches the export path via `kittenBake.ts`.
 
@@ -413,23 +415,27 @@ the regression tests, and the highest-value checks. Each row's deep contract is 
   `<EVADoor SeatId>`, and `IVAController`'s two view clamps (`ivaLook.ts` is a line-for-line port —
   re-diff `OnFrame` and the seat-cycling/`OnSwitchOn` order semantics).
   **Reference-orientation contract:** confirm `Control`/`ControlTemplate` are still empty markers
-  (no transform / control-point field), `FlightComputer.UpdateAttitudeTrackError` still aims **Body
-  +X** / rolls **+Z**, `VehicleEditor` still pins the root to identity at launch. A new
-  `ControlPoint` / "control-from-here" / reference-transform would flip "up follows root" → "up
-  follows selected part" — grep `<CURRENT>/decomp` for `controlpoint|control from here|referencetransform`.
+  (no transform / control-point field), `FlightComputer.UpdateAttitudeTrackError` still aims
+  **control-frame +X** / rolls **+Z**, and `VehicleEditor` still pins the root to identity at
+  launch. Since 5168, vehicle-only "Control From Here" selects a part/connector frame; its
+  save fields do not belong to Part authoring. Check for new authored reference-transform fields.
 
 ### H. Colliders — part collision volumes — [`scope/colliders.md`](../../../scope/colliders.md) · [`docs/colliders.md`](../../../docs/colliders.md)
 
 - **Game anchors:** `ColliderModule.cs` + `Box|Sphere|Cylinder|CapsuleColliderTemplate.cs`,
-  `ColliderTemplate.cs`, `DistanceReference.cs`, `Vehicle.cs` (collider compound + zero-collider
+  `ColliderTemplate.cs`, `MeshColliderTemplate.cs`, `ConvexHullColliderTemplate.cs`,
+  `KSA.GlbImport/GlbCollisionAtlas.cs`, `DistanceReference.cs`, `Vehicle.cs` (collider compound + zero-collider
   fallback), `ConstraintSim.cs` (docking by contact), `PartTemplate.ApplyGameData`.
 - **flexo:** `src/ksa/colliderFit.ts`, `colliderSize.ts`, `colliderValidation.ts`, and the
   collider parse/emit in `partXmlParser.ts` / `partXmlSerializer.ts` / `types.ts`;
+  `src/ksa/collisionAtlas.ts`, `src/three/CollisionMeshCache.ts`,
   `src/state/colliderStore.ts`; `src/three/ColliderObject.ts`; UI:
   `src/ui/build/ColliderInspector.tsx`.
 - **Tests:** `colliderFit.test.ts`, `colliderSize.test.ts`, `colliderValidation.test.ts`.
-- **Check:** still exactly four analytic primitives (there are NO collider meshes — a new
-  `MeshColliderTemplate` would be a MISSING-CAPABILITY); size still carried in `Transform.scale`;
+- **Check:** four analytic primitives plus `<ConvexHull><Mesh Id>`; the latter is now used
+  by stock Parts. Analytic `Transform.scale` holds dimensions; hull scale holds the game's
+  optional `<Scale>` multiplier. Verify HostOnly collision atlases and raw binary accessors
+  (current collision GLBs omit scene nodes and use `Vec3` rather than standard `VEC3`);
   the four XML authoring sites (part-level vs SubPart-owned × the two nesting forms) that flexo
   normalizes into one still all parse in-game; the zero-collider fallback unchanged.
 
@@ -479,9 +485,9 @@ Produce a review report that states, for the `<PREVIOUS>` → `<CURRENT>` transi
 4. A gap list with severities (§2.6) and exact flexo `file:line` targets, each fix framed under the
    no-migration rule (§1.3), noting any that require a `PROJECT_SCHEMA_VERSION` bump.
 5. The follow-through actions taken or needed: `scope/*.md` baseline bumps, `FULL_SCOPE.md` version
-   + status-table bump, `docs/*.md` updates, `plans/FIX_CURRENT_GAPS_PLAN.md`, private-mirror
-   re-sync (+ UASTC re-encode), fixture re-sync, new/updated regression tests, and the gate result
-   (`test` / `typecheck` / `lint` / `fmt:check` / `smoke`).
+   - status-table bump, `docs/*.md` updates, `plans/FIX_CURRENT_GAPS_PLAN.md`, private-mirror
+     re-sync (+ UASTC re-encode), fixture re-sync, new/updated regression tests, and the gate result
+     (`test` / `typecheck` / `lint` / `fmt:check` / `smoke`).
 
 If the diff is empty or purely decompiler noise, say so plainly and record **NONE** — a clean bill
 of health with the baseline bumped is a valid, complete outcome.

@@ -39,6 +39,10 @@ export function TemplateEngineSection({
         templateId={templateId}
         groups={[
           'combustor',
+          'thermalCore',
+          'antimatterRamCore',
+          'magneticNozzle',
+          'magneticScoop',
           'nozzle',
           'solidMotor',
           'grain',

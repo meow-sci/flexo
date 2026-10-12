@@ -780,6 +780,7 @@ describe('normalization (default-fill, never conversion)', () => {
     // A tank saved before <ConicalTank> (KSA 2026.9.22.5482) has no radiusTopM.
     const preConicalTank: Record<string, unknown> = { ...createTank(), outerRadiusM: 0.8 };
     delete preConicalTank.radiusTopM;
+    delete preConicalTank.magneticTrap;
     stalePart.gameData.tanks = [preConicalTank];
     stalePart.gameData.gimbals = [
       {
@@ -824,6 +825,10 @@ describe('normalization (default-fill, never conversion)', () => {
     // One stripped field at each of the four levels the normalizer covers.
     delete stalePart.kittens; // EditingPart
     delete stalePart.gameData.ivaEnabled;
+    for (const key of ['thermalCores', 'antimatterRamCores', 'magneticNozzles', 'magneticScoops']) {
+      delete stalePart.gameData[key];
+      delete stalePart.subPartGameData[0][key];
+    }
     delete stalePart.gameData.rocketControllers; // PartGameData
     delete stalePart.subPartGameData[0].solidMotors; // SubPartGameData entry
     delete (stalePart.customMeshes[0].emissive as Record<string, unknown>).coverage;
@@ -838,6 +843,15 @@ describe('normalization (default-fill, never conversion)', () => {
     const part = $part.get();
     expect(part.kittens).toEqual([]);
     expect(part.gameData.ivaEnabled).toBe(true);
+    for (const key of [
+      'thermalCores',
+      'antimatterRamCores',
+      'magneticNozzles',
+      'magneticScoops',
+    ] as const) {
+      expect(part.gameData[key]).toEqual([]);
+      expect(part.subPartGameData[0][key]).toEqual([]);
+    }
     expect(part.gameData.rocketControllers).toEqual([]);
     expect(part.subPartGameData[0].solidMotors).toEqual([]);
     expect(part.gameData.solidGrainSegments[0]).toMatchObject({

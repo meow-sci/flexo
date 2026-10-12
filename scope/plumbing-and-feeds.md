@@ -11,25 +11,41 @@
 > alongside [engines.md](engines.md), [connectors-coordinates-iva.md](connectors-coordinates-iva.md)
 > and [gamedata-modules.md](gamedata-modules.md).
 
-**Baseline:** re-verified against KSA build **2026.9.22.5482** (decomp @ 5482 + shipped Core XML);
+**Baseline:** re-verified against KSA build **2026.10.10.5554** (decomp @ 5554 + shipped Core XML);
 surface introduced at **2026.7.9.5018**.
-**Baseline status:** ✅ **CURRENT** — at 5482 every plumbing class is byte-identical
-(`ConnectorCapabilityFlags`, `ConnectorCapability`, `ConnectorCapabilityExtensions`,
-`FeedsFromReference`, `ConsumerFeedWiring`, `RocketCoreTemplate`, `PlumbingClass`, `PartTemplate`,
-`Decoupler`, `ResourceManagerBase`, `PartFlowTopology`). Rev 5475 turned seven CoreFairingA
-nosecones and interstage adapters into fuel tanks (`CoreFairingAGameData.xml`: `Fuel Tanks` tag,
-new `<Connector><Capabilities>BulkFluid</Capabilities>`, `DecouplerJoint` → `BulkFluid`, two
-`<Decoupler>` removed, id-less `<Tank>`s, two of them the new `<ConicalTank>` shape — see
-[gamedata-modules.md](gamedata-modules.md#what-changed-in-5482)); every token involved was
-already modeled. Rev 5478's refill flag in `ResourceManager` is runtime. At 5438, rev 5433 changed runtime resource-flow scheduling but left
-the authored feed contract unchanged. It remains modeled end-to-end (parse, serialize, import/paste
-remapping, project codec v4, authoring UI, export pre-flight) by the 5018 upgrade.
+**Baseline status:** ✅ **CURRENT** — all capability tokens, `<FeedsFrom>` and
+`<ConsumerFeedWiring>` fields remain intact. New ThermalCore and AntimatterRamCore consumers
+use the same feed graph and are modeled through import/paste, authoring, auto-wire,
+validation, project codecs and export. No schema-version bump is needed for their additive lists.
+
+## What changed in 5554
+
+- `decomp/KSA/PlumbedCore.cs` extracts `Combustor`'s `IResourceConsumer`, feed binding,
+  resource manager, drain-order and consumption behavior. `PlumbedCore.Mix` replaces the
+  old `Combustor.DesiredMix => Reaction.ReactantMix`; `CombustorTemplate.Create` passes
+  the same fixed reaction mix. This refactor does not alter chemical XML or flow semantics.
+- `decomp/KSA/ThermalCoreTemplate.cs` inherits `RocketCoreTemplate.FeedsFrom`, and
+  `<Plumbing>Bulk|Service</Plumbing>` still selects `BulkFluid` or `ServiceFluid`.
+  `AntimatterRamCoreTemplate.Create` fixes its plumbing capability to `BulkFluid`, with
+  `<Antimatter Id>` and `<ReactionMass Id>` phases. Both resolve `<FeedsFrom Parent="true">`
+  through their placement's `<ConsumerFeedWiring Id SubPartId>` exactly as combustors do.
+  flexo's `feedTargets.consumersOf` and `engineValidation.locateConsumers` include both;
+  automatic wiring and the BulkFluid warning therefore reach the new stock engines.
+- `decomp/KSA/MagneticScoopTemplate.cs` authors `<CaptureRadius>` and `<Collects Id>`.
+  `MagneticScoop` supplies runtime interstellar collection to the vehicle, not a new container,
+  connector capability or feed reference. The scoop itself has no `<FeedsFrom>`.
+- `ConnectorCapabilityFlags`, `ConnectorCapability`, `ConnectorCapabilityExtensions`,
+  `FeedsFromReference`, `ConsumerFeedWiring`, `RocketCoreTemplate` and `PlumbingClass`
+  remain byte-identical to 5482. `PartTemplate` gains the engine/scoop lists and additive
+  `ApplyGameData` merge, while feed resolution only shifts log line numbers.
+- Magnetic containment is a separate tank/substance requirement: `<Tank><MagneticTrap>` and
+  `<Substance><RequiresMagneticContainment>` are covered in [gamedata-modules.md](gamedata-modules.md).
 
 ---
 
 ## The three layers
 
-Propellant reaches a **consumer** (a `RocketCore` — a `<Combustor>` or a `<SolidMotor>`)
+Propellant reaches a **consumer** (a `RocketCore` — a `<Combustor>`, `<SolidMotor>`, `<ThermalCore>` or `<AntimatterRamCore>`)
 only when all three agree:
 
 1. **Connectors declare what may cross them** — `<Capabilities>`

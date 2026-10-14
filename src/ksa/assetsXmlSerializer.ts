@@ -2,11 +2,12 @@ import { DOMImplementation, XMLSerializer } from '@xmldom/xmldom';
 import type { Document as XmlDocument, Element as XmlElement } from '@xmldom/xmldom';
 import {
   buildColliderElement,
+  buildMassDefinitionElement,
   INHERITED_COLLIDER_COMPONENT_ID,
   prettyXml,
 } from './partXmlSerializer';
 import { VIEW_MESH_SUFFIX } from './exportGlb';
-import type { PartCollider } from './types';
+import type { MassDefinition, PartCollider } from './types';
 
 /**
  * Serializes the custom-asset "Assets" XML — the file that DEFINES user-created
@@ -102,6 +103,8 @@ export interface ReferenceSubPartPlan {
    * here or the variant loses the built-in collision volume.
    */
   colliders?: PartCollider[];
+  /** Inherited mass only when the document has no explicit mass override. */
+  massDefinitions?: MassDefinition[];
   /**
    * Emit `<Internal>true</Internal>` — interior-only, rendered in IVA camera mode and nowhere
    * else (`PartModel.cs:387`). `false` emits nothing (KSA's default). The variant inherits
@@ -295,6 +298,8 @@ function appendSubParts(
       model.appendChild(sc);
     }
     sub.appendChild(model);
+    for (const mass of sp.massDefinitions ?? [])
+      sub.appendChild(buildMassDefinitionElement(doc, mass));
     // View mesh — without a MeshViewModule (built from <MeshView>) KSA's editor won't
     // raycast the SubPart, so an export variant renders but can't be hovered/selected/
     // right-clicked. We point <MeshView> at the SAME built-in render mesh the PartModel

@@ -42,6 +42,8 @@ import {
   select,
 } from '../../state/editorStore';
 import { setMode } from '../../state/modeStore';
+import { runCommand } from '../../state/commandStore';
+import { $catalogIndex } from '../../state/catalogStore';
 import { $partScopeName } from '../../state/partsStore';
 import { openInspectorSheet } from '../shell/phone/phoneSheets';
 import { focusViewport } from '../../three/viewportFocus';
@@ -72,10 +74,11 @@ export function DataNavigator() {
   const findings = useStore($gameDataFindings);
   // Null in a single-part project, so the pinned root row reads exactly as before (I8).
   const partScopeName = useStore($partScopeName);
+  const catalog = useStore($catalogIndex);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(['part']));
   const [nonCapableOpen, setNonCapableOpen] = useState(false);
 
-  const model = buildDataNavigator(part, findings, search, partScopeName);
+  const model = buildDataNavigator(part, findings, search, partScopeName, catalog);
   const scopeKey = scopeToKey(scope);
 
   const toggle = (key: string) =>
@@ -177,7 +180,7 @@ export function DataNavigator() {
           selectedKeys={new Set([scopeKey])}
           disabledKeys={disabledKeys}
           onSelectionChange={onSelectionChange}
-          dependencies={[search, part, findings, expanded, nonCapableOpen, isPhone]}
+          dependencies={[search, part, findings, catalog, expanded, nonCapableOpen, isPhone]}
           className="flex flex-col gap-0.5 outline-none"
         >
           {(item: NavItem) => (
@@ -381,6 +384,15 @@ function AddDataMenuBody({ templateId }: { templateId: string }) {
     };
   return (
     <Menu aria-label="Add data">
+      <MenuItem
+        density="dense"
+        onAction={() => {
+          runCommand('data.massAdd:SolidCuboidMass', { owner: templateId });
+          if (isPhone) openInspectorSheet();
+        }}
+      >
+        Add mass
+      </MenuItem>
       <MenuItem density="dense" onAction={add(addTank, 'tanks')}>
         Add tank
       </MenuItem>
@@ -513,7 +525,7 @@ function EmptyState() {
   return (
     <div className="flex flex-col items-start gap-2 px-2 py-4">
       <p className="text-xs text-fg-subtle">
-        Place SubParts in Build mode to give them tanks, lights, solar panels or engines.
+        Place SubParts in Build mode to give them mass, tanks, lights, solar panels or engines.
       </p>
       <Button size="sm" variant="secondary" onPress={() => setMode('build')}>
         Go to Build

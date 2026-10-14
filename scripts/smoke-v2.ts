@@ -379,6 +379,66 @@ async function run(page: Page): Promise<void> {
       await modeChip(page, 'Build').waitFor({ timeout: 10_000 });
     });
   }
+  await step(
+    'Data Mass — stock import, combined mass, undo/redo and reload persistence',
+    async () => {
+      await runFromPalette(page, 'New Part');
+      await page.getByRole('button', { name: 'Add', exact: true }).first().click();
+      await page.getByRole('menuitem', { name: 'Built-in Part…' }).click();
+      await page
+        .getByRole('searchbox', { name: 'Search Parts' })
+        .fill('CoreElectricalA_Prefab_RadialBatteryB');
+      await page
+        .getByRole('grid', { name: 'Parts' })
+        .getByRole('row')
+        .filter({ hasText: 'CoreElectricalA_Prefab_RadialBatteryB' })
+        .click();
+      await page.getByRole('button', { name: 'Add & Close' }).click();
+      await page.getByRole('grid', { name: 'Parts' }).waitFor({ state: 'hidden' });
+      await runFromPalette(page, 'Edit part data: Mass');
+      const mass = page.getByRole('textbox', {
+        name: 'Mass definition 1 in kilograms',
+        exact: true,
+      });
+      await mass.waitFor();
+      assert(Number(await mass.inputValue()) === 52, 'stock battery mass was not editable');
+      const lengthX = page.getByRole('textbox', {
+        name: 'Mass definition 1 length x in meters',
+        exact: true,
+      });
+      assert(Number(await lengthX.inputValue()) === 0.6721, 'stock cuboid dimensions were lost');
+      await mass.fill('65');
+      await mass.press('Enter');
+      await page.getByText(/Combined defined mass:/).click();
+      await page.getByText('Combined defined mass: 65 kg', { exact: true }).waitFor();
+      await page.keyboard.press('ControlOrMeta+KeyZ');
+      assert(Number(await mass.inputValue()) === 52, 'mass undo did not restore 52 kg');
+      await page.keyboard.press('ControlOrMeta+Shift+KeyZ');
+      assert(Number(await mass.inputValue()) === 65, 'mass redo did not restore 65 kg');
+      await runFromPalette(page, 'Add solid sphere mass');
+      const second = page.getByRole('textbox', {
+        name: 'Mass definition 2 in kilograms',
+        exact: true,
+      });
+      await second.waitFor();
+      await second.fill('2');
+      await second.press('Enter');
+      await page.getByText(/Combined defined mass:/).click();
+      await page.getByText('Combined defined mass: 67 kg', { exact: true }).waitFor();
+      // Project autosave debounces document edits; wait for the active snapshot to settle.
+      await delay(1500);
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page
+        .getByRole('button', { name: /^Editing mode:/ })
+        .first()
+        .waitFor({ timeout: 30_000 });
+      await runFromPalette(page, 'Edit part data: Mass');
+      await mass.waitFor();
+      assert(Number(await mass.inputValue()) === 65, 'saved cuboid mass did not survive reload');
+      assert(Number(await second.inputValue()) === 2, 'saved sphere mass did not survive reload');
+      await page.getByText('Combined defined mass: 67 kg', { exact: true }).waitFor();
+    },
+  );
 }
 
 async function main(): Promise<void> {

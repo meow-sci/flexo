@@ -261,7 +261,14 @@ describe('vendored stock engines export complete isolated SubPart variants', () 
             (s) => s.subPartTemplateId === variant!.variantId,
           );
           expect(atExportPrecision(roundTripped), engine.id).toEqual(
-            atExportPrecision({ ...source, subPartTemplateId: variant!.variantId }),
+            atExportPrecision({
+              ...source,
+              subPartTemplateId: variant!.variantId,
+              massDefinitions: source.massDefinitions.map((mass, index) => ({
+                ...mass,
+                id: `_mass${index}`,
+              })),
+            }),
           );
         }
         if (engine.id.endsWith('_LESA') || engine.id.endsWith('_LESSegmentThrustAssemblyA')) {

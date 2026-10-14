@@ -1,7 +1,14 @@
 import type { Command } from '../../state/commandStore';
-import { jumpToSection, sectionsFor, setDataScope } from '../../state/dataModeStore';
-import { $part, setIvaEnabled } from '../../state/editorStore';
+import { $dataScope, jumpToSection, sectionsFor, setDataScope } from '../../state/dataModeStore';
+import { $part, setCustomMassEnabled, setIvaEnabled } from '../../state/editorStore';
+import {
+  addMassDefinition,
+  massDefinitionsFor,
+  removeMassDefinition,
+  type MassOwner,
+} from '../../state/massStore';
 import { setMode } from '../../state/modeStore';
+import { MASS_SHAPES, MASS_SHAPE_DEFS } from '../../ksa/massDefinitions';
 
 /**
  * Data-mode commands (design: design-data-engine-modes.md §A9).
@@ -36,6 +43,36 @@ function scopeTemplate(templateId: string): void {
 }
 
 export const DATA_COMMANDS: Command[] = [
+  {
+    id: 'data.massRemovePreservedCustom',
+    title: 'Remove preserved custom part mass',
+    keywords: 'gamedata mass inertia custom',
+    enabled: () => $part.get().gameData.customMass != null,
+    run: () => setCustomMassEnabled(false),
+  },
+  ...MASS_SHAPES.map(
+    (shape): Command => ({
+      id: `data.massAdd:${shape}`,
+      title:
+        shape === 'CustomMass'
+          ? 'Add custom mass'
+          : `Add ${MASS_SHAPE_DEFS[shape].label.toLowerCase()} mass`,
+      keywords: 'gamedata mass inertia distribution shape density material',
+      run: (params) => {
+        const scope = $dataScope.get();
+        const owner =
+          params === undefined
+            ? scope.kind === 'part'
+              ? null
+              : scope.templateId
+            : (params as { owner: MassOwner }).owner;
+        addMassDefinition(owner, shape);
+        if (owner == null) scopePart();
+        else scopeTemplate(owner);
+        jumpToSection('mass');
+      },
+    }),
+  ),
   {
     id: 'data.toggleIva',
     title: 'Toggle part IVA mode',
@@ -77,9 +114,26 @@ export function dataScopeCommands(): Command[] {
     out.push({
       id: `data.scopeTemplate:${templateId}`,
       title: `Edit data: ${templateId}`,
-      keywords: 'gamedata subpart template tanks lights solar engine',
+      keywords: 'gamedata subpart template mass tanks lights solar engine',
       run: () => scopeTemplate(templateId),
     });
   }
   return out;
+}
+
+/** A definition's editor id keeps the remove command stable when another card is deleted. */
+export function massRemoveCommandId(owner: MassOwner, id: string): string {
+  return `data.massRemove:${owner == null ? 'part' : `template:${encodeURIComponent(owner)}`}:${id}`;
+}
+
+/** Palette actions for definitions in the currently focused Data scope. */
+export function massDefinitionCommands(): Command[] {
+  const scope = $dataScope.get();
+  const owner = scope.kind === 'part' ? null : scope.templateId;
+  return massDefinitionsFor($part.get(), owner).map((definition, index) => ({
+    id: massRemoveCommandId(owner, definition.id),
+    title: `Remove mass ${index + 1}: ${MASS_SHAPE_DEFS[definition.shape].label}`,
+    keywords: 'gamedata mass inertia distribution remove delete',
+    run: () => removeMassDefinition(owner, index),
+  }));
 }

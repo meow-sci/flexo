@@ -28,6 +28,7 @@ import {
   type ProjectExportOptions,
 } from './projectTransfer';
 import { $part, exportHistory, importHistory, importProjectData, undo } from './editorStore';
+import { createMassDefinition } from '../ksa/massDefinitions';
 
 /**
  * The envelope is multi-part since v11. These cases exercise ONE part, so they build a
@@ -821,6 +822,35 @@ describe('mergeProjectImport into an empty project', () => {
 });
 
 describe('mergeProjectImport into a non-empty project (remapping)', () => {
+  it('appends Part masses while adopting shared template mass only once', () => {
+    const source = sourcePart();
+    const partMass = createMassDefinition('SolidCuboidMass', 'part-mass');
+    partMass.massKg = 52;
+    partMass.dimensions = { lengthXM: 0.6721, lengthYM: 0.4828, lengthZM: 0.3549 };
+    source.gameData.massDefinitions = [partMass];
+    const templateMass = createMassDefinition('SolidCylinderMass', 'template-mass');
+    templateMass.materialId = 'Aluminum.2014(s)';
+    source.subPartGameData[0].massDefinitions = [templateMass];
+    source.subPartGameData[0].massDefinitionsOverride = true;
+    const first = mergeProjectImport(createEmptyPart(), oneEntry(source, 'Mass')).part;
+    const second = mergeProjectImport(first, oneEntry(source, 'Mass')).part;
+
+    expect(second.gameData.massDefinitions).toHaveLength(2);
+    expect(second.gameData.massDefinitions.map((mass) => mass.id)).not.toContain('part-mass');
+    expect(new Set(second.gameData.massDefinitions.map((mass) => mass.id)).size).toBe(2);
+    expect(second.gameData.massDefinitions[0]).toMatchObject({
+      shape: 'SolidCuboidMass',
+      massKg: 52,
+      dimensions: partMass.dimensions,
+    });
+    expect(second.subPartGameData[0].massDefinitions).toHaveLength(1);
+    expect(second.subPartGameData[0].massDefinitions[0].materialId).toBe('Aluminum.2014(s)');
+    expect(second.subPartGameData[0].massDefinitions[0].id).toBe(
+      first.subPartGameData[0].massDefinitions[0].id,
+    );
+    expect(source.gameData.massDefinitions).toEqual([partMass]);
+  });
+
   it('avoids instanceId collisions and remaps animation references to the new ids', () => {
     const dest = createEmptyPart();
     dest.placements.push({

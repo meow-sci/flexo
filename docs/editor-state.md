@@ -6,18 +6,18 @@ the 3D scene subscribes with vanilla `subscribe()`, React reads via
 
 ## Stores — `src/state/editorStore.ts`
 
-| Atom | Type | Meaning |
-|---|---|---|
-| `$part` | `EditingPart` | The whole part: `partId`, `editorTags`, `gameData` (display name, mass, tanks, power, coupling — the popup-only metadata with no 3D form), `layers[]`, `placements[]`, `connectors[]`, `colliders[]`, `lights[]` (each carries a `layerId` naming an ordinary layer — IVA seats and kittens are the only kinds pinned to a built-in one; connector `flags` is a `ConnectorFlag[]`). Treated as **immutable** — every mutation replaces it with a fresh object (so subscribers fire). |
-| `$selection` | `readonly SelectionRef[]` | **THE selection** — one ordered list of `{kind, id}` refs spanning every entity kind (`'subpart' \| 'connector' \| 'collider' \| 'ivaSeat' \| 'light' \| 'kitten'`). The LAST element is the primary. Ephemeral: never persisted, never undone, survives mode switches. See "The selection" below. |
-| `$lightEditContext` | `Record<string, number>` | Per light id, **which placement of its owner template** was last clicked. |
-| `$activeLayerId` | `string` | Layer new items land in. Ephemeral (not persisted, not undone); clamped to a live layer. See [layers.md](./layers.md). |
-| `$chainSession` | `ChainSession \| null` | The open action-chain session (`src/state/chainStore.ts`): frozen seed ids and kind (`subpart` or `collider`) + the ordered step list. Collider seeds share one owner. **Ephemeral by design** — never persisted, never undone; the document is untouched until Apply, which is what makes Cancel unconditionally safe. The only persisted piece is the module-private `flexo:chainDefaults` (last-used parameters per op kind). See [action-chains.md](./action-chains.md). |
-| `$toolMode` | `'translate'\|'rotate'\|'scale'` | Drives the 3D gizmo. |
-| `$gizmoSpace` | `'world' \| 'local'` | Which axes the gizmo's handles use. Persisted (`flexo:gizmoSpace`), never undone; the Tool bar's **W/L** segmented control and the `tool.toggleGizmoSpace` command are its writers. |
-| `$snap` | `{ translate?, rotateDeg? }` | Grid / rotation snap (0/undefined = off). **It has real UI now** — see "Snap" below; nothing else writes it. |
-| `$clipboard` | `Clipboard \| null` | The copy/cut buffer: placements, connectors, kittens, colliders, IVA seats **and lights**, deep-cloned at copy time. Ephemeral, never undone. |
-| `$canUndo` / `$canRedo` | `boolean` | Enablement for the menubar ↶ ↷ pair and the `edit.undo`/`edit.redo` commands. |
+| Atom                    | Type                             | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `$part`                 | `EditingPart`                    | The whole part: `partId`, `editorTags`, `gameData` (display name, mass, tanks, power, coupling — the popup-only metadata with no 3D form), `layers[]`, `placements[]`, `connectors[]`, `colliders[]`, `lights[]` (each carries a `layerId` naming an ordinary layer — IVA seats and kittens are the only kinds pinned to a built-in one; connector `flags` is a `ConnectorFlag[]`). Treated as **immutable** — every mutation replaces it with a fresh object (so subscribers fire). |
+| `$selection`            | `readonly SelectionRef[]`        | **THE selection** — one ordered list of `{kind, id}` refs spanning every entity kind (`'subpart' \| 'connector' \| 'collider' \| 'ivaSeat' \| 'light' \| 'kitten'`). The LAST element is the primary. Ephemeral: never persisted, never undone, survives mode switches. See "The selection" below.                                                                                                                                                                                   |
+| `$lightEditContext`     | `Record<string, number>`         | Per light id, **which placement of its owner template** was last clicked.                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `$activeLayerId`        | `string`                         | Layer new items land in. Ephemeral (not persisted, not undone); clamped to a live layer. See [layers.md](./layers.md).                                                                                                                                                                                                                                                                                                                                                               |
+| `$chainSession`         | `ChainSession \| null`           | The open action-chain session (`src/state/chainStore.ts`): frozen seed ids and kind (`subpart` or `collider`) + the ordered step list. Collider seeds share one owner. **Ephemeral by design** — never persisted, never undone; the document is untouched until Apply, which is what makes Cancel unconditionally safe. The only persisted piece is the module-private `flexo:chainDefaults` (last-used parameters per op kind). See [action-chains.md](./action-chains.md).         |
+| `$toolMode`             | `'translate'\|'rotate'\|'scale'` | Drives the 3D gizmo.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `$gizmoSpace`           | `'world' \| 'local'`             | Which axes the gizmo's handles use. Persisted (`flexo:gizmoSpace`), never undone; the Tool bar's **W/L** segmented control and the `tool.toggleGizmoSpace` command are its writers.                                                                                                                                                                                                                                                                                                  |
+| `$snap`                 | `{ translate?, rotateDeg? }`     | Grid / rotation snap (0/undefined = off). **It has real UI now** — see "Snap" below; nothing else writes it.                                                                                                                                                                                                                                                                                                                                                                         |
+| `$clipboard`            | `Clipboard \| null`              | The copy/cut buffer: placements, connectors, kittens, colliders, IVA seats **and lights**, deep-cloned at copy time. Ephemeral, never undone.                                                                                                                                                                                                                                                                                                                                        |
+| `$canUndo` / `$canRedo` | `boolean`                        | Enablement for the menubar ↶ ↷ pair and the `edit.undo`/`edit.redo` commands.                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 (`$lightEditContext` is ephemeral too — one atom, so the gizmo's write-back frame and the
 inspector's part-frame fields can never disagree about which instance an edit converts
@@ -33,16 +33,16 @@ are parked documents in a thin registry around the editing surface, and no store
 shape to accommodate them (invariant I1 — only `partsStore`, persistence, export, the ghost
 layer and the switcher UI are part-aware).
 
-| Export | Meaning |
-| --- | --- |
-| `$partEntries` | `readonly PartMetaEntry[]` in registry order — per part: entry id (`pt_…`), display name, the ghost `visible`/`opacity`/`offset`, `includeInExport`, and derived `counts`. Meta only; never a document. |
-| `$activePartId` | Which entry `$part` currently holds. |
-| `$activePartMeta` / `$partScopeName` | The active entry, and its name **only in a multi-part project** (`null` otherwise) — the one gate every part-aware label reads, so a single-part project reads exactly as it did before. |
-| `$inactiveRevision` | Bumped whenever a parked document changes hands (switch / create / delete / duplicate / hydrate). The ghost layer's rebuild trigger. |
-| `snapshotParts()` / `$partsSnapshot` | Every part as a `SavedPartEntry[]` — active from the live stores, the rest from the parked map. The computed is the version a React body may read. |
-| `switchPart` · `createPart` · `duplicatePart` · `deletePart` · `renamePart` · `movePart` · `addImportedParts` | Lifecycle. `duplicatePart` is the one async action (it re-mints the copy's custom assets). |
-| `setPartVisible` · `setPartOpacity` · `setPartOffset` · `setPartIncludeInExport` | View state on the entry, never on the document. |
-| `partsForExport()` / `exportEntriesFrom(snapshot)` | The gathering rule for Export to KSA: included parts, registry order. |
+| Export                                                                                                        | Meaning                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$partEntries`                                                                                                | `readonly PartMetaEntry[]` in registry order — per part: entry id (`pt_…`), display name, the ghost `visible`/`opacity`/`offset`, `includeInExport`, and derived `counts`. Meta only; never a document. |
+| `$activePartId`                                                                                               | Which entry `$part` currently holds.                                                                                                                                                                    |
+| `$activePartMeta` / `$partScopeName`                                                                          | The active entry, and its name **only in a multi-part project** (`null` otherwise) — the one gate every part-aware label reads, so a single-part project reads exactly as it did before.                |
+| `$inactiveRevision`                                                                                           | Bumped whenever a parked document changes hands (switch / create / delete / duplicate / hydrate). The ghost layer's rebuild trigger.                                                                    |
+| `snapshotParts()` / `$partsSnapshot`                                                                          | Every part as a `SavedPartEntry[]` — active from the live stores, the rest from the parked map. The computed is the version a React body may read.                                                      |
+| `switchPart` · `createPart` · `duplicatePart` · `deletePart` · `renamePart` · `movePart` · `addImportedParts` | Lifecycle. `duplicatePart` is the one async action (it re-mints the copy's custom assets).                                                                                                              |
+| `setPartVisible` · `setPartOpacity` · `setPartOffset` · `setPartIncludeInExport`                              | View state on the entry, never on the document.                                                                                                                                                         |
+| `partsForExport()` / `exportEntriesFrom(snapshot)`                                                            | The gathering rule for Export to KSA: included parts, registry order.                                                                                                                                   |
 
 The parked documents (`InactivePartDoc = {part, layerView, activeLayerId}`) and the parked undo
 histories live in two module-private Maps that only this module writes (I2). Layers are per
@@ -63,14 +63,14 @@ filter that drops dead refs and never re-points a live one.
 
 **Actions** (all in `editorStore.ts`, none of them undoable):
 
-| Action | Meaning |
-|---|---|
-| `select(refs, { additive? })` | Replace (or extend) the selection. Deduped by `kind:id`, first occurrence wins; refs whose entity does not exist are dropped. |
-| `toggleRef(ref)` | Add/remove ONE ref, leaving the rest — the additive (⇧/⌘/⌃) viewport click. An appended ref becomes the primary. |
-| `deselectRefs(refs)` | Drop several refs (the subtractive marquee). |
-| `clearSelection()` | Empty it. |
-| `selectLayerEntities(layerId)` / `deselectLayer(layerId)` | Every entity on a layer / everything on it, in one pass. |
-| `selectAll()` / `invertSelection()` / `deselectAll()` | `src/state/selectionOps.ts` — the Select-menu ops. Their population is every entity on a **listed AND visible AND unlocked** layer. They live in their own module because they need both `editorStore` and `layerStore`, and `layerStore` already imports `editorStore`. |
+| Action                                                    | Meaning                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `select(refs, { additive? })`                             | Replace (or extend) the selection. Deduped by `kind:id`, first occurrence wins; refs whose entity does not exist are dropped.                                                                                                                                            |
+| `toggleRef(ref)`                                          | Add/remove ONE ref, leaving the rest — the additive (⇧/⌘/⌃) viewport click. An appended ref becomes the primary.                                                                                                                                                         |
+| `deselectRefs(refs)`                                      | Drop several refs (the subtractive marquee).                                                                                                                                                                                                                             |
+| `clearSelection()`                                        | Empty it.                                                                                                                                                                                                                                                                |
+| `selectLayerEntities(layerId)` / `deselectLayer(layerId)` | Every entity on a layer / everything on it, in one pass.                                                                                                                                                                                                                 |
+| `selectAll()` / `invertSelection()` / `deselectAll()`     | `src/state/selectionOps.ts` — the Select-menu ops. Their population is every entity on a **listed AND visible AND unlocked** layer. They live in their own module because they need both `editorStore` and `layerStore`, and `layerStore` already imports `editorStore`. |
 
 **Resolution helpers**: `entityIndexOf(part, kind, id)` (→ `-1` when gone),
 `entityIdAt(part, kind, index)`, `refLayerId(part, ref)`, and `KIND_ORDER` — the fixed kind
@@ -103,32 +103,32 @@ its branch silently moved the kitten sitting at the same index; that trap is gon
 The editor's posture is one atom. There is no `$inspectorMode` any more: the v1 three-way
 sidebar atom (`'assets' | 'anim' | 'engine'`) is gone, and every consumer reads `$mode`.
 
-| Export | Meaning |
-|---|---|
-| `$mode` | `'build' \| 'animation' \| 'data' \| 'engine' \| 'surface'`. **Ephemeral** — boots to `'build'` on every reload, never persisted, **never an undo step**. |
-| `$activeTool` | The single transient-tool slot (`'measure' \| 'seat-view' \| 'exhaust' \| 'marquee' \| 'member-paint' \| 'pivot-pick'`, or `null`). Arming one cancels the previous. The chain session is deliberately NOT in this slot — it is a parallel, non-modal session. |
-| `MODES` / `TOOLS` | The display-order datasets the menubar switcher, the status chip, the phone tab bar, the palette and the hotkey validator all render from. |
-| `setMode(next, payload?)` | **THE** choreography point: exit hooks → cancel the armed tool (unless its `ToolDef` says `survivesModeSwitch`) → set `$mode` → enter hooks. It never touches the document, `$part`, undo history, the selection, the camera, layer view state or the active layer. |
-| `registerModeHooks` / `registerTool` | How an area store declares its own entry/exit choreography and tool teardown. Hooks are wrapped in try/catch — a broken area hook can never strand the UI between modes. |
-| `resetModeForProjectLoad()` | Project load/switch: mode → Build, tool slot cleared. Called from `applyProjectSnapshot`. |
+| Export                               | Meaning                                                                                                                                                                                                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$mode`                              | `'build' \| 'animation' \| 'data' \| 'engine' \| 'surface'`. **Ephemeral** — boots to `'build'` on every reload, never persisted, **never an undo step**.                                                                                                           |
+| `$activeTool`                        | The single transient-tool slot (`'measure' \| 'seat-view' \| 'exhaust' \| 'marquee' \| 'member-paint' \| 'pivot-pick'`, or `null`). Arming one cancels the previous. The chain session is deliberately NOT in this slot — it is a parallel, non-modal session.      |
+| `MODES` / `TOOLS`                    | The display-order datasets the menubar switcher, the status chip, the phone tab bar, the palette and the hotkey validator all render from.                                                                                                                          |
+| `setMode(next, payload?)`            | **THE** choreography point: exit hooks → cancel the armed tool (unless its `ToolDef` says `survivesModeSwitch`) → set `$mode` → enter hooks. It never touches the document, `$part`, undo history, the selection, the camera, layer view state or the active layer. |
+| `registerModeHooks` / `registerTool` | How an area store declares its own entry/exit choreography and tool teardown. Hooks are wrapped in try/catch — a broken area hook can never strand the UI between modes.                                                                                            |
+| `resetModeForProjectLoad()`          | Project load/switch: mode → Build, tool slot cleared. Called from `applyProjectSnapshot`.                                                                                                                                                                           |
 
 Two derived flags moved with it: `$isPoseEditing` and `$isExhaustPlacing` now derive from
 `$mode` (plus their own area state) instead of the deleted inspector atom.
 
 ### Data mode's sub-state — `src/state/dataModeStore.ts`
 
-Data mode is the canonical GameData surface, and everything that decides *what it is showing*
+Data mode is the canonical GameData surface, and everything that decides _what it is showing_
 lives here. All of it is **ephemeral view state: never persisted, never an undo step.**
 
-| Export | Meaning |
-|---|---|
-| `$dataScopeRaw` / `$dataScope` | The scope the left form shows: `{kind:'part'}` or `{kind:'template', templateId}`. The computed CLAMPS a template with zero placements back to Part, leaving the raw atom alone so undoing the deletion restores the scope. |
-| `sectionsFor(scope)` / `sectionDef(id)` | The ONE section dataset. The navigator's child rows, the form's chip strip and the form's section stack all render from it, so the three can never disagree about order, wording or which sections a scope has. |
-| `$dataSectionJump` / `jumpToSection(id, cardKey?)` | The nonce'd "scroll to + expand + flash" intent a chip, a navigator row or a finding fires. The nonce is what makes a second click on the same chip do something visible. |
-| `$dataSearch` / `setDataSearch` | The navigator's fuzzy filter. |
-| `$dataHighlight` | Instance ids of the scoped template's placements, in Data mode only — a persistent viewport TINT, not a selection. |
-| `$dataFlash` / `flashPlacements` / `flashConnector` / `clearFlash` | The one-shot ~600 ms flash behind row hovers, scope chips and the Coupling section's "Show →" eye. Two id spaces, because placements and connector markers highlight through different scene paths. |
-| `initDataMode()` | Registers the entry ladder (jump payload → surviving scope → selected SubPart's template → Part) plus the reaction-catalog preload. Exit has NO effects: the scope must survive for the return trip. |
+| Export                                                             | Meaning                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$dataScopeRaw` / `$dataScope`                                     | The scope the left form shows: `{kind:'part'}` or `{kind:'template', templateId}`. The computed CLAMPS a template with zero placements back to Part, leaving the raw atom alone so undoing the deletion restores the scope. |
+| `sectionsFor(scope)` / `sectionDef(id)`                            | The ONE section dataset. The navigator's child rows, the form's chip strip and the form's section stack all render from it, so the three can never disagree about order, wording or which sections a scope has.             |
+| `$dataSectionJump` / `jumpToSection(id, cardKey?)`                 | The nonce'd "scroll to + expand + flash" intent a chip, a navigator row or a finding fires. The nonce is what makes a second click on the same chip do something visible.                                                   |
+| `$dataSearch` / `setDataSearch`                                    | The navigator's fuzzy filter.                                                                                                                                                                                               |
+| `$dataHighlight`                                                   | Instance ids of the scoped template's placements, in Data mode only — a persistent viewport TINT, not a selection.                                                                                                          |
+| `$dataFlash` / `flashPlacements` / `flashConnector` / `clearFlash` | The one-shot ~600 ms flash behind row hovers, scope chips and the Coupling section's "Show →" eye. Two id spaces, because placements and connector markers highlight through different scene paths.                         |
+| `initDataMode()`                                                   | Registers the entry ladder (jump payload → surviving scope → selected SubPart's template → Part) plus the reaction-catalog preload. Exit has NO effects: the scope must survive for the return trip.                        |
 
 ### Engine mode's sub-state — `src/state/engineStore.ts`
 
@@ -136,19 +136,19 @@ Engine mode's designer state, all of it **ephemeral: never serialized, never an 
 Every reference into `$part` is re-resolved on read, so a removed module or placement degrades
 to a sane fallback instead of editing the wrong thing.
 
-| Export | Meaning |
-|---|---|
-| `$activeEngineEntry` / `activateEngine(entry)` | The open engine SCOPE — a SubPart template or the part itself (`PART_ENGINE_ENTRY_KEY = '\0part'`). `activateEngine` also resets the module focus, since a module ref is indexed WITHIN a scope. |
-| `engineEntryLabel` / `engineEntryShortLabel` / `engineEntryKey` / `engineEntryFromKey` | The ONE label + key helpers (v1 duplicated them across two components). |
-| `$activeModule` / `$activeModuleClamped` / `focusModule(ref)` | Which module the LEFT editor shows: `{group, scope, index}`. The clamped read returns null once the index falls out of range, which is what makes removing the focused module fall back to the summary card instead of rendering over `undefined`. |
-| `engineModuleCount(part, entry, group, scope)` | The one place that knows which `$part` list backs each module group. |
-| `$activeNozzleRef` / `$resolvedNozzleTargets` / `$activeNozzleTarget` / `cycleExhaustTarget(±1)` | The exhaust handles: nozzle × flavor × placement × channel, exactly one active. `,` / `.` walk them in chip order. |
-| `$isExhaustPlacing` / `$effectiveToolMode` / `setExhaustPlacing` / `toggleExhaustPlacing` | Exhaust placement's tenancy of the single `$activeTool` slot, plus the Scale→Move clamp the Tool bar displays truthfully. |
-| `$engineFindings` / `$engineBlockerCount` / `moduleRefForIssue` / `focusEngineIssue` | `validateEngines` over the live catalog, the mode-switcher attention dot, and the click-through that opens a finding's scope, focuses its module and flashes the field. |
-| `$moduleFlash` / `flashModuleField(key)` | The nonce'd field-flash intent the editors consume (`mixtureRatio`, `exhaustDirection`, `defaultPressure`, `reactionId`, `areaRatio`). |
-| `$rocketReadoutSel` / `FIRST_PAIR_ROCKET` | Which `<Rocket>` the Performance card aggregates over. |
-| `$engineDefineFlow` / `requestDefineNewEngine` / `$engineTreeCollapsed` / `jumpToEngineGroup` | The define-new pushed view and the tree's collapse state — in the store, not in component state, so a cross-mode jump can open or reveal them without an effect writing state. |
-| `initEngineMode()` | Registers the entry ladder (jump payload → surviving scope → selected chamber, then selected nozzle → first chamber, then first scope → empty) plus the reaction + solid-curve preloads. A built-in Part import explicitly activates its chamber scope, replacing any previous scope. **`enterEngineMode` / `exitEngineMode` are GONE** — `setMode('engine', payload)` is the single choreography point, and exit needs no hook (the refs are retained for the return trip, `setMode` cancels the tool, and `EditorScene` disposes the handles on `$mode`). |
+| Export                                                                                           | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$activeEngineEntry` / `activateEngine(entry)`                                                   | The open engine SCOPE — a SubPart template or the part itself (`PART_ENGINE_ENTRY_KEY = '\0part'`). `activateEngine` also resets the module focus, since a module ref is indexed WITHIN a scope.                                                                                                                                                                                                                                                                                                                                                            |
+| `engineEntryLabel` / `engineEntryShortLabel` / `engineEntryKey` / `engineEntryFromKey`           | The ONE label + key helpers (v1 duplicated them across two components).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `$activeModule` / `$activeModuleClamped` / `focusModule(ref)`                                    | Which module the LEFT editor shows: `{group, scope, index}`. The clamped read returns null once the index falls out of range, which is what makes removing the focused module fall back to the summary card instead of rendering over `undefined`.                                                                                                                                                                                                                                                                                                          |
+| `engineModuleCount(part, entry, group, scope)`                                                   | The one place that knows which `$part` list backs each module group.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `$activeNozzleRef` / `$resolvedNozzleTargets` / `$activeNozzleTarget` / `cycleExhaustTarget(±1)` | The exhaust handles: nozzle × flavor × placement × channel, exactly one active. `,` / `.` walk them in chip order.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `$isExhaustPlacing` / `$effectiveToolMode` / `setExhaustPlacing` / `toggleExhaustPlacing`        | Exhaust placement's tenancy of the single `$activeTool` slot, plus the Scale→Move clamp the Tool bar displays truthfully.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `$engineFindings` / `$engineBlockerCount` / `moduleRefForIssue` / `focusEngineIssue`             | `validateEngines` over the live catalog, the mode-switcher attention dot, and the click-through that opens a finding's scope, focuses its module and flashes the field.                                                                                                                                                                                                                                                                                                                                                                                     |
+| `$moduleFlash` / `flashModuleField(key)`                                                         | The nonce'd field-flash intent the editors consume (`mixtureRatio`, `exhaustDirection`, `defaultPressure`, `reactionId`, `areaRatio`).                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `$rocketReadoutSel` / `FIRST_PAIR_ROCKET`                                                        | Which `<Rocket>` the Performance card aggregates over.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `$engineDefineFlow` / `requestDefineNewEngine` / `$engineTreeCollapsed` / `jumpToEngineGroup`    | The define-new pushed view and the tree's collapse state — in the store, not in component state, so a cross-mode jump can open or reveal them without an effect writing state.                                                                                                                                                                                                                                                                                                                                                                              |
+| `initEngineMode()`                                                                               | Registers the entry ladder (jump payload → surviving scope → selected chamber, then selected nozzle → first chamber, then first scope → empty) plus the reaction + solid-curve preloads. A built-in Part import explicitly activates its chamber scope, replacing any previous scope. **`enterEngineMode` / `exitEngineMode` are GONE** — `setMode('engine', payload)` is the single choreography point, and exit needs no hook (the refs are retained for the return trip, `setMode` cancels the tool, and `EditorScene` disposes the handles on `$mode`). |
 
 Engine document mutations stay in `editorStore`: `addEngine` / `addRcsEngine` /
 `addSolidEngine` / `addSrbEngine` are ONE-undo-step composites, `duplicateEngineModule(ref, templateId)`
@@ -168,14 +168,14 @@ scope. `focusFinding(finding)` is the shared click-through — scope, then jump,
 A tool is layered ON TOP of a mode, never a mode of its own. Each one declares its rules
 once, at module scope in the store that owns its state, via `registerTool(id, def)`:
 
-| Tool | Allowed modes | On mode switch | Status segment | Escape | Owner |
-|---|---|---|---|---|---|
-| `measure` | all | **cancels** (including a half-placed pick) | `Measure — click first point` → `…second point`, with an `Esc` chip | rung 5 — cancels the pending point AND disarms | `measurementStore.ts` |
-| `seat-view` | all | **survives** (`survivesModeSwitch: true` — it is a camera state, not a mode-local affordance) | `Seat 2 / 4` plus the interactive `◀ ▶ ⓘ Exit` controls | rung **8** (never `preventDefault`ed — v1 contract) | `ivaStore.ts` |
-| `exhaust` | **Engine only** | auto-off (the mode disallows it, so `setMode` cancels it) | `Exhaust: NozzleB #2 · FX` | rung 5 | `engineStore.ts` |
-| `marquee` | all | cancels | `Box select — drag to select` → `…release to select` | rung 5 | `EditorScene.ts` |
-| `member-paint` | **Animation only** | auto-off | `Paint members → <joint>` | rung 5 | `animationStore.ts` |
-| `pivot-pick` | **Animation only** | auto-off | `Pick pivot point — click a surface` | rung 5 | `animationStore.ts` |
+| Tool           | Allowed modes      | On mode switch                                                                                | Status segment                                                      | Escape                                              | Owner                 |
+| -------------- | ------------------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------- | --------------------- |
+| `measure`      | all                | **cancels** (including a half-placed pick)                                                    | `Measure — click first point` → `…second point`, with an `Esc` chip | rung 5 — cancels the pending point AND disarms      | `measurementStore.ts` |
+| `seat-view`    | all                | **survives** (`survivesModeSwitch: true` — it is a camera state, not a mode-local affordance) | `Seat 2 / 4` plus the interactive `◀ ▶ ⓘ Exit` controls             | rung **8** (never `preventDefault`ed — v1 contract) | `ivaStore.ts`         |
+| `exhaust`      | **Engine only**    | auto-off (the mode disallows it, so `setMode` cancels it)                                     | `Exhaust: NozzleB #2 · FX`                                          | rung 5                                              | `engineStore.ts`      |
+| `marquee`      | all                | cancels                                                                                       | `Box select — drag to select` → `…release to select`                | rung 5                                              | `EditorScene.ts`      |
+| `member-paint` | **Animation only** | auto-off                                                                                      | `Paint members → <joint>`                                           | rung 5                                              | `animationStore.ts`   |
+| `pivot-pick`   | **Animation only** | auto-off                                                                                      | `Pick pivot point — click a surface`                                | rung 5                                              | `animationStore.ts`   |
 
 `$pivotEditing` — Animation's `⊕ Edit pivot` gizmo mode — deliberately does NOT hold the
 slot (it is a gizmo routing change, not a pointer claim), but rung 5's `when` predicate
@@ -215,14 +215,14 @@ Five more stores in `src/state/` belong to the chrome rather than the document, 
 follow the same contract: **never in `$part`, never an undo step, never read by
 `src/three/`** except through an explicit intent atom.
 
-| Store | Atoms | Persistence |
-|---|---|---|
-| `layoutStore.ts` | `$layout` — `{left, right}` sidebar `{width, collapsed}`, `timeline {height, collapsed, hidden}`, `float` / `floatOrder` / `floatHidden`; plus `SIDEBAR_CLAMPS` (left 220–480, right 260–640) and `TIMELINE_MIN_HEIGHT` 120 | `flexo:layout` |
-| `statusStore.ts` | `$statusMessage` (ONE slot — a new message overwrites, never queues), `$lastStatusMessage`, `$toolStatus`, `$statusConfirm`, `$fpsReport`, `$advisories`, computed `$progress` | none |
-| `notificationStore.ts` | `$notifications` (ring of `NOTIFICATION_RING_MAX` = 100, newest first), `$unreadCount`, `$notificationCenterOpen`, `$notificationFocusId` | none — session-only |
-| `modifierStore.ts` | `$heldModifiers`, `$hoverContext`, computed `$modifierHints` over registered providers | none |
-| `commandStore.ts` | the command + provider registries, `$paletteOpen`, `$paletteRecents` (8 ids) | `flexo:paletteRecents` |
-| `dialogStore.ts` | `$openDialog` — `{id, params} \| null` over 22 `DialogId`s | none |
+| Store                  | Atoms                                                                                                                                                                                                                       | Persistence            |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `layoutStore.ts`       | `$layout` — `{left, right}` sidebar `{width, collapsed}`, `timeline {height, collapsed, hidden}`, `float` / `floatOrder` / `floatHidden`; plus `SIDEBAR_CLAMPS` (left 220–480, right 260–640) and `TIMELINE_MIN_HEIGHT` 120 | `flexo:layout`         |
+| `statusStore.ts`       | `$statusMessage` (ONE slot — a new message overwrites, never queues), `$lastStatusMessage`, `$toolStatus`, `$statusConfirm`, `$fpsReport`, `$advisories`, computed `$progress`                                              | none                   |
+| `notificationStore.ts` | `$notifications` (ring of `NOTIFICATION_RING_MAX` = 100, newest first), `$unreadCount`, `$notificationCenterOpen`, `$notificationFocusId`                                                                                   | none — session-only    |
+| `modifierStore.ts`     | `$heldModifiers`, `$hoverContext`, computed `$modifierHints` over registered providers                                                                                                                                      | none                   |
+| `commandStore.ts`      | the command + provider registries, `$paletteOpen`, `$paletteRecents` (8 ids)                                                                                                                                                | `flexo:paletteRecents` |
+| `dialogStore.ts`       | `$openDialog` — `{id, params} \| null` over 22 `DialogId`s                                                                                                                                                                  | none                   |
 
 `projectIndexStore.ts` sits alongside them but is backed by IndexedDB rather than
 localStorage — see [projects.md](./projects.md). Full behavioural detail for all of these is
@@ -280,7 +280,7 @@ IVA-seat rule).
 **`setPlacementsInternal(indices, internal)`** is discrete (one undo entry) and writes
 `part.internalFlags` for the **distinct** SubPart templates behind the given placements — KSA
 puts `<Internal>` on the template's `<PartModel>`, so it is never per-placement. Glass-exporting
-templates are skipped (`isGlassTemplate`, exported so the menus can *disable* the item rather
+templates are skipped (`isGlassTemplate`, exported so the menus can _disable_ the item rather
 than silently drop the write).
 
 **GameData actions** (`part.gameData`, used by Data mode's scope form): `setDisplayName`,
@@ -293,6 +293,12 @@ stored in `gameData` but serialized on the geometry `<Part>`; off ⇒ `null` ⇒
 `set*Connector` / `setDecouplerForce` / `setDockingPort{LatchingImpulse,PushoffForce}`.
 List add/remove, checkboxes and
 Select picks are **discrete**; free-text/number field edits are **streaming**.
+
+`massStore.ts` adds scoped `addMassDefinition`, `removeMassDefinition`, and
+`setMassDefinitionShape` (discrete), plus `updateMassDefinition` (streaming).
+`massDefinitionsOverride` preserves an explicitly empty SubPart mass list so export
+does not restore inherited Core mass. All fields are document state, including
+snapshot history and compact project export; see [mass-definitions.md](mass-definitions.md).
 
 Three of them are Data mode's own:
 
@@ -318,7 +324,7 @@ Three of them are Data mode's own:
 which `defaultOp` reads back defensively (unknown or malformed fields degrade to the hardcoded
 defaults — no migration). The **commit** is `applyActionChain(entries, detail)` for SubParts
 or `applyColliderActionChain(entries, detail)` for colliders, both in `editorStore.ts`. Each
-is a discrete mutation that collapses seed moves *and* every clone into one undo entry,
+is a discrete mutation that collapses seed moves _and_ every clone into one undo entry,
 and selects seeds + copies afterwards. Collider commits validate all seed ids, layer locks
 and common ownership before writing; clones preserve shape, owner and layer with fresh ids,
 and dimensions are normalized on assignment. The live evaluation between the two,
@@ -327,6 +333,7 @@ than `src/state/` — it needs the three.js math engine (`chainMath.ts`), and it
 palette footer and the ghost preview read.
 
 Conventions:
+
 - Instance ids: `lastDotSegment(templateId).toLowerCase() + "_" + (count+1)`
   (e.g. `Core.Screw.A` → `a_1`, `a_2`).
 - Mutating actions clone `$part` (`structuredClone`), edit, then `$part.set(next)`.
@@ -359,7 +366,7 @@ History snapshots **`$part` only** (the serialized document: `partId`, `editorTa
 `internalFlags`, incl. each entity's `layerId`). Selection, `$toolMode`, `$snap` and
 `$activeLayerId` are ephemeral UI and are intentionally excluded (so are `$gizmoSpace` and
 the `snapStore` keys, which are persisted view preferences); selection + active layer are
-*clamped* (not restored) after undo/redo. So are the seat-view and seat-aim atoms (`$seatView`
+_clamped_ (not restored) after undo/redo. So are the seat-view and seat-aim atoms (`$seatView`
 / `$seatLook` in `ivaStore.ts`, `$ivaSeatAimRequest` in `ivaSeatStore.ts`) and the light
 editing context (`$lightEditContext`) — an aim request only enters history through the
 `aimIvaSeat` it eventually causes.
@@ -406,6 +413,7 @@ module recomputes selection membership from `$part`.
 ## Two-way binding (gizmo ↔ inspector)
 
 Both edit the same store:
+
 - Gizmo drag → `EditorScene` → `updatePlacementTransform(index, …)`.
 - Focus-editor field → `src/ui/build/TransformGroups.tsx` → `updateSelectedTransform(…)`.
 
@@ -468,7 +476,7 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
   spans past (and up to) rows on a hidden or locked layer without selecting them, the
   same rule click-selection and the 3D viewport already follow
 - ranges are computed over the displayed row order with the layer sections flattened, so
-  one range can span layers *and* entity kinds (`$selection` is one cross-kind list)
+  one range can span layers _and_ entity kinds (`$selection` is one cross-kind list)
 
 ## The UI surface map (`src/ui/`)
 
@@ -530,6 +538,7 @@ history), autosaved to the `flexo-projects` IndexedDB database and restored on b
 [projects.md](./projects.md).
 
 ## Tests
+
 `src/state/editorStore.test.ts` covers instance-id generation, add/remove/duplicate,
 selection clamping, and undo/redo — including that discrete mutations self-record
 (`setEditorTags`, `setConnectorFlags`), that streaming mutations add no step on their

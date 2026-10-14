@@ -266,6 +266,8 @@ export function parseAssetsFile(
     const engines = engineModulesFromElement(sub);
     const data = {
       ...createSubPartGameData(id),
+      massDefinitions: engines.massDefinitions,
+      massDefinitionsOverride: engines.massDefinitions.length > 0,
       combustors: engines.combustors,
       thermalCores: engines.thermalCores,
       antimatterRamCores: engines.antimatterRamCores,

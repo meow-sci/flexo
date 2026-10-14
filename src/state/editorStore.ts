@@ -1,5 +1,6 @@
 import { atom, computed } from 'nanostores';
 import type { CatalogSubPart } from '../ksa/catalog';
+import { randomId } from './ids';
 import { persistentJSON } from '@nanostores/persistent';
 import type {
   Battery,
@@ -806,6 +807,7 @@ export interface ImportedGameData {
   /** Part-level `<CustomMass>` mass override (Kg) + its preserved unmodeled children (inertia). */
   customMass: number | null;
   customMassExtras: RawXmlNode[];
+  massDefinitions: import('../ksa/types').MassDefinition[];
   /** Unmodeled `<PartGameData>` attrs + child elements, preserved verbatim on import. */
   unknownAttrs: Record<string, string>;
   unknownChildren: RawXmlNode[];
@@ -884,6 +886,10 @@ function remapSubPartGameData(
 ): SubPartGameData {
   return {
     ...spd,
+    massDefinitions: spd.massDefinitions.map((mass) => ({
+      ...structuredClone(mass),
+      id: randomId(),
+    })),
     unknownChildren: remapRawConnectorRefs(spd.unknownChildren, connectorIdMap, idMap),
     rockets: spd.rockets.map((r) => remapRocket(r, idMap)),
     rocketControllers: spd.rocketControllers.map((c) => ({
@@ -954,6 +960,9 @@ function applyImportedGameData(
   layerId: string,
 ): void {
   const game = target.gameData;
+  game.massDefinitions.push(
+    ...src.massDefinitions.map((mass) => ({ ...structuredClone(mass), id: randomId() })),
+  );
   if (game.decoupler == null && src.decoupler) {
     const id = connectorIdMap.get(src.decoupler.connectorId);
     if (id) game.decoupler = { ...src.decoupler, connectorId: id };

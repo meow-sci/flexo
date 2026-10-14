@@ -7,7 +7,7 @@ import { partSwitchCommands } from './partCommands';
 import { customMeshInstanceCommands } from './addCommands';
 import { layerActivateCommands, layerSelectCommands } from './selectCommands';
 import { seatCommands } from './toolsCommands';
-import { dataScopeCommands } from './dataCommands';
+import { dataScopeCommands, massDefinitionCommands } from './dataCommands';
 import { surfacePickCommands } from './surfaceCommands';
 import { animationClipCommands } from './animationCommands';
 
@@ -40,6 +40,7 @@ export const COMMAND_PROVIDERS: { id: string; commands: () => Command[] }[] = [
   { id: 'modsFolder', commands: modsFolderCommands },
   // One "Edit data: <template>" row per data-capable SubPart template (design §A9).
   { id: 'data.scopeTemplate', commands: dataScopeCommands },
+  { id: 'data.massDefinitions', commands: massDefinitionCommands },
   // One "Edit surface: <mesh>" row per custom mesh, kitten submeshes included (D6).
   { id: 'surface.pickMesh', commands: surfacePickCommands },
   // One "Open clip: <name>" row per animation clip (design-animation-mode.md §13).

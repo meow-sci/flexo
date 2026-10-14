@@ -87,7 +87,7 @@ describe('jumpToSection', () => {
 });
 
 describe('sectionsFor', () => {
-  it('lists the eight Part sections and the five template sections, in form order', () => {
+  it('lists the eight Part sections and the six template sections, in form order', () => {
     expect(sectionsFor({ kind: 'part' }).map((s) => s.id)).toEqual([
       'identity',
       'mass',
@@ -99,6 +99,7 @@ describe('sectionsFor', () => {
       'passthrough',
     ]);
     expect(sectionsFor({ kind: 'template', templateId: 'T' }).map((s) => s.id)).toEqual([
+      'mass',
       'tanks',
       'lights',
       'solar',

@@ -47,6 +47,8 @@ import {
   setSubPartSolarPanelRotation,
 } from '../../state/editorStore';
 import { setMode } from '../../state/modeStore';
+import { runCommand } from '../../state/commandStore';
+import { $catalogIndex } from '../../state/catalogStore';
 import { openPanelSheet } from '../shell/phone/phoneSheets';
 import type { EditingPart } from '../../ksa/types';
 
@@ -60,7 +62,7 @@ import type { EditingPart } from '../../ksa/types';
  * be deleted rather than merely hidden (RULE ZERO, §C1 rows 1–4).
  *
  * The two scopes render different stacks: Part = Identity · Mass · Tanks · Power · Coupling ·
- * Wiring · Advanced · Passthrough; Template = Tanks · Lights · Solar · Engine · Passthrough.
+ * Wiring · Advanced · Passthrough; Template = Mass · Tanks · Lights · Solar · Engine · Passthrough.
  * Both orders come from `sectionsFor()`, the one section dataset the navigator's child rows
  * and this form's chip strip also render from, so the three can never drift apart.
  *
@@ -100,7 +102,8 @@ export function DataScopeForm({ children }: { children?: React.ReactNode }) {
  */
 function useSectionMeta(part: EditingPart, scope: DataScope): (id: DataSectionId) => SectionMeta {
   const findings = useStore($gameDataFindings);
-  const model = buildDataNavigator(part, findings);
+  const catalog = useStore($catalogIndex);
+  const model = buildDataNavigator(part, findings, '', null, catalog);
   const rows =
     scope.kind === 'part'
       ? model.part.sections
@@ -118,7 +121,7 @@ function PartSections({ part }: { part: EditingPart }) {
   return (
     <>
       <IdentitySection part={part} meta={meta('identity')} />
-      <MassSection part={part} meta={meta('mass')} />
+      <MassSection part={part} owner={null} meta={meta('mass')} />
       <TanksSection owner={null} tanks={g.tanks} meta={meta('tanks')} />
       <PowerSection part={part} meta={meta('power')} />
       <CouplingSection part={part} meta={meta('coupling')} />
@@ -143,6 +146,7 @@ function TemplateSections({ part, templateId }: { part: EditingPart; templateId:
   const lightCount = part.lights.filter((l) => l.ownerTemplateId === templateId).length;
   const isEmpty =
     lightCount === 0 &&
+    meta('mass').count === 0 &&
     (!spd ||
       spd.tanks.length +
         spd.solarPanels.length +
@@ -159,6 +163,7 @@ function TemplateSections({ part, templateId }: { part: EditingPart; templateId:
   return (
     <>
       {isEmpty && <TemplateEmptyState templateId={templateId} />}
+      <MassSection part={part} owner={templateId} meta={meta('mass')} />
       <TanksSection owner={templateId} tanks={spd?.tanks ?? []} meta={meta('tanks')} />
       <LightsSection part={part} templateId={templateId} meta={meta('lights')} />
       <DataSection
@@ -202,6 +207,12 @@ function TemplateEmptyState({ templateId }: { templateId: string }) {
         No data on this SubPart yet. Give it something KSA can use:
       </p>
       <div className="flex flex-wrap gap-1">
+        <Button
+          size="sm"
+          onPress={() => runCommand('data.massAdd:SolidCuboidMass', { owner: templateId })}
+        >
+          Add mass
+        </Button>
         <Button size="sm" onPress={add(() => addTank(templateId), 'tanks')}>
           Add tank
         </Button>
@@ -351,8 +362,9 @@ function ScopeMenu({
 function SectionChipStrip({ scope }: { scope: DataScope }) {
   const findings = useStore($gameDataFindings);
   const part = useStore($part);
+  const catalog = useStore($catalogIndex);
   // The chips mirror the navigator's child rows exactly — one dataset, one set of counts.
-  const model = buildDataNavigator(part, findings);
+  const model = buildDataNavigator(part, findings, '', null, catalog);
   const sections =
     scope.kind === 'part'
       ? model.part.sections

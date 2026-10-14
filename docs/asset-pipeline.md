@@ -83,7 +83,9 @@ installed game. It does the selective pruning so the Vite plugin doesn't have to
 1. Scans `Content/Core/**/*.xml` and discovers `<Assets>` catalogs containing
    `<Part>`/`<SubPart>`, static objects, reactions, grain geometries, or solid
    propellants (no hard-coded part-catalog filename list).
-2. Copies each catalog XML plus its `*GameData.xml` sibling (when present).
+2. Copies each catalog XML plus its `*GameData.xml` sibling (when present). Explicit
+   `Materials.xml` and `Volatiles.xml` copies supply physical substance densities for
+   Data → Mass; `SolidPropellants.xml` supplies the solid propellant phases.
 3. Parses every catalog + GameData XML for `Path="..."` references to `.glb`, `.gltf`,
    `.ktx2`, and `.dds` files and copies each one, preserving its `Meshes/…` /
    `Textures/…` layout. Referenced files missing on disk are warned + skipped.

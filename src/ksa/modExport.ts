@@ -10,7 +10,8 @@ import type {
   TextureChannel,
 } from './types';
 import { isSubPartGameDataEmpty, meshKind } from './types';
-import type { PartCollider } from './types';
+import type { MassDefinition, PartCollider } from './types';
+import { MASS_SHAPES } from './massDefinitions';
 import { serializeGameDataXml, serializePartsXml } from './partXmlSerializer';
 import {
   serializeAssets,
@@ -252,6 +253,8 @@ export interface ExportVariant {
    * `<Box>`). Empty for a template that authors none.
    */
   colliders: PartCollider[];
+  /** Mass from the catalog, carried only when it is not explicitly overridden. */
+  massDefinitions: MassDefinition[];
   /**
    * The `<Internal>` (interior-only) value the variant declares — {@link resolveInternal}'s
    * result. `false` emits no element at all (KSA's default).
@@ -382,6 +385,16 @@ export function buildExportVariantMap(
       meshId: entry.meshNodeName,
       materialId: entry.materialId,
       colliders: entry.colliders ?? [],
+      massDefinitions: part.subPartGameData.some(
+        (data) =>
+          data.subPartTemplateId === templateId &&
+          (data.massDefinitionsOverride ||
+            data.unknownChildren.some((node) =>
+              (MASS_SHAPES as readonly string[]).includes(node.tag),
+            )),
+      )
+        ? []
+        : (entry.data?.gameData?.massDefinitions ?? []),
       internal: wantInternal,
       rayTracing: entry.rayTracing ?? null,
       shadowCaster: entry.shadowCaster ?? null,
@@ -919,6 +932,7 @@ async function buildPartBundlePlan(
     meshId: v.meshId,
     materialId: v.materialId,
     colliders: v.colliders,
+    massDefinitions: v.massDefinitions,
     internal: v.internal,
     rayTracing: v.rayTracing,
     shadowCaster: v.shadowCaster,

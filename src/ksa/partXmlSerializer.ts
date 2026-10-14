@@ -34,6 +34,7 @@ import { colliderDimensions } from './colliderSize';
 import { seatAxesFromRotation } from './ivaSeatAxes';
 import { formatG6 } from './formatG6';
 import { animGlbPath, animModuleId, isAnimationExportable } from './animationNaming';
+import { MASS_SHAPE_DEFS, type MassDefinition } from './massDefinitions';
 
 /**
  * Serializes an EditingPart to KSA "Assets" Part XML, mirroring the rules in
@@ -270,6 +271,7 @@ function appendPartGameData(
     for (const node of game.customMassExtras) custom.appendChild(buildRawNode(doc, node));
     gd.appendChild(custom);
   }
+  for (const mass of game.massDefinitions) gd.appendChild(buildMassDefinitionElement(doc, mass));
 
   // <Control/> — bare command-capability marker (ControlTemplate has no fields).
   if (game.controllable) gd.appendChild(doc.createElement('Control'));
@@ -415,6 +417,8 @@ function appendPartGameData(
     // fresh variant SubPart instead of REDEFINING the shared built-in (KSA merges by id).
     spdEl.setAttribute('Id', templateRemap.get(spd.subPartTemplateId) ?? spd.subPartTemplateId);
     applyUnknownAttrs(spdEl, spd.unknownAttrs);
+    for (const mass of spd.massDefinitions)
+      spdEl.appendChild(buildMassDefinitionElement(doc, mass));
     for (const tank of spd.tanks) spdEl.appendChild(buildTankWrapperElement(doc, tank));
     for (const sp of spd.solarPanels) spdEl.appendChild(buildSolarPanelElement(doc, sp));
     for (const light of ownedLights) spdEl.appendChild(buildLightElement(doc, light));
@@ -596,6 +600,38 @@ function elWithAttr(doc: XmlDocument, name: string, attr: string, value: string)
 }
 
 /** Rebuilds a captured {@link RawXmlNode} (unmodeled passthrough XML) into a real element. */
+export function buildMassDefinitionElement(doc: XmlDocument, mass: MassDefinition): XmlElement {
+  const el = doc.createElement(mass.shape);
+  applyUnknownAttrs(el, mass.unknownAttrs);
+  if (mass.massKg != null) el.appendChild(elWithAttr(doc, 'Mass', 'Kg', formatG6(mass.massKg)));
+  if (mass.densityKgM3 != null)
+    el.appendChild(elWithAttr(doc, 'Density', 'KgPerM3', formatG6(mass.densityKgM3)));
+  if (mass.materialId != null) el.appendChild(elWithAttr(doc, 'Material', 'Id', mass.materialId));
+  for (const field of MASS_SHAPE_DEFS[mass.shape].dimensions) {
+    const value = mass.dimensions[field.key];
+    if (value != null) el.appendChild(elWithAttr(doc, field.xmlTag, 'M', formatG6(value)));
+  }
+  if (MASS_SHAPE_DEFS[mass.shape].revolved && mass.sweepRad != null)
+    el.appendChild(elWithAttr(doc, 'Sweep', 'Radians', formatG6(mass.sweepRad)));
+  const zero = { x: 0, y: 0, z: 0 };
+  for (const [name, value] of [
+    ['LocationAsmb', mass.locationAsmb],
+    ['Paf2Asmb', mass.paf2Asmb],
+  ] as const) {
+    const transform = buildEngineVec3(doc, name, value, zero);
+    if (transform) el.appendChild(transform);
+  }
+  if (mass.shape === 'CustomMass' && mass.massSpecificInertia) {
+    const inertia = doc.createElement('MassSpecificInertia');
+    inertia.setAttribute('Ixx', formatG6(mass.massSpecificInertia.ixx));
+    inertia.setAttribute('Iyy', formatG6(mass.massSpecificInertia.iyy));
+    inertia.setAttribute('Izz', formatG6(mass.massSpecificInertia.izz));
+    el.appendChild(inertia);
+  }
+  for (const child of mass.unknownChildren) el.appendChild(buildRawNode(doc, child));
+  return el;
+}
+
 function buildRawNode(doc: XmlDocument, node: RawXmlNode): XmlElement {
   const el = doc.createElement(node.tag);
   for (const [name, value] of Object.entries(node.attrs ?? {})) el.setAttribute(name, value);

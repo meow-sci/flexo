@@ -10,6 +10,13 @@ import {
 } from './types';
 import { SEAT_LOCAL_FORWARD, SEAT_LOCAL_UP, seatRotationFromAxes } from './ivaSeatAxes';
 import {
+  createMassDefinition,
+  MASS_SHAPES,
+  MASS_SHAPE_DEFS,
+  type MassDefinition,
+  type MassShape,
+} from './massDefinitions';
+import {
   colliderDimensionNames,
   colliderSizeFromDimensions,
   DEFAULT_COLLIDER_SIZE_M,
@@ -655,20 +662,7 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
     if (v && !editorTags.includes(v)) editorTags.push(v);
   }
 
-  // <CustomMass> — KSA's CustomMassTemplate needs <Mass Kg> (> 0) and may also carry
-  // <MassSpecificInertia> + transform offsets. flexo edits the Kg scalar; everything
-  // else inside the modeled element is preserved verbatim (customMassExtras). A
-  // CustomMass flexo can't model (no valid Mass) and any repeats beyond the first are
-  // extra PartTemplate.InertMasses entries — kept whole via the unknown passthrough.
-  const customMassEls = directChildren(gd, 'CustomMass');
-  const mass = readNum(directChildren(customMassEls[0] ?? gd, 'Mass')[0], 'Kg');
-  game.customMass = mass != null && mass > 0 ? mass : null;
-  if (game.customMass != null && customMassEls[0]) {
-    game.customMassExtras = childElements(customMassEls[0])
-      .filter((el) => el.tagName !== 'Mass')
-      .map(elementToRawNode);
-  }
-  const passthroughCustomMassEls = game.customMass != null ? customMassEls.slice(1) : customMassEls;
+  game.massDefinitions = massDefinitionsFromElement(gd);
 
   // <Diameter M/> — a repeatable DistanceReference (KSA 2026.7). The first is the
   // editable size class; the rest (adapter prefabs list several) are preserved verbatim.
@@ -763,7 +757,6 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   game.unknownAttrs = captureUnknownAttrs(gd, KNOWN_PART_GAMEDATA_ATTRS);
   game.unknownChildren = captureUnknownChildren(gd, KNOWN_PART_GAMEDATA_CHILDREN);
   game.unknownChildren.push(...directChildren(gd, 'Decoupler').slice(1).map(elementToRawNode));
-  game.unknownChildren.push(...passthroughCustomMassEls.map(elementToRawNode));
 
   return {
     editorTags,
@@ -872,6 +865,8 @@ function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
     const subPartTemplateId = spEl.getAttribute('Id');
     if (!subPartTemplateId) continue;
     const spd = createSubPartGameData(subPartTemplateId);
+    spd.massDefinitions = massDefinitionsFromElement(spEl);
+    spd.massDefinitionsOverride = spd.massDefinitions.length > 0;
     spd.tanks = tanksFromElement(spEl);
     spd.solarPanels = directChildren(spEl, 'SolarPanel').map(parseSolarPanel);
     // <Light> is NOT read here — lights are first-class part entities gathered by
@@ -895,6 +890,11 @@ function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
  * `DisplayName` identifies the template).
  */
 export function mergeSubPartGameDataInto(base: SubPartGameData, add: SubPartGameData): void {
+  base.massDefinitions.push(...add.massDefinitions);
+  base.massDefinitions.forEach((mass, index) => {
+    mass.id = `_mass${index}`;
+  });
+  base.massDefinitionsOverride ||= add.massDefinitionsOverride;
   base.tanks.push(...add.tanks);
   base.solarPanels.push(...add.solarPanels);
   base.combustors.push(...add.combustors);
@@ -977,6 +977,7 @@ function childElements(parent: Element): Element[] {
 
 /** `<PartGameData>` child tags flexo models (read and/or emit). Everything else is passthrough. */
 const KNOWN_PART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
+  ...MASS_SHAPES,
   'EditorTag',
   'Diameter',
   'KeyframeAnimationModule',
@@ -1017,6 +1018,7 @@ const KNOWN_PART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
  * passthrough verbatim — round-tripped, just not editable. Do not "fix" this by adding it.
  */
 const KNOWN_SUBPART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
+  ...MASS_SHAPES,
   'Tank',
   'SolarPanel',
   'Light',
@@ -1057,6 +1059,103 @@ export function captureUnknownChildren(parent: Element, known: ReadonlySet<strin
   return childElements(parent)
     .filter((el) => !known.has(el.tagName))
     .map(elementToRawNode);
+}
+
+/** Stock inert-mass entries in document order, at any Part/SubPart authoring site. */
+export function massDefinitionsFromElement(parent: Element): MassDefinition[] {
+  return childElements(parent)
+    .filter((el) => (MASS_SHAPES as readonly string[]).includes(el.tagName))
+    .map((el, index) => {
+      const shape = el.tagName as MassShape;
+      const definition = createMassDefinition(shape, `_mass${index}`);
+      const child = (tag: string) => directChildren(el, tag)[0];
+      definition.massKg = readMassKg(child('Mass'));
+      definition.densityKgM3 = readDensityKgM3(child('Density'));
+      definition.materialId = child('Material')?.getAttribute('Id') ?? null;
+      definition.dimensions = {};
+      for (const field of MASS_SHAPE_DEFS[shape].dimensions) {
+        const value = readDistanceM(child(field.xmlTag));
+        if (value != null) definition.dimensions[field.key] = value;
+      }
+      const sweep = child('Sweep');
+      definition.sweepRad = sweep
+        ? (readNum(sweep, 'Radians') ?? ((readNum(sweep, 'Degrees') ?? 0) * Math.PI) / 180)
+        : null;
+      definition.locationAsmb = readVec3Attrs(child('LocationAsmb'), ZERO_VEC3);
+      definition.paf2Asmb = readVec3Attrs(child('Paf2Asmb'), ZERO_VEC3) as EulerXYZ;
+      const inertia = child('MassSpecificInertia');
+      definition.massSpecificInertia = inertia
+        ? {
+            ixx: readNum(inertia, 'Ixx') ?? 1,
+            iyy: readNum(inertia, 'Iyy') ?? 1,
+            izz: readNum(inertia, 'Izz') ?? 1,
+          }
+        : null;
+      definition.unknownAttrs = captureUnknownAttrs(el, new Set());
+      definition.unknownChildren = captureUnknownChildren(
+        el,
+        new Set([
+          'Mass',
+          'Density',
+          'Material',
+          'LocationAsmb',
+          'Paf2Asmb',
+          ...(MASS_SHAPE_DEFS[shape].revolved ? ['Sweep'] : []),
+          ...(shape === 'CustomMass' ? ['MassSpecificInertia'] : []),
+          ...MASS_SHAPE_DEFS[shape].dimensions.map((field) => field.xmlTag),
+        ]),
+      );
+      return definition;
+    });
+}
+
+function readUnitSum(
+  el: Element | null | undefined,
+  units: readonly (readonly [string, number])[],
+): number | null {
+  if (!el) return null;
+  let sum = 0;
+  let found = false;
+  for (const [unit, factor] of units) {
+    const value = readNum(el, unit);
+    if (value != null) {
+      sum += value * factor;
+      found = true;
+    }
+  }
+  return found ? sum : null;
+}
+
+/** MassReference adds every authored current unit, rather than choosing one. */
+export function readMassKg(el: Element | null | undefined): number | null {
+  return readUnitSum(el, [
+    ['Kg', 1],
+    ['G', 0.001],
+    ['Mg', 1e3],
+    ['Gg', 1e6],
+    ['Tg', 1e9],
+    ['Pg', 1e12],
+    ['Eg', 1e15],
+    ['Zg', 1e18],
+    ['Yg', 1e21],
+    ['Tonnes', 1e3],
+    ['Lunars', 7.349e22],
+    ['Earths', 5.97219e24],
+    ['Jupiters', 1.89819e27],
+    ['Suns', 1.98841e30],
+  ]);
+}
+
+/** DensityReference's current additive unit contract. */
+export function readDensityKgM3(el: Element | null | undefined): number | null {
+  return readUnitSum(el, [
+    ['TonnePerM3', 1e3],
+    ['KgPerM3', 1],
+    ['GPerM3', 1e-3],
+    ['MgPerM3', 1e-6],
+    ['UgPerM3', 1e-9],
+    ['GPerCm3', 1e3],
+  ]);
 }
 
 /**
@@ -1182,6 +1281,8 @@ export function readDistanceM(el: Element | null | undefined): number | null {
     ['Cm', 0.01],
     ['M', 1],
     ['Km', 1000],
+    ['Au', 149597870700],
+    ['Ly', 9461000000000000],
   ];
   let value: number | null = null;
   for (const [attr, scale] of parts) {
@@ -1603,6 +1704,7 @@ function parseEngineModules(
 /** Geometry Part/SubPart engine modules normalize to editable GameData on import. */
 export function engineModulesFromElement(el: Element): PartGameData {
   const data = createEmptyGameData();
+  data.massDefinitions = massDefinitionsFromElement(el);
   parseEngineModules(el, data);
   return data;
 }
@@ -1614,6 +1716,8 @@ export function subPartEngineModulesFromRoot(root: Element): SubPartGameData[] {
     const id = el.getAttribute('Id');
     if (!id) continue;
     const data = createSubPartGameData(id);
+    data.massDefinitions = massDefinitionsFromElement(el);
+    data.massDefinitionsOverride = data.massDefinitions.length > 0;
     parseEngineModules(el, data);
     if (!isSubPartGameDataEmpty(data)) modules.push(data);
   }

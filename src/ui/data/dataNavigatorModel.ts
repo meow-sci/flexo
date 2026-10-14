@@ -2,6 +2,7 @@ import { fuzzyAny } from '../fuzzyMatch';
 import { sectionsFor, type DataScope, type DataSectionId } from '../../state/dataModeStore';
 import type { GameDataFinding } from '../../state/gameDataFindings';
 import type { EditingPart, PartGameData, SubPartGameData } from '../../ksa/types';
+import type { CatalogSubPart } from '../../ksa/catalog';
 import type { EntityKind } from '../../state/editorStore';
 
 /**
@@ -184,6 +185,7 @@ export function buildDataNavigator(
   findings: readonly GameDataFinding[],
   query = '',
   partScopeName: string | null = null,
+  catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
 ): DataNavModel {
   const g = part.gameData;
   const partScope: DataScope = { kind: 'part' };
@@ -194,6 +196,7 @@ export function buildDataNavigator(
     sections: sectionRows(
       partScope,
       {
+        mass: g.massDefinitions.length + (g.customMass == null ? 0 : 1),
         tanks: g.tanks.length,
         power:
           g.batteries.length +
@@ -227,12 +230,16 @@ export function buildDataNavigator(
     const scope: DataScope = { kind: 'template', templateId };
     const spd = part.subPartGameData.find((s) => s.subPartTemplateId === templateId);
     const lights = part.lights.filter((l) => l.ownerTemplateId === templateId).length;
+    const mass = spd?.massDefinitionsOverride
+      ? spd.massDefinitions.length
+      : (catalog.get(templateId)?.data?.gameData?.massDefinitions.length ?? 0);
     const tanks = spd?.tanks.length ?? 0;
     const solar = spd?.solarPanels.length ?? 0;
     const engine = templateEngineCount(spd);
     const passthrough = spd ? passthroughCount(spd) : 0;
 
     const badges: DataNavBadge[] = [];
+    if (mass > 0) badges.push({ icon: '⚖', label: `${mass} mass definitions`, count: mass });
     if (tanks > 0) badges.push({ icon: '⛁', label: `${tanks} tanks`, count: tanks });
     if (lights > 0) badges.push({ icon: '💡', label: `${lights} lights`, count: lights });
     if (solar > 0) badges.push({ icon: '☀', label: `${solar} solar panels`, count: solar });
@@ -244,8 +251,8 @@ export function buildDataNavigator(
       placementCount: instancesOf.get(templateId)!.length,
       instanceIds: instancesOf.get(templateId)!,
       badges,
-      empty: tanks + lights + solar + engine + passthrough === 0,
-      sections: sectionRows(scope, { tanks, lights, solar, engine, passthrough }, findings),
+      empty: mass + tanks + lights + solar + engine + passthrough === 0,
+      sections: sectionRows(scope, { mass, tanks, lights, solar, engine, passthrough }, findings),
       issue: worst(findings, (f) => sameScope(f.target.scope, scope)),
     };
   });

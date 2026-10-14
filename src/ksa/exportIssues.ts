@@ -9,7 +9,7 @@
  * boxes. Styling and copy could — and did — drift apart. This module is the ONE model both
  * feed, so the dialog renders severities, not sources.
  *
- * **The four validators are untouched.** They are shared with the Data/Engine findings
+ * **The validators are shared** with the Data/Engine findings
  * surfaces (`gameDataFindings`, `EngineIssuesPanel`'s successor) and each one is a
  * game-contract statement about what KSA does at load; this module maps their output 1:1 —
  * same severity, same message, verbatim — and adds only the editor-side targeting a jump
@@ -24,11 +24,12 @@ import { validateColliders } from './colliderValidation';
 import { validateEngines } from './engineValidation';
 import { validateIvaSeats } from './ivaSeatValidation';
 import { validateLights } from './lightValidation';
+import { massDefinitionIssues } from './massDefinitions';
 import { customToReactionData, indexReactionCatalog } from './reactionCatalog';
 import type { EngineIssueSource } from './engineValidation';
 import type { CatalogSubPart } from './catalog';
 import type { ReactionData } from './reactionCatalog';
-import type { CustomReaction, EditingPart } from './types';
+import type { CustomReaction, EditingPart, MassDefinition } from './types';
 // TYPE-only (the layering law above): `modExport` pulls in three + stores, so this module
 // may never take a value from it. `NamedExportPart.ns` is all the preflight needs.
 import type { NamedExportPart } from './modExport';
@@ -42,7 +43,7 @@ import type { Mode } from '../state/modeStore';
 export type IssueSeverity = 'block' | 'warn' | 'info';
 
 /** Which authoring surface an issue came from — grouping/telemetry only, never gating. */
-export type IssueArea = 'part' | 'engine' | 'collider' | 'seat' | 'light' | 'asset';
+export type IssueArea = 'part' | 'mass' | 'engine' | 'collider' | 'seat' | 'light' | 'asset';
 
 /**
  * Where an issue's fix lives (foundation §2.5 "jump with context"): the dialog closes,
@@ -91,7 +92,7 @@ function engineJump(source: EngineIssueSource | undefined): ExportJumpTarget {
 }
 
 /**
- * Every pre-flight issue for `part`, in source order: the basic trio, then engines,
+ * Every pre-flight issue for `part`, in source order: the basic trio, mass definitions, engines,
  * colliders, IVA seats, lights, then the custom-asset notes. The UI groups by severity —
  * this list is deliberately NOT pre-sorted, so a group renders its issues in the order the
  * validators emit them (which is their own authored priority).
@@ -140,6 +141,34 @@ export function collectExportIssues(
       message: 'No SubParts placed.',
       jumpTarget: { mode: 'build' },
     });
+  }
+
+  // Material availability cannot be established from the mesh catalog: the mass helper's
+  // other checks are pure schema checks, while that warning belongs to the loaded Data
+  // surface's Substance density catalog. A legal retained raw mass remains passthrough.
+  const massScopes: {
+    scope: { kind: 'part' } | { kind: 'template'; templateId: string };
+    definitions: readonly MassDefinition[];
+  }[] = [
+    { scope: { kind: 'part' }, definitions: part.gameData.massDefinitions },
+    ...part.subPartGameData
+      .filter((data) => data.massDefinitionsOverride)
+      .map((data) => ({
+        scope: { kind: 'template' as const, templateId: data.subPartTemplateId },
+        definitions: data.massDefinitions,
+      })),
+  ];
+  for (const { scope, definitions } of massScopes) {
+    for (const definition of definitions) {
+      for (const issue of massDefinitionIssues(definition, new Map())) {
+        if (issue.code === 'mass-material-unresolved') continue;
+        issues.push({
+          ...issue,
+          area: 'mass',
+          jumpTarget: { mode: 'data', focus: { scope, sectionId: 'mass' } },
+        });
+      }
+    }
   }
 
   // ── the four shared validators, mapped 1:1 ─────────────────────────────────

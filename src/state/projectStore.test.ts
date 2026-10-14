@@ -97,6 +97,8 @@ import {
   createLayer,
   deleteLayer,
   newPart,
+  pushUndo,
+  redo,
   setPartId,
   undo,
 } from './editorStore';
@@ -143,6 +145,7 @@ import {
 import type { EditingPart } from '../ksa/types';
 import type { PersistedPartHistory, ProjectHistoryRecord, ProjectSnapshot } from './projectDb';
 import type { SavedPartEntry } from './projectDb';
+import { addMassDefinition, updateMassDefinition } from './massStore';
 
 function snapshotOf(id: string): ProjectSnapshot {
   return db.snapshots.get(id) as ProjectSnapshot;
@@ -178,6 +181,38 @@ beforeEach(() => {
 });
 
 describe('project persistence', () => {
+  it('preserves authored mass definitions at both scopes and their undo history', async () => {
+    const id = await createProject('Masses');
+    addSubPart('Core.Battery');
+    addMassDefinition(null, 'SolidCuboidMass');
+    addMassDefinition('Core.Battery', 'CustomMass');
+    pushUndo('edit mass');
+    updateMassDefinition(null, 0, {
+      massKg: 52,
+      dimensions: { lengthXM: 0.6721, lengthYM: 0.4828, lengthZM: 0.3549 },
+    });
+    updateMassDefinition('Core.Battery', 0, {
+      massKg: 10,
+      massSpecificInertia: { ixx: 0.325, iyy: 0.668, izz: 0.668 },
+      locationAsmb: { x: 0.1, y: 0.2, z: -0.3 },
+    });
+    const authored = structuredClone($part.get());
+    await flushAutosave();
+    await createProject('Scratch');
+    await openProject(id);
+    expect($part.get()).toEqual(authored);
+    undo();
+    expect($part.get().gameData.massDefinitions[0].massKg).not.toBe(52);
+    expect($part.get().subPartGameData[0].massDefinitions[0].massSpecificInertia).toEqual({
+      ixx: 1,
+      iyy: 1,
+      izz: 1,
+    });
+    redo();
+    expect($part.get()).toEqual(authored);
+    expect(PROJECT_SCHEMA_VERSION).toBe(4);
+  });
+
   it('round-trips the document, active layer, layer view, and history', async () => {
     const id = await createProject('Rocket');
     const engines = createLayer('Engines'); // active = Engines, undoable
@@ -825,10 +860,17 @@ describe('normalization (default-fill, never conversion)', () => {
     // One stripped field at each of the four levels the normalizer covers.
     delete stalePart.kittens; // EditingPart
     delete stalePart.gameData.ivaEnabled;
-    for (const key of ['thermalCores', 'antimatterRamCores', 'magneticNozzles', 'magneticScoops']) {
+    for (const key of [
+      'massDefinitions',
+      'thermalCores',
+      'antimatterRamCores',
+      'magneticNozzles',
+      'magneticScoops',
+    ]) {
       delete stalePart.gameData[key];
       delete stalePart.subPartGameData[0][key];
     }
+    delete stalePart.subPartGameData[0].massDefinitionsOverride;
     delete stalePart.gameData.rocketControllers; // PartGameData
     delete stalePart.subPartGameData[0].solidMotors; // SubPartGameData entry
     delete (stalePart.customMeshes[0].emissive as Record<string, unknown>).coverage;
@@ -844,6 +886,7 @@ describe('normalization (default-fill, never conversion)', () => {
     expect(part.kittens).toEqual([]);
     expect(part.gameData.ivaEnabled).toBe(true);
     for (const key of [
+      'massDefinitions',
       'thermalCores',
       'antimatterRamCores',
       'magneticNozzles',
@@ -853,6 +896,7 @@ describe('normalization (default-fill, never conversion)', () => {
       expect(part.subPartGameData[0][key]).toEqual([]);
     }
     expect(part.gameData.rocketControllers).toEqual([]);
+    expect(part.subPartGameData[0].massDefinitionsOverride).toBe(false);
     expect(part.subPartGameData[0].solidMotors).toEqual([]);
     expect(part.gameData.solidGrainSegments[0]).toMatchObject({
       outerRadiusM: 0.7,
@@ -888,6 +932,11 @@ describe('normalization (default-fill, never conversion)', () => {
     for (const entry of stacks.undo) {
       delete entry.part.kittens;
       delete (entry.part.gameData as Record<string, unknown>).ivaEnabled;
+      delete (entry.part.gameData as Record<string, unknown>).massDefinitions;
+      const template = createSubPartGameData('Core.A') as unknown as Record<string, unknown>;
+      delete template.massDefinitions;
+      delete template.massDefinitionsOverride;
+      entry.part.subPartGameData = [template];
     }
     db.history.set(id, stale);
 
@@ -895,6 +944,9 @@ describe('normalization (default-fill, never conversion)', () => {
     await openProject(id);
     undo();
     expect($part.get().gameData.ivaEnabled).toBe(true);
+    expect($part.get().gameData.massDefinitions).toEqual([]);
+    expect($part.get().subPartGameData[0].massDefinitions).toEqual([]);
+    expect($part.get().subPartGameData[0].massDefinitionsOverride).toBe(false);
     // Undo landed on a complete document, not the field-shy one that was stored.
     expect($part.get().placements.length).toBe(1);
     expect($part.get().kittens).toEqual([]);

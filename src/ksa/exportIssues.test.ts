@@ -12,6 +12,7 @@ import {
   createEmptyPart,
   createPartLight,
   createSolidMotor,
+  createSubPartGameData,
   identityTransform,
   type CustomMesh,
   type CustomReaction,
@@ -20,6 +21,7 @@ import {
 import { partExportNs, type NamedExportPart } from './modExport';
 import type { CatalogSubPart } from './catalog';
 import type { ReactionData } from './reactionCatalog';
+import { createMassDefinition, massDefinitionIssues } from './massDefinitions';
 
 /**
  * The unified pre-flight model (P10.01). The four validators have their own exhaustive
@@ -99,6 +101,66 @@ describe('collectExportIssues — the basic trio', () => {
 });
 
 describe('collectExportIssues — validator mapping', () => {
+  it('blocks a Part mass without its required source or dimensions and opens Data Mass', () => {
+    const part = cleanPart();
+    const definition = createMassDefinition('SolidCuboidMass', 'battery-mass');
+    definition.massKg = null;
+    delete definition.dimensions.lengthXM;
+    part.gameData.massDefinitions = [definition];
+    const expected = massDefinitionIssues(definition, new Map());
+    const found = issuesOf(part).filter((issue) => issue.area === 'mass');
+    expect(found).toEqual(
+      expected.map((issue) => ({
+        ...issue,
+        area: 'mass',
+        jumpTarget: { mode: 'data', focus: { scope: { kind: 'part' }, sectionId: 'mass' } },
+      })),
+    );
+    expect(found.map((issue) => issue.code)).toEqual([
+      'mass-source-missing',
+      'mass-dimension-invalid',
+    ]);
+    expect(found.every((issue) => issue.severity === 'block')).toBe(true);
+  });
+
+  it('targets an explicitly authored template mass at that template’s Data Mass section', () => {
+    const part = cleanPart();
+    const templateId = part.placements[0].subPartTemplateId;
+    const data = createSubPartGameData(templateId);
+    data.massDefinitionsOverride = true;
+    const definition = createMassDefinition('CustomMass', 'custom');
+    definition.massKg = 0;
+    data.massDefinitions = [definition];
+    part.subPartGameData = [data];
+    const found = find(part, 'mass-source-missing')!;
+    expect(found.severity).toBe('block');
+    expect(found.jumpTarget).toEqual({
+      mode: 'data',
+      focus: { scope: { kind: 'template', templateId }, sectionId: 'mass' },
+    });
+  });
+
+  it('does not warn about unresolved stock material density or legal preserved mass XML', () => {
+    const part = cleanPart();
+    const definition = createMassDefinition('HollowOpenCylinderMass', 'shell');
+    definition.massKg = null;
+    definition.materialId = 'Aluminum.2014(s)';
+    part.gameData.massDefinitions = [definition];
+    part.gameData.unknownChildren = [
+      {
+        tag: 'SolidCuboidMass',
+        attrs: {},
+        children: [
+          { tag: 'Mass', attrs: { Kg: '52' }, children: [] },
+          { tag: 'LengthX', attrs: { M: '0.6721' }, children: [] },
+          { tag: 'LengthY', attrs: { M: '0.4828' }, children: [] },
+          { tag: 'LengthZ', attrs: { M: '0.3549' }, children: [] },
+        ],
+      },
+    ];
+    expect(issuesOf(part).filter((issue) => issue.area === 'mass')).toEqual([]);
+  });
+
   it('carries a collider block through with its message and area', () => {
     const part = cleanPart();
     part.colliders.push({

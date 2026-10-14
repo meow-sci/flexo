@@ -1,0 +1,698 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Assets>
+    <Substance Id="Aluminum.2014">
+        <Name Value="Aluminum Alloy 2014" />
+        <Solid>
+            <StorageTemperature K="283.15" />
+            <MeltingTemperature K="780" />
+            <EnthalpyOfFusionPerKg J="390000" />
+            <StorageDensity KgPerM3="2800" />
+            <MechanicalCondition>
+                <Temperature K="20" />
+                <YieldStrength MPa="520" />
+                <YoungsModulus GPa="80" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="293" />
+                <YieldStrength MPa="415" />
+                <YoungsModulus GPa="72" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="423" />
+                <YieldStrength MPa="330" />
+                <YoungsModulus GPa="68" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="473" />
+                <YieldStrength MPa="180" />
+                <YoungsModulus GPa="63" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="523" />
+                <YieldStrength MPa="45" />
+                <YoungsModulus GPa="52" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="573" />
+                <YieldStrength MPa="15" />
+                <YoungsModulus GPa="40" />
+            </MechanicalCondition>
+            <ThermalCondition>
+                <Temperature K="3" />
+                <HeatCapacityPerKgK J="0.02" />
+                <ThermalConductivityPerMK W="5" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="20" />
+                <HeatCapacityPerKgK J="9" />
+                <ThermalConductivityPerMK W="30" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="50" />
+                <HeatCapacityPerKgK J="140" />
+                <ThermalConductivityPerMK W="60" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="100" />
+                <HeatCapacityPerKgK J="480" />
+                <ThermalConductivityPerMK W="100" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="200" />
+                <HeatCapacityPerKgK J="800" />
+                <ThermalConductivityPerMK W="140" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="293" />
+                <HeatCapacityPerKgK J="875" />
+                <ThermalConductivityPerMK W="160" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="500" />
+                <HeatCapacityPerKgK J="985" />
+                <ThermalConductivityPerMK W="185" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="780" />
+                <HeatCapacityPerKgK J="1090" />
+                <ThermalConductivityPerMK W="210" />
+            </ThermalCondition>
+        </Solid>
+    </Substance>
+
+    <Substance Id="Aluminum.8090">
+        <Name Value="Aluminum Alloy 8090" />
+        <Solid>
+            <StorageTemperature K="283.15" />
+            <MeltingTemperature K="875" />
+            <EnthalpyOfFusionPerKg J="400000" />
+            <StorageDensity KgPerM3="2540" />
+            <MechanicalCondition>
+                <Temperature K="20" />
+                <YieldStrength MPa="500" />
+                <YoungsModulus GPa="87" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="293" />
+                <YieldStrength MPa="400" />
+                <YoungsModulus GPa="80" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="423" />
+                <YieldStrength MPa="320" />
+                <YoungsModulus GPa="76" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="473" />
+                <YieldStrength MPa="180" />
+                <YoungsModulus GPa="70" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="523" />
+                <YieldStrength MPa="45" />
+                <YoungsModulus GPa="55" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="573" />
+                <YieldStrength MPa="15" />
+                <YoungsModulus GPa="42" />
+            </MechanicalCondition>
+            <ThermalCondition>
+                <Temperature K="3" />
+                <HeatCapacityPerKgK J="0.02" />
+                <ThermalConductivityPerMK W="5" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="20" />
+                <HeatCapacityPerKgK J="9" />
+                <ThermalConductivityPerMK W="28" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="50" />
+                <HeatCapacityPerKgK J="145" />
+                <ThermalConductivityPerMK W="58" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="100" />
+                <HeatCapacityPerKgK J="495" />
+                <ThermalConductivityPerMK W="95" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="200" />
+                <HeatCapacityPerKgK J="825" />
+                <ThermalConductivityPerMK W="135" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="293" />
+                <HeatCapacityPerKgK J="900" />
+                <ThermalConductivityPerMK W="150" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="500" />
+                <HeatCapacityPerKgK J="1010" />
+                <ThermalConductivityPerMK W="175" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="850" />
+                <HeatCapacityPerKgK J="1130" />
+                <ThermalConductivityPerMK W="205" />
+            </ThermalCondition>
+        </Solid>
+    </Substance>
+
+    <Substance Id="Aluminum.7075">
+        <Name Value="Aluminum Alloy 7075" />
+        <Solid>
+            <StorageTemperature K="283.15" />
+            <MeltingTemperature K="750" />
+            <EnthalpyOfFusionPerKg J="385000" />
+            <StorageDensity KgPerM3="2810" />
+            <MechanicalCondition>
+                <Temperature K="20" />
+                <YieldStrength MPa="620" />
+                <YoungsModulus GPa="80" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="293" />
+                <YieldStrength MPa="505" />
+                <YoungsModulus GPa="72" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="373" />
+                <YieldStrength MPa="450" />
+                <YoungsModulus GPa="69" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="423" />
+                <YieldStrength MPa="310" />
+                <YoungsModulus GPa="67" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="473" />
+                <YieldStrength MPa="90" />
+                <YoungsModulus GPa="58" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="523" />
+                <YieldStrength MPa="15" />
+                <YoungsModulus GPa="45" />
+            </MechanicalCondition>
+            <ThermalCondition>
+                <Temperature K="3" />
+                <HeatCapacityPerKgK J="0.02" />
+                <ThermalConductivityPerMK W="4" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="20" />
+                <HeatCapacityPerKgK J="9" />
+                <ThermalConductivityPerMK W="25" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="50" />
+                <HeatCapacityPerKgK J="140" />
+                <ThermalConductivityPerMK W="50" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="100" />
+                <HeatCapacityPerKgK J="480" />
+                <ThermalConductivityPerMK W="80" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="200" />
+                <HeatCapacityPerKgK J="800" />
+                <ThermalConductivityPerMK W="115" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="293" />
+                <HeatCapacityPerKgK J="875" />
+                <ThermalConductivityPerMK W="130" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="500" />
+                <HeatCapacityPerKgK J="985" />
+                <ThermalConductivityPerMK W="160" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="750" />
+                <HeatCapacityPerKgK J="1080" />
+                <ThermalConductivityPerMK W="180" />
+            </ThermalCondition>
+        </Solid>
+    </Substance>
+
+    <Substance Id="Titanium.64">
+        <Name Value="Titanium Alloy 6-4" />
+        <Solid>
+            <StorageTemperature K="283.15" />
+            <MeltingTemperature K="1877" />
+            <EnthalpyOfFusionPerKg J="290000" />
+            <StorageDensity KgPerM3="4430" />
+            <MechanicalCondition>
+                <Temperature K="20" />
+                <YieldStrength MPa="520" />
+                <YoungsModulus GPa="80" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="293" />
+                <YieldStrength MPa="415" />
+                <YoungsModulus GPa="72" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="423" />
+                <YieldStrength MPa="330" />
+                <YoungsModulus GPa="68" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="473" />
+                <YieldStrength MPa="180" />
+                <YoungsModulus GPa="63" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="523" />
+                <YieldStrength MPa="45" />
+                <YoungsModulus GPa="52" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="573" />
+                <YieldStrength MPa="15" />
+                <YoungsModulus GPa="40" />
+            </MechanicalCondition>
+            <ThermalCondition>
+                <Temperature K="3" />
+                <HeatCapacityPerKgK J="0.02" />
+                <ThermalConductivityPerMK W="0.3" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="20" />
+                <HeatCapacityPerKgK J="4" />
+                <ThermalConductivityPerMK W="1.5" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="50" />
+                <HeatCapacityPerKgK J="50" />
+                <ThermalConductivityPerMK W="3.0" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="100" />
+                <HeatCapacityPerKgK J="195" />
+                <ThermalConductivityPerMK W="4.2" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="293" />
+                <HeatCapacityPerKgK J="530" />
+                <ThermalConductivityPerMK W="6.7" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="700" />
+                <HeatCapacityPerKgK J="610" />
+                <ThermalConductivityPerMK W="11" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="1300" />
+                <HeatCapacityPerKgK J="700" />
+                <ThermalConductivityPerMK W="17" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="1877" />
+                <HeatCapacityPerKgK J="750" />
+                <ThermalConductivityPerMK W="22" />
+            </ThermalCondition>
+        </Solid>
+    </Substance>
+
+    <Substance Id="Steel.304L">
+        <Name Value="Stainless Steel 304L" />
+        <Solid>
+            <StorageTemperature K="283.15" />
+            <MeltingTemperature K="1673" />
+            <EnthalpyOfFusionPerKg J="290000" />
+            <StorageDensity KgPerM3="8000" />
+            <MechanicalCondition>
+                <Temperature K="20" />
+                <YieldStrength MPa="450" />
+                <YoungsModulus GPa="210" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="90" />
+                <YieldStrength MPa="350" />
+                <YoungsModulus GPa="205" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="293" />
+                <YieldStrength MPa="210" />
+                <YoungsModulus GPa="200" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="1100" />
+                <YieldStrength MPa="90" />
+                <YoungsModulus GPa="145" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="1200" />
+                <YieldStrength MPa="55" />
+                <YoungsModulus GPa="128" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="1373" />
+                <YieldStrength MPa="25" />
+                <YoungsModulus GPa="110" />
+            </MechanicalCondition>
+            <ThermalCondition>
+                <Temperature K="3" />
+                <HeatCapacityPerKgK J="0.05" />
+                <ThermalConductivityPerMK W="0.5" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="20" />
+                <HeatCapacityPerKgK J="8" />
+                <ThermalConductivityPerMK W="2.2" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="50" />
+                <HeatCapacityPerKgK J="90" />
+                <ThermalConductivityPerMK W="5" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="100" />
+                <HeatCapacityPerKgK J="250" />
+                <ThermalConductivityPerMK W="9" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="200" />
+                <HeatCapacityPerKgK J="430" />
+                <ThermalConductivityPerMK W="13" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="293" />
+                <HeatCapacityPerKgK J="500" />
+                <ThermalConductivityPerMK W="15" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="800" />
+                <HeatCapacityPerKgK J="560" />
+                <ThermalConductivityPerMK W="22" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="1673" />
+                <HeatCapacityPerKgK J="700" />
+                <ThermalConductivityPerMK W="32" />
+            </ThermalCondition>
+        </Solid>
+    </Substance>
+
+    <Substance Id="Steel.300">
+        <Name Value="Maraging Steel 300" />
+        <Solid>
+            <StorageTemperature K="283.15" />
+            <MeltingTemperature K="1685" />
+            <EnthalpyOfFusionPerKg J="270000" />
+            <StorageDensity KgPerM3="8100" />
+            <MechanicalCondition>
+                <Temperature K="20" />
+                <YieldStrength MPa="2050" />
+                <YoungsModulus GPa="200" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="293" />
+                <YieldStrength MPa="1900" />
+                <YoungsModulus GPa="190" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="673" />
+                <YieldStrength MPa="1700" />
+                <YoungsModulus GPa="175" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="773" />
+                <YieldStrength MPa="1400" />
+                <YoungsModulus GPa="170" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="823" />
+                <YieldStrength MPa="650" />
+                <YoungsModulus GPa="162" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="873" />
+                <YieldStrength MPa="250" />
+                <YoungsModulus GPa="150" />
+            </MechanicalCondition>
+            <ThermalCondition>
+                <Temperature K="3" />
+                <HeatCapacityPerKgK J="0.04" />
+                <ThermalConductivityPerMK W="1" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="20" />
+                <HeatCapacityPerKgK J="6" />
+                <ThermalConductivityPerMK W="4" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="50" />
+                <HeatCapacityPerKgK J="80" />
+                <ThermalConductivityPerMK W="8" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="100" />
+                <HeatCapacityPerKgK J="220" />
+                <ThermalConductivityPerMK W="13" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="200" />
+                <HeatCapacityPerKgK J="400" />
+                <ThermalConductivityPerMK W="18" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="293" />
+                <HeatCapacityPerKgK J="452" />
+                <ThermalConductivityPerMK W="20" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="773" />
+                <HeatCapacityPerKgK J="560" />
+                <ThermalConductivityPerMK W="27" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="1685" />
+                <HeatCapacityPerKgK J="700" />
+                <ThermalConductivityPerMK W="35" />
+            </ThermalCondition>
+        </Solid>
+    </Substance>
+
+    <Substance Id="Inconel.718">
+        <Name Value="Inconel 718" />
+        <Solid>
+            <StorageTemperature K="283.15" />
+            <MeltingTemperature K="1533" />
+            <EnthalpyOfFusionPerKg J="210000" />
+            <StorageDensity KgPerM3="8190" />
+            <MechanicalCondition>
+                <Temperature K="20" />
+                <YieldStrength MPa="1300" />
+                <YoungsModulus GPa="215" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="293" />
+                <YieldStrength MPa="1100" />
+                <YoungsModulus GPa="200" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="923" />
+                <YieldStrength MPa="1000" />
+                <YoungsModulus GPa="165" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="1100" />
+                <YieldStrength MPa="780" />
+                <YoungsModulus GPa="150" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="1200" />
+                <YieldStrength MPa="380" />
+                <YoungsModulus GPa="132" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="1300" />
+                <YieldStrength MPa="150" />
+                <YoungsModulus GPa="115" />
+            </MechanicalCondition>
+            <ThermalCondition>
+                <Temperature K="3" />
+                <HeatCapacityPerKgK J="0.05" />
+                <ThermalConductivityPerMK W="0.6" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="20" />
+                <HeatCapacityPerKgK J="6" />
+                <ThermalConductivityPerMK W="2.5" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="50" />
+                <HeatCapacityPerKgK J="70" />
+                <ThermalConductivityPerMK W="4.5" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="100" />
+                <HeatCapacityPerKgK J="190" />
+                <ThermalConductivityPerMK W="7" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="200" />
+                <HeatCapacityPerKgK J="380" />
+                <ThermalConductivityPerMK W="9.5" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="293" />
+                <HeatCapacityPerKgK J="435" />
+                <ThermalConductivityPerMK W="11.4" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="800" />
+                <HeatCapacityPerKgK J="560" />
+                <ThermalConductivityPerMK W="19" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="1533" />
+                <HeatCapacityPerKgK J="720" />
+                <ThermalConductivityPerMK W="30" />
+            </ThermalCondition>
+        </Solid>
+    </Substance>
+
+    <Substance Id="CarbonFiber">
+        <Name Value="Carbon Fiber" />
+        <Solid>
+            <StorageTemperature K="283.15" />
+            <!-- Using the heat of decomposition of the resin with a 35% resin mass fraction -->
+            <MeltingTemperature K="575" />
+            <MeltBehavior>Pyrolysis</MeltBehavior>
+            <EnthalpyOfFusionPerKg J="240000" />
+            <StorageDensity KgPerM3="1600" />
+            <MechanicalCondition>
+                <Temperature K="20" />
+                <YieldStrength MPa="650" />
+                <YoungsModulus GPa="72" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="293" />
+                <YieldStrength MPa="600" />
+                <YoungsModulus GPa="70" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="415" />
+                <YieldStrength MPa="545" />
+                <YoungsModulus GPa="66" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="425" />
+                <YieldStrength MPa="150" />
+                <YoungsModulus GPa="18" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="575" />
+                <YieldStrength MPa="20" />
+                <YoungsModulus GPa="3" />
+            </MechanicalCondition>
+            <!-- Thermal conductivities in the thickness (weakest) direction only -->
+            <ThermalCondition>
+                <Temperature K="3" />
+                <HeatCapacityPerKgK J="0.5" />
+                <ThermalConductivityPerMK W="0.02" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="20" />
+                <HeatCapacityPerKgK J="15" />
+                <ThermalConductivityPerMK W="0.1" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="100" />
+                <HeatCapacityPerKgK J="200" />
+                <ThermalConductivityPerMK W="0.35" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="293" />
+                <HeatCapacityPerKgK J="850" />
+                <ThermalConductivityPerMK W="0.7" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="400" />
+                <HeatCapacityPerKgK J="1050" />
+                <ThermalConductivityPerMK W="0.8" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="550" />
+                <HeatCapacityPerKgK J="1250" />
+                <ThermalConductivityPerMK W="0.9" />
+            </ThermalCondition>
+        </Solid>
+    </Substance>
+
+    <Substance Id="Fiberglass">
+        <Name Value="Fiberglass" />
+        <Solid>
+            <StorageTemperature K="283.15" />
+            <!-- Using the heat of decomposition of the resin with a 35% resin mass fraction -->
+            <MeltingTemperature K="575" />
+            <MeltBehavior>Pyrolysis</MeltBehavior>
+            <EnthalpyOfFusionPerKg J="240000" />
+            <StorageDensity KgPerM3="1950" />
+            <MechanicalCondition>
+                <Temperature K="20" />
+                <YieldStrength MPa="480" />
+                <YoungsModulus GPa="40" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="293" />
+                <YieldStrength MPa="450" />
+                <YoungsModulus GPa="38" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="415" />
+                <YieldStrength MPa="405" />
+                <YoungsModulus GPa="35" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="425" />
+                <YieldStrength MPa="120" />
+                <YoungsModulus GPa="10" />
+            </MechanicalCondition>
+            <MechanicalCondition>
+                <Temperature K="575" />
+                <YieldStrength MPa="15" />
+                <YoungsModulus GPa="2" />
+            </MechanicalCondition>
+            <!-- Thermal conductivities in the thickness (weakest) direction only -->
+            <ThermalCondition>
+                <Temperature K="3" />
+                <HeatCapacityPerKgK J="0.6" />
+                <ThermalConductivityPerMK W="0.02" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="20" />
+                <HeatCapacityPerKgK J="18" />
+                <ThermalConductivityPerMK W="0.08" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="100" />
+                <HeatCapacityPerKgK J="230" />
+                <ThermalConductivityPerMK W="0.2" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="293" />
+                <HeatCapacityPerKgK J="950" />
+                <ThermalConductivityPerMK W="0.35" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="400" />
+                <HeatCapacityPerKgK J="1150" />
+                <ThermalConductivityPerMK W="0.4" />
+            </ThermalCondition>
+            <ThermalCondition>
+                <Temperature K="550" />
+                <HeatCapacityPerKgK J="1350" />
+                <ThermalConductivityPerMK W="0.45" />
+            </ThermalCondition>
+        </Solid>
+    </Substance>
+</Assets>

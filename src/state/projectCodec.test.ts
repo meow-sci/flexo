@@ -23,6 +23,7 @@ import {
   type PartAnimation,
 } from '../ksa/types';
 import { uniformSegmentEasing } from '../ksa/easing';
+import { createMassDefinition, MASS_SHAPES } from '../ksa/massDefinitions';
 import {
   buildProjectExport,
   parseProjectObject,
@@ -74,6 +75,62 @@ function xf(p: [number, number, number], r: [number, number, number], s: [number
     scale: { x: s[0], y: s[1], z: s[2] },
   };
 }
+
+describe('mass definition codec', () => {
+  it('preserves each editable stock shape and CustomMass at both GameData scopes', () => {
+    const part = createEmptyPart();
+    part.gameData.massDefinitions = MASS_SHAPES.map((shape, index) => {
+      const definition = createMassDefinition(shape, `mass_${index}`);
+      definition.massKg = index % 2 === 0 ? 52 : null;
+      definition.densityKgM3 = index % 2 === 0 ? null : 2700;
+      definition.materialId = index === 1 ? 'Aluminum.2014(s)' : null;
+      definition.locationAsmb = { x: 0.1, y: 0.2, z: -0.3 };
+      definition.paf2Asmb = { x: 0.4, y: 0, z: 0.5 };
+      definition.unknownAttrs = { EditorNote: 'retained' };
+      definition.unknownChildren = [{ tag: 'AuthorData', attrs: { Value: 'ok' }, children: [] }];
+      return definition;
+    });
+    const custom = createMassDefinition('CustomMass', 'custom');
+    custom.massKg = 7.5;
+    custom.massSpecificInertia = { ixx: 0.1, iyy: 0.2, izz: 0.3 };
+    const template = createSubPartGameData('Core.Battery');
+    template.massDefinitions = [custom];
+    template.massDefinitionsOverride = true;
+    part.subPartGameData = [template];
+
+    const decoded = roundTripOne(part);
+    expect(decoded.gameData.massDefinitions).toEqual(part.gameData.massDefinitions);
+    expect(decoded.subPartGameData[0].massDefinitions).toEqual([custom]);
+    expect(decoded.subPartGameData[0].massDefinitionsOverride).toBe(true);
+    expect(encodeOne(part).g?.md).toHaveLength(MASS_SHAPES.length);
+  });
+
+  it('default-fills missing definition lists without converting preserved XML', () => {
+    const part = createEmptyPart();
+    const raw = { tag: 'SolidCuboidMass', attrs: {}, children: [] };
+    part.gameData.unknownChildren = [raw];
+    part.subPartGameData = [createSubPartGameData('Core.Battery')];
+    const decoded = roundTripOne(part);
+    expect(encodeOne(part).g?.md).toBeUndefined();
+    expect(decoded.gameData.massDefinitions).toEqual([]);
+    expect(decoded.subPartGameData[0].massDefinitions).toEqual([]);
+    expect(decoded.subPartGameData[0].massDefinitionsOverride).toBe(false);
+    expect(decoded.gameData.unknownChildren).toEqual([raw]);
+    expect(PROJECT_EXPORT_VERSION).toBe(11);
+  });
+
+  it('preserves an intentionally empty template mass override', () => {
+    const part = createEmptyPart();
+    const template = createSubPartGameData('Core.Battery');
+    template.massDefinitionsOverride = true;
+    part.subPartGameData = [template];
+    expect(encodeOne(part).sg?.[0].md).toBeUndefined();
+    expect(roundTripOne(part).subPartGameData[0]).toMatchObject({
+      massDefinitions: [],
+      massDefinitionsOverride: true,
+    });
+  });
+});
 
 /**
  * A maximally-populated project that exercises every codec branch: identity vs.

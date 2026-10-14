@@ -859,6 +859,10 @@ export function mergeProjectImport(
   for (const sg of data.subPartGameData) {
     if (droppedTemplateIds.has(sg.subPartTemplateId)) continue;
     const templateId = mapTemplateId(sg.subPartTemplateId);
+    const massDefinitions = (sg.massDefinitions ?? []).map((definition) => ({
+      ...structuredClone(definition),
+      id: `mass_${randomId()}`,
+    }));
     const tanks = (sg.tanks ?? []).map((t) => ({ ...t }));
     const solarPanels = (sg.solarPanels ?? []).map((sp) => structuredClone(sp));
     // A consumer's feed points name connectors/placements in the SOURCE id space.
@@ -891,6 +895,12 @@ export function mergeProjectImport(
     );
     const existing = part.subPartGameData.find((x) => x.subPartTemplateId === templateId);
     if (existing) {
+      // Template mass is instantiated at EVERY placement, so a repeated paste must not
+      // append the same template's definitions a second time.
+      if (!existing.massDefinitionsOverride) {
+        existing.massDefinitions = massDefinitions;
+        existing.massDefinitionsOverride = sg.massDefinitionsOverride;
+      }
       existing.tanks.push(...tanks);
       existing.solarPanels.push(...solarPanels);
       existing.combustors.push(...combustors);
@@ -909,6 +919,8 @@ export function mergeProjectImport(
       existing.solidGrainSegments.push(...solidGrainSegments);
     } else {
       const entry = createSubPartGameData(templateId);
+      entry.massDefinitions = massDefinitions;
+      entry.massDefinitionsOverride = sg.massDefinitionsOverride;
       entry.tanks = tanks;
       entry.solarPanels = solarPanels;
       entry.combustors = combustors;
@@ -1011,6 +1023,12 @@ function mergeGameData(
     target.customMass = src.customMass;
     target.customMassExtras = structuredClone(src.customMassExtras ?? []);
   }
+  target.massDefinitions.push(
+    ...(src.massDefinitions ?? []).map((definition) => ({
+      ...structuredClone(definition),
+      id: `mass_${randomId()}`,
+    })),
+  );
   if (target.diameterM == null && src.diameterM != null) target.diameterM = src.diameterM;
   if (target.crashTolerancePa == null && src.crashTolerancePa != null)
     target.crashTolerancePa = src.crashTolerancePa;

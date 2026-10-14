@@ -2,7 +2,12 @@ import { computed } from 'nanostores';
 import { validateEngines, type EngineIssue } from '../ksa/engineValidation';
 import type { EditingPart } from '../ksa/types';
 import type { ReactionData } from '../ksa/reactionCatalog';
+import type { CatalogSubPart } from '../ksa/catalog';
+import { massDefinitionIssues } from '../ksa/massDefinitions';
 import { $part } from './editorStore';
+import { $catalogIndex } from './catalogStore';
+import { $massMaterialDensities } from './materialDensityStore';
+import { massDefinitionsFor } from './massStore';
 import { $allReactionIndex } from './reactionStore';
 import type { DataScope, DataSectionId } from './dataModeStore';
 
@@ -92,6 +97,8 @@ function duplicateFeedIds(tanks: readonly { id: string }[]): { index: number; id
 export function computeGameDataFindings(
   part: EditingPart,
   reactions: ReadonlyMap<string, ReactionData>,
+  materialDensities: ReadonlyMap<string, number> = new Map(),
+  catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
 ): GameDataFinding[] {
   const findings: GameDataFinding[] = [];
 
@@ -111,6 +118,24 @@ export function computeGameDataFindings(
       message: issue.message,
       target: targetOf(issue),
     });
+  }
+
+  const massScopes: DataScope[] = [
+    { kind: 'part' },
+    ...[...new Set(part.placements.map((placement) => placement.subPartTemplateId))].map(
+      (templateId): DataScope => ({ kind: 'template', templateId }),
+    ),
+  ];
+  for (const scope of massScopes) {
+    const owner = scope.kind === 'part' ? null : scope.templateId;
+    for (const definition of massDefinitionsFor(part, owner, catalog)) {
+      for (const issue of massDefinitionIssues(definition, materialDensities)) {
+        findings.push({
+          ...issue,
+          target: { scope, sectionId: 'mass', cardKey: definition.id },
+        });
+      }
+    }
   }
 
   for (const dup of duplicateFeedIds(part.gameData.tanks)) {
@@ -147,4 +172,7 @@ export function computeGameDataFindings(
 }
 
 /** Live findings for the current document (design §A7 store row). */
-export const $gameDataFindings = computed([$part, $allReactionIndex], computeGameDataFindings);
+export const $gameDataFindings = computed(
+  [$part, $allReactionIndex, $massMaterialDensities, $catalogIndex],
+  computeGameDataFindings,
+);

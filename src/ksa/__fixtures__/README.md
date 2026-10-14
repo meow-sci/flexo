@@ -9,6 +9,9 @@ Current copies are verified against KSA **2026.10.10.5554**.
 
 ## Files
 
+`Materials.xml` also supplies the stock physical substance densities used by
+the mass editor and its material-based combined-mass tests.
+
 | File                                                        | Why it's vendored                                                                                                                    |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `CorePropulsionAAssets.xml` / `CorePropulsionAGameData.xml` | Liquid engines, gas generators, verniers, gimbal pivots, SRBs, launch escape systems, and 5554's magnetic nozzle/antimatter reactor. |

@@ -2,6 +2,7 @@ import { atom, computed } from 'nanostores';
 import { $part, $selection } from './editorStore';
 import { $mode, registerModeHooks } from './modeStore';
 import { ensureReactionsLoaded } from './reactionStore';
+import { ensureMassMaterialDensitiesLoaded } from './materialDensityStore';
 import type { GameDataFinding as GameDataFindingType } from './gameDataFindings';
 
 /**
@@ -24,7 +25,7 @@ import type { GameDataFinding as GameDataFindingType } from './gameDataFindings'
 export type DataScope = { kind: 'part' } | { kind: 'template'; templateId: string };
 
 /**
- * Every section a scope form can host. `tanks` and `passthrough` render at BOTH scopes; the
+ * Every section a scope form can host. `mass`, `tanks` and `passthrough` render at BOTH scopes; the
  * rest are scope-specific (design §A4.1 / §A4.2).
  */
 export type DataSectionId =
@@ -37,7 +38,7 @@ export type DataSectionId =
   | 'wiring'
   | 'advanced'
   | 'passthrough'
-  // Template-scope extras (template order: tanks · lights · solar · engine · passthrough).
+  // Template-scope extras (template order: mass · tanks · lights · solar · engine · passthrough).
   | 'lights'
   | 'solar'
   | 'engine';
@@ -81,6 +82,7 @@ const PART_SECTION_ORDER: readonly DataSectionId[] = [
 ];
 
 const TEMPLATE_SECTION_ORDER: readonly DataSectionId[] = [
+  'mass',
   'tanks',
   'lights',
   'solar',
@@ -287,6 +289,7 @@ export function initDataMode(): void {
         setDataScope(templateId ? { kind: 'template', templateId } : { kind: 'part' });
       }
       void ensureReactionsLoaded();
+      void ensureMassMaterialDensitiesLoaded();
     },
   });
 }

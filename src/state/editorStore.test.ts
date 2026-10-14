@@ -225,6 +225,15 @@ import {
   setMeshTransparent,
 } from './customAssetStore';
 import { seatAxesFromRotation } from '../ksa/ivaSeatAxes';
+import { $catalog } from './catalogStore';
+import { createMassDefinition } from '../ksa/massDefinitions';
+import {
+  addMassDefinition,
+  massDefinitionsFor,
+  removeMassDefinition,
+  setMassDefinitionShape,
+  updateMassDefinition,
+} from './massStore';
 // The world-pose-stability tests compose the SAME conversion the inspector's owner
 // select performs (the frame math deliberately lives outside the store — see
 // setLightOwner's JSDoc); importing coords here mirrors the UI, not the store.
@@ -304,6 +313,7 @@ function emptyImportedGameData(): ImportedGameData {
     controllable: false,
     customMass: null,
     customMassExtras: [],
+    massDefinitions: [],
     unknownAttrs: {},
     unknownChildren: [],
     batteries: [],
@@ -575,6 +585,7 @@ describe('editorStore', () => {
         controllable: false,
         customMass: null,
         customMassExtras: [],
+        massDefinitions: [],
         unknownAttrs: {},
         unknownChildren: [],
         batteries: [],
@@ -809,6 +820,7 @@ describe('editorStore', () => {
       controllable: false,
       customMass: null,
       customMassExtras: [],
+      massDefinitions: [],
       unknownAttrs: {},
       // KSA 2026.7 <Aligned> groups pair connectors by ref — ids in the SOURCE id space.
       unknownChildren: [
@@ -2266,6 +2278,163 @@ describe('editorStore duplicateLayer', () => {
     expect(duplicateLayer('nope')).toBeNull();
     expect($part.get().layers).toHaveLength(3);
     expect($canUndo.get()).toBe(false);
+  });
+});
+
+describe('editable mass definitions', () => {
+  it('promotes inherited template masses on edit and preserves an empty override after deletion', () => {
+    const templateId = 'Core.TestMass';
+    addSubPart(templateId);
+    const catalogBefore = $catalog.get();
+    const inherited = createSubPartGameData(templateId);
+    inherited.massDefinitions = [
+      createMassDefinition('SolidSphereMass', 'first'),
+      createMassDefinition('SolidCuboidMass', 'second'),
+    ];
+    inherited.massDefinitionsOverride = true;
+    $catalog.set([
+      ...catalogBefore,
+      {
+        id: templateId,
+        sourceFile: '',
+        atlasUrl: '',
+        meshNodeName: null,
+        data: { gameData: inherited, colliders: [], lights: [] },
+      },
+    ]);
+    try {
+      expect(massDefinitionsFor($part.get(), templateId)).toEqual(inherited.massDefinitions);
+      pushUndo('edit inherited mass');
+      updateMassDefinition(templateId, 0, { massKg: 52 });
+      expect($part.get().subPartGameData[0].massDefinitionsOverride).toBe(true);
+      expect(massDefinitionsFor($part.get(), templateId)).toHaveLength(2);
+      expect(inherited.massDefinitions[0].massKg).toBe(1);
+      undo();
+      expect($part.get().subPartGameData).toEqual([]);
+      expect(massDefinitionsFor($part.get(), templateId)[0].massKg).toBe(1);
+      removeMassDefinition(templateId, 0);
+      expect(massDefinitionsFor($part.get(), templateId).map((mass) => mass.id)).toEqual([
+        'second',
+      ]);
+      removeMassDefinition(templateId, 0);
+      expect(massDefinitionsFor($part.get(), templateId)).toEqual([]);
+      expect($part.get().subPartGameData[0].massDefinitionsOverride).toBe(true);
+      undo();
+      expect(massDefinitionsFor($part.get(), templateId).map((mass) => mass.id)).toEqual([
+        'second',
+      ]);
+    } finally {
+      $catalog.set(catalogBefore);
+    }
+  });
+
+  it('keeps older raw template mass out of catalog fallback without converting it on an explicit add', () => {
+    const part = structuredClone($part.get());
+    const template = createSubPartGameData('Core.TestMass');
+    const raw = { tag: 'SolidCuboidMass', attrs: {}, children: [] };
+    template.unknownChildren = [raw];
+    part.subPartGameData = [template];
+    const catalogDefinition = createMassDefinition('SolidCuboidMass', 'inherited');
+    const catalogData = createSubPartGameData('Core.TestMass');
+    catalogData.massDefinitions = [catalogDefinition];
+    const catalog = new Map([
+      [
+        'Core.TestMass',
+        {
+          id: 'Core.TestMass',
+          sourceFile: '',
+          atlasUrl: '',
+          meshNodeName: null,
+          data: { gameData: catalogData, colliders: [], lights: [] },
+        },
+      ],
+    ]);
+    expect(massDefinitionsFor(part, 'Core.TestMass', catalog)).toEqual([]);
+    $part.set(part);
+    addMassDefinition('Core.TestMass', 'SolidSphereMass');
+    expect($part.get().subPartGameData[0].unknownChildren).toEqual([raw]);
+    expect(massDefinitionsFor($part.get(), 'Core.TestMass')).toHaveLength(1);
+    undo();
+    expect($part.get().subPartGameData[0]).toEqual(template);
+  });
+
+  it('adds, changes shape and deletes a Part mass in separate undo steps', () => {
+    addMassDefinition(null, 'SolidCuboidMass');
+    const definition = $part.get().gameData.massDefinitions[0];
+    expect(definition.shape).toBe('SolidCuboidMass');
+    expect(definition.id).toBeTruthy();
+    updateMassDefinition(null, 0, {
+      massKg: 52,
+      locationAsmb: { x: 1, y: 2, z: 3 },
+      dimensions: { lengthXM: 0.6721, lengthYM: 0.4828, lengthZM: 0.3549 },
+    });
+    setMassDefinitionShape(null, 0, 'SolidCylinderMass');
+    expect($part.get().gameData.massDefinitions[0]).toMatchObject({
+      shape: 'SolidCylinderMass',
+      massKg: 52,
+      locationAsmb: { x: 1, y: 2, z: 3 },
+    });
+    undo();
+    expect($part.get().gameData.massDefinitions[0].dimensions).toEqual({
+      lengthXM: 0.6721,
+      lengthYM: 0.4828,
+      lengthZM: 0.3549,
+    });
+    redo();
+    expect($part.get().gameData.massDefinitions[0].shape).toBe('SolidCylinderMass');
+    removeMassDefinition(null, 0);
+    expect($part.get().gameData.massDefinitions).toEqual([]);
+    undo();
+    expect($part.get().gameData.massDefinitions[0].id).toBe(definition.id);
+    redo();
+    expect($part.get().gameData.massDefinitions).toEqual([]);
+    undo();
+    undo();
+    undo();
+    expect($part.get().gameData.massDefinitions).toEqual([]);
+  });
+
+  it('undoes a template mass typing session in one step, including its dimensions and placement', () => {
+    addSubPart('Core.Battery');
+    addMassDefinition('Core.Battery', 'SolidCuboidMass');
+    const before = structuredClone(massDefinitionsFor($part.get(), 'Core.Battery')[0]);
+    pushUndo('edit mass definition');
+    updateMassDefinition('Core.Battery', 0, { massKg: 50 });
+    updateMassDefinition('Core.Battery', 0, { massKg: 52 });
+    updateMassDefinition('Core.Battery', 0, {
+      dimensions: { lengthXM: 0.6721, lengthYM: 0.4828, lengthZM: 0.3549 },
+      locationAsmb: { x: 0.25, y: -0.1, z: 0.02 },
+      paf2Asmb: { x: 0, y: 0, z: Math.PI / 2 },
+    });
+    const edited = structuredClone(massDefinitionsFor($part.get(), 'Core.Battery')[0]);
+    undo();
+    expect(massDefinitionsFor($part.get(), 'Core.Battery')[0]).toEqual(before);
+    redo();
+    expect(massDefinitionsFor($part.get(), 'Core.Battery')[0]).toEqual(edited);
+    removeMassDefinition('Core.Battery', 0);
+    expect($part.get().subPartGameData[0]).toMatchObject({
+      massDefinitions: [],
+      massDefinitionsOverride: true,
+    });
+    undo();
+    expect(massDefinitionsFor($part.get(), 'Core.Battery')[0]).toEqual(edited);
+  });
+
+  it('keeps existing custom mass and preserved mass XML untouched while editing a modeled mass', () => {
+    const part = structuredClone($part.get());
+    part.gameData.customMass = 10;
+    part.gameData.customMassExtras = [{ tag: 'LocationAsmb', attrs: { X: '1' }, children: [] }];
+    const raw = { tag: 'SolidCuboidMass', attrs: {}, children: [] };
+    part.gameData.unknownChildren.push(raw);
+    part.gameData.massDefinitions.push(createMassDefinition('SolidSphereMass', 'sphere'));
+    $part.set(part);
+    pushUndo('edit sphere mass');
+    updateMassDefinition(null, 0, { massKg: 4 });
+    expect($part.get().gameData.customMass).toBe(10);
+    expect($part.get().gameData.customMassExtras).toEqual(part.gameData.customMassExtras);
+    expect($part.get().gameData.unknownChildren).toEqual([raw]);
+    undo();
+    expect($part.get().gameData).toEqual(part.gameData);
   });
 });
 

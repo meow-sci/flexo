@@ -101,6 +101,7 @@ export async function importBuiltInPart(
       controllable: part.controllable,
       customMass: part.customMass,
       customMassExtras: part.customMassExtras,
+      massDefinitions: part.massDefinitions,
       unknownAttrs: part.unknownAttrs,
       unknownChildren: part.unknownChildren,
       batteries: part.batteries,

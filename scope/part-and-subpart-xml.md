@@ -98,7 +98,7 @@ remain separate from this update.
 - **`Vector3Reference` defaults a MISSING attribute to 0 for all of Position/Rotation/Scale** (`X = Y = Z = 0.0` field initialisers; `XmlSerializer` leaves absent attributes there). `TransformReference.ScaleValue` substitutes `double3.One` only when the whole `<Scale>` element is absent. So `<Position>`/`<Rotation>` may omit a zero axis losslessly, but **`<Scale>` must always carry X, Y, Z** — `<Scale X="2"/>` loads as (2, 0, 0), `CreateScale` goes singular and the SubPart/Connector renders blank. flexo's `buildScaleElement` emits all three axes (fixed 2026-08-23; earlier exports with non-uniform scale must be re-exported); the importer keeps the lenient 1 for a missing axis but logs a warning. All 465 `<Scale>` in shipped Content carry X, Y and Z.
 - Rotation is **Euler XYZ radians** (KSA "XYZ" ⇒ three.js `'ZYX'` — see [connectors-coordinates-iva.md](connectors-coordinates-iva.md)).
 - `<Connector Id>` carries `<Transform>` + a whitespace-separated `<Flags>` body; connector faces local **+X**. Flag enum is exactly `Internal | ToSurface | FromSurface`; unknown flags dropped.
-- `<PartGameData>` children flexo reads: `DisplayName` attr; `<EditorTag Value>`; `<Diameter M>`; `<CustomMass><Mass Kg>` (other CustomMass children — inertia/offsets — preserved verbatim as `customMassExtras`); `<Control/>`; `<Connector Id><Flags>`; `<Decoupler>`; `<DockingPort>`; `<EVADoor>`; power modules; engine modules; `<KeyframeAnimationModule>`. (See [gamedata-modules.md](gamedata-modules.md) for module detail.)
+- `<PartGameData>` children flexo reads: `DisplayName` attr; `<EditorTag Value>`; `<Diameter M>`; eight stock inert-mass shapes with their sources/dimensions/assembly transforms/custom inertia ([mass-definitions.md](mass-definitions.md)); older project scalar custom mass and extras remain preserved; `<Control/>`; `<Connector Id><Flags>`; `<Decoupler>`; `<DockingPort>`; `<EVADoor>`; power modules; engine modules; `<KeyframeAnimationModule>`. (See [gamedata-modules.md](gamedata-modules.md) for module detail.)
 
 **Catalog / file-path conventions**
 
@@ -136,7 +136,7 @@ remain separate from this update.
 
 The parser reads a **fixed allow-list** into typed objects; the serializer **rebuilds a brand-new `<Assets>` document** and appends only what it knows how to emit. flexo is a _model-faithful re-emitter_, not a _byte-faithful editor_.
 
-**As of 2026-06-27 (gap 6), `<PartGameData>` and `<SubPartGameData>` ARE passthrough-safe:** their unmodeled direct **child elements** and unmodeled **root attributes** are captured verbatim on import (`captureUnknownChildren`/`captureUnknownAttrs` → `RawXmlNode` JSON trees on `unknownChildren`/`unknownAttrs`) and re-emitted on export (`buildRawNode`, appended last). This recovers the `SolidSphereMass`… mass family, `<AttachedInternal>`, `<SubstanceStorageVolume>`, and a SubPart's `DisplayName` — all previously dropped. (`<Collider>` was recovered this way too until it became MODELED — see [colliders.md](colliders.md); so was `<IVASeat>`, now MODELED at PART level and still passthrough at SubPart level — see [connectors-coordinates-iva.md](connectors-coordinates-iva.md).)
+**As of 2026-06-27 (gap 6), `<PartGameData>` and `<SubPartGameData>` ARE passthrough-safe:** their unmodeled direct **child elements** and unmodeled **root attributes** are captured verbatim on import (`captureUnknownChildren`/`captureUnknownAttrs` → `RawXmlNode` JSON trees on `unknownChildren`/`unknownAttrs`) and re-emitted on export (`buildRawNode`, appended last). This recovers unsupported mass shapes, `<AttachedInternal>`, `<SubstanceStorageVolume>`, and a SubPart's `DisplayName` — all previously dropped. (`<Collider>` was recovered this way too until it became MODELED — see [colliders.md](colliders.md); so was `<IVASeat>`, now MODELED at PART level and still passthrough at SubPart level — see [connectors-coordinates-iva.md](connectors-coordinates-iva.md).)
 
 Consequences / what's STILL drop-on-round-trip (passthrough is scoped to GameData containers):
 
@@ -485,10 +485,9 @@ solar-panel colliders.
 `<HollowOpenOgiveMass>` (`HollowOpenOgiveMassTemplate`), the "tangent ogive mass type" of the
 CoreFairingA import. Two sibling classes appeared alongside them — `AsmbRevolvedMassTemplate`
 (masses of revolution may now be a **sector** rather than a full circle, hence the `<Sweep>`
-elements new in `CoreFairingAGameData.xml`) and `HollowOpenOgiveMassTemplate`. flexo models only
-`<CustomMass>` out of this whole family; every other mass element rides the `<PartGameData>` /
-`<SubPartGameData>` `RawXmlNode` passthrough (`src/ksa/types.ts` documents the family by name), so
-the new ones round-trip untouched. **No parser change required.**
+elements new in `CoreFairingAGameData.xml`) and `HollowOpenOgiveMassTemplate`. at that audit these shapes rode passthrough. The current editor models the eight stock
+shapes, including `HollowOpenOgiveMass` and sector sweep; unsupported shapes remain
+raw GameData. See [mass-definitions.md](mass-definitions.md).
 
 `CoreEditorTagsGameData.xml` is unchanged, so the static `EDITOR_TAG_DEFS` / `KNOWN_EDITOR_TAGS`
 snapshot in `src/ksa/types.ts` still matches the registry.

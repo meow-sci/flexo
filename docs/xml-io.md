@@ -243,7 +243,9 @@ GameData files under `/ksa/`; `vite/ksaAssets.ts` copies the existing ones into
   (`DataNavigator`) picks the scope — the Part, or one SubPart template — and the left
   sidebar (`DataScopeForm`) renders that scope's sections: Identity / Mass / Tanks
   (feed containers) / Power / Coupling / Wiring / Advanced / Passthrough at Part scope, and
-  Tanks / Lights / Solar / Engine / Passthrough at template scope. Entry points are the mode
+  Mass / Tanks / Lights / Solar / Engine / Passthrough at template scope. Mass cards model
+  the eight stock inert-mass shapes and their transforms/sources/inertia; see
+  [mass-definitions.md](mass-definitions.md). Entry points are the mode
   switcher, `3`, the ⌘K commands `data.scopePart` and `data.scopeTemplate:<id>`, and Build's
   "SubPart Data →" jump. The v1 **Part Data** and **SubPart Data** fullscreen modals are
   deleted. Numeric fields reuse `PreciseNumberInput` (with `onInteractionStart` to push one

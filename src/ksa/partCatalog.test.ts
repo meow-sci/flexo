@@ -116,7 +116,7 @@ describe('parseGameDataFile + mergeGameData', () => {
     expect(parts[0].controllable).toBe(true);
   });
 
-  it('merges <CustomMass> (Kg + preserved inertia children) from GameData onto the Part', () => {
+  it('merges editable <CustomMass> with inertia from GameData onto the Part', () => {
     const parts: CatalogPart[] = [];
     parsePartsFile(parse(ASSETS_XML), 'CoreCommandAAssets.xml', parts);
     expect(parts[0].customMass).toBeNull(); // not present on the geometry <Part>
@@ -133,14 +133,11 @@ describe('parseGameDataFile + mergeGameData', () => {
     );
     mergeGameData(parts, gameData);
 
-    expect(parts[0].customMass).toBe(1800);
-    expect(parts[0].customMassExtras).toEqual([
-      {
-        tag: 'MassSpecificInertia',
-        attrs: { Ixx: '0.325', Iyy: '0.668', Izz: '0.668' },
-        children: [],
-      },
-    ]);
+    expect(parts[0].massDefinitions[0]).toMatchObject({
+      shape: 'CustomMass',
+      massKg: 1800,
+      massSpecificInertia: { ixx: 0.325, iyy: 0.668, izz: 0.668 },
+    });
   });
 
   it('merges unmodeled <PartGameData> children onto the Part verbatim', () => {
@@ -563,10 +560,7 @@ describe('geometry <Part><Collider> (gap E — vendored fixtures)', () => {
     const light = parts.find((p) => p.id === 'CoreElectricalA_Prefab_LightSmallB')!;
     expect(light.colliders.map((c) => c.shape)).toEqual(['Box']);
     // 5438 adds real mass geometry; it survives independently of the modeled collider.
-    expect(light.unknownChildren.map((n) => n.tag)).toEqual(['SolidCuboidMass']);
-    expect(light.unknownChildren[0].children.find((n) => n.tag === 'Mass')?.attrs).toEqual({
-      Kg: '6',
-    });
+    expect(light.massDefinitions[0]).toMatchObject({ shape: 'SolidCuboidMass', massKg: 6 });
   });
 });
 

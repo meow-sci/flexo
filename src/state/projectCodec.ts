@@ -32,6 +32,9 @@ import type {
   KittenMeshSource,
   Layer,
   LayerColor,
+  MassDefinition,
+  MassDimension,
+  MassShape,
   PartAnimation,
   PartCollider,
   PartGameData,
@@ -70,6 +73,7 @@ import {
   meshKind,
 } from '../ksa/types';
 import { normalizeSegmentEasing } from '../ksa/easing';
+import { createMassDefinition, MASS_DIMENSIONS, MASS_SHAPES } from '../ksa/massDefinitions';
 import type {
   PartTransferEntry,
   ProjectExportData,
@@ -408,6 +412,7 @@ interface CGameData {
   dn?: string; // displayName
   cm?: number; // customMass
   cmx?: RawXmlNode[]; // customMassExtras (unmodeled <CustomMass> children, passthrough)
+  md?: CMassDefinition[]; // editable geometric/custom mass definitions
   dm?: number; // diameterM (omitted when null)
   xdm?: number[]; // extraDiametersM (adapter size classes; omitted when empty)
   crt?: number; // crashTolerancePa (<Part CrashTolerance>; omitted when null = derived in-game)
@@ -443,6 +448,7 @@ function encGameData(g: PartGameData): CGameData {
   if (g.displayName.trim()) o.dn = g.displayName;
   if (g.customMass != null) o.cm = round(g.customMass);
   if (g.customMass != null && g.customMassExtras.length) o.cmx = g.customMassExtras;
+  if (g.massDefinitions.length) o.md = g.massDefinitions.map(encMassDefinition);
   if (g.diameterM != null) o.dm = round(g.diameterM);
   if (g.extraDiametersM.length) o.xdm = g.extraDiametersM.map(round);
   if (g.crashTolerancePa != null) o.crt = round(g.crashTolerancePa);
@@ -492,6 +498,7 @@ function decGameData(c: CGameData | undefined): PartGameData {
   g.displayName = str(c.dn);
   g.customMass = typeof c.cm === 'number' ? c.cm : null;
   g.customMassExtras = g.customMass != null ? decRawNodes(c.cmx) : [];
+  g.massDefinitions = decMassDefinitions(c.md);
   g.diameterM = typeof c.dm === 'number' ? c.dm : null;
   g.extraDiametersM = arr<number>(c.xdm).map(num);
   g.crashTolerancePa = typeof c.crt === 'number' ? c.crt : null;
@@ -552,6 +559,71 @@ function decRawNodes(v: unknown): RawXmlNode[] {
       };
       if (typeof n.text === 'string' && n.text) node.text = n.text;
       return node;
+    });
+}
+
+interface CMassDefinition {
+  i: string; // editor-only id
+  sh: MassShape;
+  m?: number; // explicit mass kg
+  d?: number; // explicit density kg/m³
+  mt?: string; // Substance material id
+  dm?: Partial<Record<MassDimension, number>>;
+  sw?: number; // sweep radians
+  l?: Triple; // LocationAsmb
+  r?: Triple; // Paf2Asmb
+  mi?: Triple; // MassSpecificInertia Ixx/Iyy/Izz
+  ua?: Record<string, string>;
+  uc?: RawXmlNode[];
+}
+
+function encMassDefinition(definition: MassDefinition): CMassDefinition {
+  const out: CMassDefinition = { i: definition.id, sh: definition.shape };
+  if (definition.massKg != null) out.m = round(definition.massKg);
+  if (definition.densityKgM3 != null) out.d = round(definition.densityKgM3);
+  if (definition.materialId != null) out.mt = definition.materialId;
+  if (Object.keys(definition.dimensions).length) {
+    out.dm = Object.fromEntries(
+      Object.entries(definition.dimensions).map(([key, value]) => [key, round(value)]),
+    );
+  }
+  if (definition.sweepRad != null) out.sw = round(definition.sweepRad);
+  if (!isZeroVec(definition.locationAsmb)) out.l = encVec(definition.locationAsmb);
+  if (!isZeroVec(definition.paf2Asmb)) out.r = encVec(definition.paf2Asmb);
+  if (definition.massSpecificInertia) {
+    const { ixx, iyy, izz } = definition.massSpecificInertia;
+    out.mi = [round(ixx), round(iyy), round(izz)];
+  }
+  if (Object.keys(definition.unknownAttrs).length) out.ua = definition.unknownAttrs;
+  if (definition.unknownChildren.length) out.uc = definition.unknownChildren;
+  return out;
+}
+
+function decMassDefinitions(value: unknown): MassDefinition[] {
+  return arr<CMassDefinition>(value)
+    .filter(
+      (definition) =>
+        !!definition && typeof definition === 'object' && MASS_SHAPES.includes(definition.sh),
+    )
+    .map((definition) => {
+      const out = createMassDefinition(definition.sh, str(definition.i));
+      out.massKg = typeof definition.m === 'number' ? num(definition.m) : null;
+      out.densityKgM3 = typeof definition.d === 'number' ? num(definition.d) : null;
+      out.materialId = typeof definition.mt === 'string' ? definition.mt : null;
+      out.dimensions = {};
+      for (const key of MASS_DIMENSIONS) {
+        if (typeof definition.dm?.[key] === 'number') out.dimensions[key] = num(definition.dm[key]);
+      }
+      out.sweepRad = typeof definition.sw === 'number' ? num(definition.sw) : null;
+      out.locationAsmb = decVec(definition.l, 0);
+      out.paf2Asmb = decVec(definition.r, 0);
+      out.massSpecificInertia =
+        Array.isArray(definition.mi) && definition.mi.length === 3
+          ? { ixx: num(definition.mi[0]), iyy: num(definition.mi[1]), izz: num(definition.mi[2]) }
+          : null;
+      out.unknownAttrs = decRawAttrs(definition.ua);
+      out.unknownChildren = decRawNodes(definition.uc);
+      return out;
     });
 }
 
@@ -1041,6 +1113,8 @@ function decGimbal(c: CGimbal): Gimbal {
 
 interface CSubPartGameData {
   t: string; // subPartTemplateId
+  md?: CMassDefinition[];
+  mo?: 1; // explicit override, including an intentionally empty mass-definition list
   tk?: CTank[]; // tanks
   sp?: CSolarPanel[]; // solarPanels
   thermal?: CThermalCore[];
@@ -1060,6 +1134,8 @@ interface CSubPartGameData {
 
 function encSubPartGameData(s: SubPartGameData): CSubPartGameData {
   const o: CSubPartGameData = { t: s.subPartTemplateId };
+  if (s.massDefinitions.length) o.md = s.massDefinitions.map(encMassDefinition);
+  if (s.massDefinitionsOverride) o.mo = 1;
   if (s.tanks.length) o.tk = s.tanks.map(encTank);
   if (s.solarPanels.length) o.sp = s.solarPanels.map(encSolarPanel);
   if (s.combustors.length) o.cb = s.combustors.map(encCombustor);
@@ -1080,6 +1156,8 @@ function encSubPartGameData(s: SubPartGameData): CSubPartGameData {
 
 function decSubPartGameData(c: CSubPartGameData): SubPartGameData {
   const s = createSubPartGameData(str(c.t));
+  s.massDefinitions = decMassDefinitions(c.md);
+  s.massDefinitionsOverride = !!c.mo;
   s.tanks = arr<CTank>(c.tk).map(decTank);
   s.solarPanels = arr<CSolarPanel>(c.sp).map(decSolarPanel);
   s.combustors = arr<CCombustor>(c.cb).map(decCombustor);

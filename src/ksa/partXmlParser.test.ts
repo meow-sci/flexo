@@ -321,7 +321,7 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
   it('recovers display name, tags, mass', () => {
     expect(parsed.gameData.displayName).toBe('Round Trip');
     expect(parsed.editorTags).toEqual(['Tanks', 'Structural']);
-    expect(parsed.gameData.customMass).toBe(42);
+    expect(parsed.gameData.massDefinitions[0].massKg).toBe(42);
   });
 
   it('recovers part diameter (size class) and the command marker', () => {
@@ -781,26 +781,21 @@ describe('unmodeled-XML passthrough (gap 6)', () => {
     ['CoreElectricalA_Prefab_LightSmallB', 'SolidCuboidMass', 1, 6],
     ['CoreElectricalA_Prefab_SolarPanelB', 'SolidCuboidMass', 4, 19],
     ['CoreElectricalA_Prefab_BayFuelcellSmall', 'SolidCylinderMass', 1, 49],
-  ] as const)('preserves 5438 mass geometry for %s', (partId, tag, count, massKg) => {
+  ] as const)('models stock mass geometry for %s', (partId, tag, count, massKg) => {
     const parsed = gameDataFromAssets(
       readVendoredAsset('CoreElectricalAGameData.xml'),
       partId,
       new DOMParser(),
     )!;
-    const masses = parsed.gameData.unknownChildren.filter((n) => n.tag === tag);
+    const masses = parsed.gameData.massDefinitions.filter((n) => n.shape === tag);
     expect(masses).toHaveLength(count);
-    expect(
-      masses.reduce(
-        (sum, n) => sum + Number(n.children.find((c) => c.tag === 'Mass')!.attrs.Kg),
-        0,
-      ),
-    ).toBe(massKg);
+    expect(masses.reduce((sum, n) => sum + (n.massKg ?? 0), 0)).toBe(massKg);
     const reparsed = gameDataFromAssets(
       serializeGameData(editingPart({ partId, gameData: parsed.gameData })),
       partId,
       new DOMParser(),
     )!;
-    expect(reparsed.gameData.unknownChildren.filter((n) => n.tag === tag)).toEqual(masses);
+    expect(reparsed.gameData.massDefinitions.filter((n) => n.shape === tag)).toEqual(masses);
   });
 
   it('preserves 5438 ordered parachute material choices at Part and SubPart scope', () => {
@@ -851,7 +846,7 @@ describe('unmodeled-XML passthrough (gap 6)', () => {
           <LengthY M="1.0197" />
         </Cylinder>
       </Collider>
-      <SolidSphereMass><Mass Kg="50" /></SolidSphereMass>
+      <SolidConeMass><Mass Kg="50" /></SolidConeMass>
     </PartGameData>
     <SubPartGameData Id="Tmpl" DisplayName="Wing Skin">
       <SubstanceStorageVolume Id="Vol1" />
@@ -861,7 +856,7 @@ describe('unmodeled-XML passthrough (gap 6)', () => {
 
   it('captures unmodeled <PartGameData> children verbatim (tag/attrs/nested tree)', () => {
     // <Collider> is MODELED now (it lands in `colliders`, not the passthrough).
-    expect(parsed.gameData.unknownChildren.map((n) => n.tag)).toEqual(['SolidSphereMass']);
+    expect(parsed.gameData.unknownChildren.map((n) => n.tag)).toEqual(['SolidConeMass']);
     const mass = parsed.gameData.unknownChildren[0];
     expect(mass.children.map((c) => [c.tag, c.attrs])).toEqual([['Mass', { Kg: '50' }]]);
   });
@@ -975,7 +970,7 @@ describe('unmodeled-XML passthrough (gap 6)', () => {
   });
 });
 
-describe('<CustomMass> fidelity (Kg modeled, inertia/offset children preserved)', () => {
+describe('<CustomMass> fidelity (typed mass and inertia, unknown children preserved)', () => {
   // Mirrors Core's CoreCommandA capsule: CustomMass with an offset + specific inertia.
   const xml = `<Assets>
     <PartGameData Id="P">
@@ -988,16 +983,13 @@ describe('<CustomMass> fidelity (Kg modeled, inertia/offset children preserved)'
   </Assets>`;
   const parsed = gameDataFromAssets(xml, 'P', new DOMParser())!;
 
-  it('parses the Kg scalar and captures the other CustomMass children verbatim', () => {
-    expect(parsed.gameData.customMass).toBe(1800);
-    expect(parsed.gameData.customMassExtras).toEqual([
-      { tag: 'LocationBody', attrs: { X: '-0.3601690873' }, children: [] },
-      {
-        tag: 'MassSpecificInertia',
-        attrs: { Ixx: '0.3252281349', Iyy: '0.668371379', Izz: '0.668371379' },
-        children: [],
-      },
-    ]);
+  it('parses mass and inertia and captures unknown CustomMass children', () => {
+    expect(parsed.gameData.customMass).toBeNull();
+    expect(parsed.gameData.massDefinitions[0]).toMatchObject({
+      massKg: 1800,
+      massSpecificInertia: { ixx: 0.3252281349, iyy: 0.668371379, izz: 0.668371379 },
+      unknownChildren: [{ tag: 'LocationBody', attrs: { X: '-0.3601690873' }, children: [] }],
+    });
     expect(parsed.gameData.unknownChildren).toEqual([]);
   });
 
@@ -1007,44 +999,43 @@ describe('<CustomMass> fidelity (Kg modeled, inertia/offset children preserved)'
     const custom = doc.getElementsByTagName('CustomMass');
     expect(custom.length).toBe(1);
     expect(custom[0].getElementsByTagName('MassSpecificInertia')[0].getAttribute('Ixx')).toBe(
-      '0.3252281349',
+      '0.325228',
     );
     const reparsed = gameDataFromAssets(serializeGameData(part), 'P', new DOMParser())!;
-    expect(reparsed.gameData.customMass).toBe(1800);
-    expect(reparsed.gameData.customMassExtras).toEqual(parsed.gameData.customMassExtras);
+    expect(reparsed.gameData.massDefinitions[0].massKg).toBe(1800);
+    expect(reparsed.gameData.massDefinitions[0].massSpecificInertia?.ixx).toBeCloseTo(
+      0.3252281349,
+      6,
+    );
+    expect(reparsed.gameData.massDefinitions[0].unknownChildren).toEqual(
+      parsed.gameData.massDefinitions[0].unknownChildren,
+    );
   });
 
-  it('keeps a CustomMass flexo cannot model (no valid <Mass Kg>) whole via passthrough', () => {
+  it('retains invalid CustomMass source data for correction in Mass', () => {
     const dens = `<Assets><PartGameData Id="P">
       <CustomMass><Density KgPerM3="2700" /><MassSpecificInertia Ixx="1" Iyy="1" Izz="1" /></CustomMass>
     </PartGameData></Assets>`;
     const p = gameDataFromAssets(dens, 'P', new DOMParser())!;
     expect(p.gameData.customMass).toBeNull();
     expect(p.gameData.customMassExtras).toEqual([]);
-    expect(p.gameData.unknownChildren.map((n) => n.tag)).toEqual(['CustomMass']);
-    expect(p.gameData.unknownChildren[0].children.map((c) => c.tag)).toEqual([
-      'Density',
-      'MassSpecificInertia',
-    ]);
+    expect(p.gameData.massDefinitions[0]).toMatchObject({
+      shape: 'CustomMass',
+      massKg: null,
+      densityKgM3: 2700,
+      massSpecificInertia: { ixx: 1, iyy: 1, izz: 1 },
+    });
   });
 
-  it('keeps repeat <CustomMass> entries beyond the first (InertMasses is a list) via passthrough', () => {
+  it('keeps every repeated CustomMass as an editable entry', () => {
     const two = `<Assets><PartGameData Id="P">
       <CustomMass><Mass Kg="10" /></CustomMass>
       <CustomMass><Mass Kg="5" /><MassSpecificInertia Ixx="2" Iyy="2" Izz="2" /></CustomMass>
     </PartGameData></Assets>`;
     const p = gameDataFromAssets(two, 'P', new DOMParser())!;
-    expect(p.gameData.customMass).toBe(10);
-    expect(p.gameData.unknownChildren).toEqual([
-      {
-        tag: 'CustomMass',
-        attrs: {},
-        children: [
-          { tag: 'Mass', attrs: { Kg: '5' }, children: [] },
-          { tag: 'MassSpecificInertia', attrs: { Ixx: '2', Iyy: '2', Izz: '2' }, children: [] },
-        ],
-      },
-    ]);
+    expect(p.gameData.massDefinitions.map((mass) => mass.massKg)).toEqual([10, 5]);
+    expect(p.gameData.massDefinitions[1].massSpecificInertia).toEqual({ ixx: 2, iyy: 2, izz: 2 });
+    expect(p.gameData.unknownChildren).toEqual([]);
   });
 });
 

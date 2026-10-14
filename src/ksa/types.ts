@@ -3,6 +3,13 @@
  * space-tape editor's state model (PartEditorState.cs / GameDataModels.cs) but
  * are intentionally framework-agnostic — no React, no three.js imports.
  */
+import type { MassDefinition } from './massDefinitions';
+export type {
+  MassDefinition,
+  MassDimension,
+  MassShape,
+  MassSpecificInertia,
+} from './massDefinitions';
 
 export interface Vec3 {
   x: number;
@@ -1355,8 +1362,8 @@ export function createSolidGrainSegment(id: string): SolidGrainSegment {
 /**
  * A captured XML subtree flexo does NOT model, preserved verbatim so importing a
  * built-in Part and re-exporting never silently drops game data flexo has no field for
- * (e.g. `<AttachedInternal>`, the `SolidSphereMass`/`SolidCylinderMass`… mass family,
- * `<SubstanceStorageVolume>`). Stored as plain JSON (no live DOM handle) so it round-trips
+ * (e.g. `<AttachedInternal>`, `<SubstanceStorageVolume>`). Stored as plain JSON
+ * (no live DOM handle) so it round-trips
  * through the project codec and localStorage. Built by the parser's `captureUnknownChildren`
  * and re-emitted by the serializer's `buildRawNode`. This is the cure for flexo's
  * "model-faithful re-emitter drops everything it doesn't model" round-trip invariant.
@@ -1383,16 +1390,19 @@ export interface PartGameData {
   ivaEnabled: boolean;
   /** In-game display name (PartGameData DisplayName attribute). Blank omits it. */
   displayName: string;
-  /** Mass override in kg, or null for the part's default mass. */
+  /** Preserved older project CustomMass scalar; additive, not a total-mass override. */
   customMass: number | null;
   /**
-   * Unmodeled children of the modeled `<CustomMass>` element (KSA's `CustomMassTemplate`
+   * Preserved children belonging to an older project's scalar `<CustomMass>` (KSA's `CustomMassTemplate`
    * carries more than `<Mass Kg>`: `<MassSpecificInertia Ixx/Iyy/Izz>` plus the
    * `AsmbTransformTemplate` offset/rotation), preserved verbatim and re-emitted inside
-   * `<CustomMass>` so importing a built-in part keeps its inertia. Meaningless (and
+   * `<CustomMass>` so existing projects keep their inertia. Fresh XML imports use
+   * {@link massDefinitions}. Meaningless (and
    * dropped) when {@link customMass} is null — KSA requires `Mass > 0` on a CustomMass.
    */
   customMassExtras: RawXmlNode[];
+  /** Editable additive inert-mass definitions; multiple shapes contribute together. */
+  massDefinitions: MassDefinition[];
   /**
    * Part diameter in meters, serialized as <Diameter M/>. KSA's VAB part-picker
    * size-class filter (the `DiameterFilterlist` editor tags) — no physics effect.
@@ -1485,6 +1495,10 @@ export interface PartGameData {
 export interface SubPartGameData {
   /** The SubPart template id this data belongs to, e.g. "CoreFuelTankA_Subpart_Skin2W1HB". */
   subPartTemplateId: string;
+  /** Each placed instance contributes this template's inert-mass definitions. */
+  massDefinitions: MassDefinition[];
+  /** Author an explicit variant mass list, including an intentionally empty list. */
+  massDefinitionsOverride: boolean;
   tanks: Tank[];
   solarPanels: SolarPanel[];
   /** Reusable thrust-chamber combustors that travel with this mesh. */
@@ -1514,6 +1528,8 @@ export interface SubPartGameData {
 /** True when a SubPart's data is empty and the entry can be pruned. */
 export function isSubPartGameDataEmpty(spd: SubPartGameData): boolean {
   return (
+    !spd.massDefinitionsOverride &&
+    spd.massDefinitions.length === 0 &&
     spd.tanks.length === 0 &&
     spd.solarPanels.length === 0 &&
     spd.combustors.length === 0 &&
@@ -1593,6 +1609,7 @@ export function createEmptyGameData(): PartGameData {
     ivaEnabled: true,
     customMass: null,
     customMassExtras: [],
+    massDefinitions: [],
     diameterM: null,
     extraDiametersM: [],
     crashTolerancePa: null,
@@ -1627,6 +1644,8 @@ export function createEmptyGameData(): PartGameData {
 export function createSubPartGameData(subPartTemplateId: string): SubPartGameData {
   return {
     subPartTemplateId,
+    massDefinitions: [],
+    massDefinitionsOverride: false,
     tanks: [],
     solarPanels: [],
     combustors: [],

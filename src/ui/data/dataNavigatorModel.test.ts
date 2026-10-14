@@ -13,6 +13,7 @@ import {
   IVA_SEAT_LAYER_ID,
 } from '../../ksa/types';
 import type { EditingPart } from '../../ksa/types';
+import { createMassDefinition } from '../../ksa/massDefinitions';
 
 function place(part: EditingPart, instanceId: string, subPartTemplateId: string): void {
   part.placements.push({
@@ -63,6 +64,14 @@ describe('buildDataNavigator — Part root', () => {
     expect(sections.power).toBe(3); // battery + generator + consumer
     expect(sections.coupling).toBe(1);
     expect(sections.wiring).toBe(0);
+  });
+
+  it('counts each mass definition and the existing custom mass in the Mass section', () => {
+    const part = named();
+    part.gameData.customMass = 10;
+    part.gameData.massDefinitions.push(createMassDefinition('SolidCuboidMass', 'battery_mass'));
+    const section = buildDataNavigator(part, []).part.sections.find((s) => s.sectionId === 'mass');
+    expect(section?.count).toBe(2);
   });
 
   it('counts passthrough as children + one synthetic attrs row + customMassExtras', () => {
@@ -135,7 +144,7 @@ describe('buildDataNavigator — template rows', () => {
     ]);
   });
 
-  it('badges engine modules and lists the five template sections', () => {
+  it('badges engine modules and lists the six template sections', () => {
     const part = named();
     place(part, 'thruster_1', 'ThrusterA');
     part.subPartGameData.push({
@@ -145,12 +154,53 @@ describe('buildDataNavigator — template rows', () => {
     const [row] = buildDataNavigator(part, []).templates;
     expect(row.badges).toEqual([{ icon: '🚀', label: '1 engine modules', count: 1 }]);
     expect(row.sections.map((s) => s.sectionId)).toEqual([
+      'mass',
       'tanks',
       'lights',
       'solar',
       'engine',
       'passthrough',
     ]);
+  });
+
+  it('counts a template with only mass as authored data', () => {
+    const part = named();
+    place(part, 'battery_1', 'BatteryB');
+    const data = createSubPartGameData('BatteryB');
+    data.massDefinitionsOverride = true;
+    data.massDefinitions.push(createMassDefinition('SolidCuboidMass', 'battery_mass'));
+    part.subPartGameData.push(data);
+    const [row] = buildDataNavigator(part, []).templates;
+    expect(row.empty).toBe(false);
+    expect(row.badges).toEqual([{ icon: '⚖', label: '1 mass definitions', count: 1 }]);
+    expect(row.sections.find((section) => section.sectionId === 'mass')?.count).toBe(1);
+  });
+
+  it('counts inherited catalog mass until the user explicitly replaces the list', () => {
+    const part = named();
+    place(part, 'battery_1', 'BatteryB');
+    const catalogData = createSubPartGameData('BatteryB');
+    catalogData.massDefinitions.push(createMassDefinition('SolidCuboidMass', 'stock_mass'));
+    const catalog = new Map([
+      [
+        'BatteryB',
+        {
+          id: 'BatteryB',
+          atlasUrl: '',
+          meshNodeName: null,
+          sourceFile: 'CoreElectricalAGameData.xml',
+          data: { gameData: catalogData, colliders: [], lights: [] },
+        },
+      ],
+    ]);
+    let row = buildDataNavigator(part, [], '', null, catalog).templates[0];
+    expect(row.empty).toBe(false);
+    expect(row.sections.find((section) => section.sectionId === 'mass')?.count).toBe(1);
+    const replacement = createSubPartGameData('BatteryB');
+    replacement.massDefinitionsOverride = true;
+    part.subPartGameData.push(replacement);
+    row = buildDataNavigator(part, [], '', null, catalog).templates[0];
+    expect(row.sections.find((section) => section.sectionId === 'mass')?.count).toBe(0);
   });
 });
 

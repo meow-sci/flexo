@@ -11,6 +11,7 @@ import {
 } from '../ksa/types';
 import type { EditingPart } from '../ksa/types';
 import type { ReactionData } from '../ksa/reactionCatalog';
+import { createMassDefinition } from '../ksa/massDefinitions';
 
 const NO_REACTIONS: ReadonlyMap<string, ReactionData> = new Map();
 
@@ -119,6 +120,41 @@ describe('computeGameDataFindings', () => {
     part.gameData.combustors.push({ ...createCombustor('GasGen'), feeds: [] });
     const severities = computeGameDataFindings(part, NO_REACTIONS).map((f) => f.severity);
     expect(severities.indexOf('block')).toBeLessThan(severities.indexOf('warn'));
+  });
+
+  it('targets an invalid mass definition by its stable editor id', () => {
+    const part = namedPart();
+    const mass = createMassDefinition('SolidCuboidMass', 'battery_mass');
+    mass.dimensions.lengthXM = 0;
+    part.gameData.massDefinitions.push(mass);
+    const finding = computeGameDataFindings(part, NO_REACTIONS).find(
+      (entry) => entry.code === 'mass-dimension-invalid',
+    );
+    expect(finding?.severity).toBe('block');
+    expect(finding?.target).toEqual({
+      scope: { kind: 'part' },
+      sectionId: 'mass',
+      cardKey: 'battery_mass',
+    });
+  });
+
+  it('routes a template mass finding to its Mass section', () => {
+    const part = namedPart();
+    place(part, 'battery_1', 'BatteryB');
+    const data = createSubPartGameData('BatteryB');
+    data.massDefinitionsOverride = true;
+    const mass = createMassDefinition('SolidCuboidMass', 'battery_mass');
+    mass.massKg = null;
+    data.massDefinitions.push(mass);
+    part.subPartGameData.push(data);
+    const finding = computeGameDataFindings(part, NO_REACTIONS).find(
+      (entry) => entry.code === 'mass-source-missing',
+    );
+    expect(finding?.target).toEqual({
+      scope: { kind: 'template', templateId: 'BatteryB' },
+      sectionId: 'mass',
+      cardKey: 'battery_mass',
+    });
   });
 });
 

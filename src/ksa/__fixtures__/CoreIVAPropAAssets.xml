@@ -1,0 +1,775 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Assets>
+    <MeshAtlas Id="CoreIVAPropA_MeshAtlas" Path="Meshes/CoreIVAPropA_MeshAtlas.glb" />
+
+    <Texture Id="CoreIVAPropA_TextureAtlas_Diffuse" Path="Textures/CoreIVAPropA_TextureAtlas_Diffuse.ktx2" Category="Vessel" />
+    <Texture Id="CoreIVAPropA_TextureAtlas_Normal" Path="Textures/CoreIVAPropA_TextureAtlas_Normal.ktx2" Category="Vessel" />
+    <Texture Id="CoreIVAPropA_TextureAtlas_PBR" Path="Textures/CoreIVAPropA_TextureAtlas_PBR.ktx2" Category="Vessel" />
+    <Texture Id="CoreIVAPropA_TextureAtlas_Emissive" Path="Textures/CoreIVAPropA_TextureAtlas_Emissive.ktx2" Category="Vessel" />
+    <PbrMaterial Id="CoreIVAPropA_Material">
+        <Diffuse Ref="CoreIVAPropA_TextureAtlas_Diffuse" />
+        <Normal Ref="CoreIVAPropA_TextureAtlas_Normal" />
+        <AoRoughMetal Ref="CoreIVAPropA_TextureAtlas_PBR" />
+        <Emissive Ref="CoreIVAPropA_TextureAtlas_Emissive" />
+    </PbrMaterial>
+
+    <SubPart Id="CoreIVAPropA_Subpart_WrittenNoteE">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_WrittenNoteE_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_WrittenNoteE" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_WrittenNoteD">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_WrittenNoteD_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_WrittenNoteD" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_WrittenNoteC">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_WrittenNoteC_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_WrittenNoteC" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_WrittenNoteB">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_WrittenNoteB_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_WrittenNoteB" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_WrittenNoteA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_WrittenNoteA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_WrittenNoteA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_TapeC">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_TapeC_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_TapeC" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_TapeB">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_TapeB_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_TapeB" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_TapeA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_TapeA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_TapeA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_PhotoB">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_PhotoB_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_PhotoB" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_PhotoH">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_PhotoH_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_PhotoH" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_PhotoG">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_PhotoG_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_PhotoG" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_PhotoF">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_PhotoF_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_PhotoF" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_PhotoE">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_PhotoE_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_PhotoE" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_PhotoD">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_PhotoD_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_PhotoD" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_PhotoC">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_PhotoC_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_PhotoC" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_PhotoA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_PhotoA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_PhotoA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_HingeAAxle">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_HingeAAxle_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_HingeAAxle" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_BoltB">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_BoltB_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_BoltB" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ThrottleALeftStick">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ThrottleALeftStick_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ThrottleALeftStick" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_SwitchGuardB">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_SwitchGuardB_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_SwitchGuardB" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_SwitchGuardA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_SwitchGuardA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_SwitchGuardA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_DeanSardineB">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_DeanSardineB_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_DeanSardineB" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_DeanSardineA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_DeanSardineA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_DeanSardineA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ConsoleAPanelB">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ConsoleAPanelB_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ConsoleAPanelB" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ConsoleAPanelC">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ConsoleAPanelC_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ConsoleAPanelC" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ConsoleAPanelD">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ConsoleAPanelD_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ConsoleAPanelD" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ConsoleAPanelE">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ConsoleAPanelE_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ConsoleAPanelE" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ConsoleAPanelF">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ConsoleAPanelF_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ConsoleAPanelF" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_InternalLeverA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_InternalLeverA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_InternalLeverA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ChairA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ChairA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ChairA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ChairAHeadrest">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ChairAHeadrest_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ChairAHeadrest" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_InternalLeverABase">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_InternalLeverABase_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_InternalLeverABase" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ThrottleARightStick">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ThrottleARightStick_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ThrottleARightStick" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_CableHolderA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_CableHolderA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_CableHolderA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_JoystickA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_JoystickA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_JoystickA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ThrottleABase">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ThrottleABase_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ThrottleABase" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ToothbrushA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ToothbrushA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ToothbrushA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_WiringBundleC">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_WiringBundleC_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_WiringBundleC" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_WiringBundleA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_WiringBundleA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_WiringBundleA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_WiringBundleB">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_WiringBundleB_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_WiringBundleB" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_MergedLightA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_MergedLightA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_MergedLightA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ScrewB">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ScrewB_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ScrewB" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ZiptieA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ZiptieA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ZiptieA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ScrewA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ScrewA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ScrewA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_WiringBundleTie">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_WiringBundleTie_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_WiringBundleTie" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_CentralConsoleA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_CentralConsoleA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_CentralConsoleA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ConsoleAPanelA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ConsoleAPanelA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ConsoleAPanelA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_UtilityBagA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_UtilityBagA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_UtilityBagA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ChairAEjectionRunners">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ChairAEjectionRunners_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ChairAEjectionRunners" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ChairABase">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ChairABase_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ChairABase" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_FloorAGrateB">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_FloorAGrateB_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_FloorAGrateB" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_FloorAGrateD">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_FloorAGrateD_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_FloorAGrateD" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_FloorACubeA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_FloorACubeA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_FloorACubeA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_FloorAJoinA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_FloorAJoinA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_FloorAJoinA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_FloorAGrateE">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_FloorAGrateE_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_FloorAGrateE" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_FloorAGrateF">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_FloorAGrateF_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_FloorAGrateF" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_FloorAGrateG">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_FloorAGrateG_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_FloorAGrateG" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_FloorAGrateC">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_FloorAGrateC_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_FloorAGrateC" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_FloorAGrateA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_FloorAGrateA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_FloorAGrateA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_ConsoleRunnersA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_ConsoleRunnersA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_ConsoleRunnersA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_HingeA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_HingeA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_HingeA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_DialABase">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_DialABase_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_DialABase" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_DialA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_DialA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_DialA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_HingeACap">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_HingeACap_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_HingeACap" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_DialB">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_DialB_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_DialB" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_DialBBase">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_DialBBase_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_DialBBase" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_SwitchGuardD">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_SwitchGuardD_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_SwitchGuardD" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_SwitchGuardC">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_SwitchGuardC_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_SwitchGuardC" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVAPropA_Subpart_BoltA">
+        <Components>
+            <PartModel Key="CoreIVAPropA_Subpart_BoltA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVAPropA_Subpart_BoltA" />
+                <Material Ref="CoreIVAPropA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+</Assets>

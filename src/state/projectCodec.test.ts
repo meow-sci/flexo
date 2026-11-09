@@ -76,6 +76,22 @@ function xf(p: [number, number, number], r: [number, number, number], s: [number
   };
 }
 
+describe('current KSA component persistence', () => {
+  it('retains unknown components, component keys, status lights, and empty template overrides', () => {
+    const part = createEmptyPart();
+    const raw = { tag: 'Habitat', attrs: { Key: 'cabin' }, children: [] };
+    part.gameData.unknownComponents = [raw];
+    part.gameData.batteries = [{ capacityWh: 2, ksaId: 'battery', hasStatusLight: true }];
+    const subPart = createSubPartGameData('Body');
+    subPart.unknownComponents = [raw];
+    part.subPartGameData = [subPart, createSubPartGameData('Empty')];
+    const decoded = roundTripOne(part);
+    expect(decoded.gameData.unknownComponents).toEqual([raw]);
+    expect(decoded.gameData.batteries).toEqual(part.gameData.batteries);
+    expect(decoded.subPartGameData).toEqual(part.subPartGameData);
+  });
+});
+
 describe('mass definition codec', () => {
   it('preserves each editable stock shape and CustomMass at both GameData scopes', () => {
     const part = createEmptyPart();
@@ -116,7 +132,7 @@ describe('mass definition codec', () => {
     expect(decoded.subPartGameData[0].massDefinitions).toEqual([]);
     expect(decoded.subPartGameData[0].massDefinitionsOverride).toBe(false);
     expect(decoded.gameData.unknownChildren).toEqual([raw]);
-    expect(PROJECT_EXPORT_VERSION).toBe(11);
+    expect(PROJECT_EXPORT_VERSION).toBe(12);
   });
 
   it('preserves an intentionally empty template mass override', () => {
@@ -643,9 +659,9 @@ describe('projectCodec round-trip', () => {
 
   // Per the no-migration rule a v10 envelope is REJECTED, never converted — so the
   // marker must actually be 11, not just "whatever the constant says".
-  it('stamps wire version 11 (multi-part)', () => {
-    expect(PROJECT_EXPORT_VERSION).toBe(11);
-    expect(encodeProject(oneEnv(createEmptyPart())).v).toBe(11);
+  it('stamps wire version 12 (current KSA data)', () => {
+    expect(PROJECT_EXPORT_VERSION).toBe(12);
+    expect(encodeProject(oneEnv(createEmptyPart())).v).toBe(12);
   });
 
   it('round-trips a conical tank, carrying its top radius only for that shape', () => {

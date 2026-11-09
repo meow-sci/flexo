@@ -1,14 +1,40 @@
 # Scope — Colliders (part collision volumes)
 
+## Current contract — KSA 2026.11.10.5801
+
+Current vessel colliders are Components modules:
+`<Components><Collider Key="…"><Colliders><Box Key="…">…</Box></Colliders></Collider>`.
+They live on resolved Part/SubPart rows, including same-tag Modify patches. The
+analytic dimensions and assembly transforms remain unchanged. ConvexHull uses
+`<Mesh Ref="…"/>` plus Scale; its mesh comes from a HostOnly atlas and is not put
+in the render-model index. ICRP static templates use their own current Colliders
+wrapper; see [static objects](static-objects.md).
+
+Flexo imports stock hull geometry and preserves its mesh reference. Custom hull
+creation remains unavailable. Fresh imported shape keys prevent repeated-import
+collisions. Flexo combines shapes under a generated Collider component key, so an
+unmodeled KeyRef to an original collider component cannot currently be retained;
+no such reference was found in the audited stock content. Do not mistake shape
+identity for module identity when extending this representation.
+
+Current implementation evidence and validation are recorded in
+[the 5801 upgrade](../plans/KSA_5801_UPGRADE.md).
+
+## Archived detail from audits through 5554
+
+The remainder records earlier source investigations. Its old XML examples and
+compatibility verdicts apply to their named builds; use the current contract above
+and [Part XML](part-and-subpart-xml.md) when authoring 5801 content.
+
 > Integration surface for how flexo **reads** and **emits** a Part's collision volume — the
 > coarse analytic shapes KSA's physics uses instead of the visual mesh. Read alongside
 > [docs/colliders.md](../docs/colliders.md) (the flexo-internal view) and
 > [part-and-subpart-xml.md](part-and-subpart-xml.md) (which owns the surrounding `<Part>` /
 > `<PartGameData>` document structure).
 
-**Baseline:** re-verified against KSA build **2026.10.10.5554** (`decomp/` + shipped `Content/Core`)
+**Historical baseline:** re-verified against KSA build **2026.10.10.5554** (`decomp/` + shipped `Content/Core`)
 and the real GLB meshes in `flexo-private-assets/assets/Meshes`.
-**Baseline status:** 🟡 **MODELED; custom hull authoring remains unavailable.** The four analytic
+**Historical baseline status:** 🟡 **MODELED; custom hull authoring remains unavailable.** The four analytic
 shapes and stock mesh-backed `<ConvexHull>` references import, preview, persist and export
 faithfully. Gap **S1** is narrowed to creating/exporting new custom collision meshes, rather than
 dropping the stock hulls introduced in 5554.

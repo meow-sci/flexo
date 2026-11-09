@@ -19,7 +19,9 @@ import {
 } from './types';
 import { validateEngines } from './engineValidation';
 import { computePerformance } from '../ui/engine/performanceAggregation';
-import { parsePartsFile, mergeGameData, parseGameDataFile, type CatalogPart } from './partCatalog';
+import { resolveContent } from './contentXml';
+import { catalogPartsFromContent } from './partCatalog';
+import { catalogFromContent } from './catalog';
 import { buildMultiModContent } from './modExport';
 
 const parser = new DOMParser();
@@ -27,43 +29,21 @@ const xml = (value: string) =>
   parser.parseFromString(value, 'application/xml') as unknown as Document;
 // Current 5554 CorePropulsionAGameData.xml fields, including TW power and magnetic-only diameter.
 const MODULES = `
-  <ThermalCore Id="FusionCore"><FeedsFrom Parent="true"/><Reaction Id="FusionH2"/><CoreTemperature K="3000000"/><MaxPressure Bar="1000"/><ThermalEfficiency Value="0.95"/><MinimumThrottle Value="0.01"/></ThermalCore>
-  <AntimatterRamCore Id="RamCore"><FeedsFrom Parent="true"/><JetPower TW="30"/><AnnihilationEfficiency Value="0.5"/><CarriedExhaustFractionOfLight Value="0.4"/><Antimatter Id="AntiH2(l)"/><ReactionMass Id="H2(l)"/><MinimumThrottle Value="0.01"/></AntimatterRamCore>
-  <MagneticNozzle Id="Nozzle"><FxExitDiameter M="4.605"/><ExhaustLocation X="-1.23"/><ExhaustDirection X="-1"/><SoundEvent Action="On" SoundId="DefaultEngineSoundBehavior"/></MagneticNozzle>
-  <MagneticScoop Id="Scoop"><CaptureRadius Km="1000"/><Collects Id="H2(l)"/></MagneticScoop>`;
+  <RocketCores><ThermalCore Key="FusionCore"><FeedsFroms><FeedsFrom FromParent="true"/></FeedsFroms><Reaction Ref="FusionH2"/><CoreTemperature K="3000000"/><MaxPressure Bar="1000"/><ThermalEfficiency Value="0.95"/><MinimumThrottle Value="0.01"/></ThermalCore>
+  <AntimatterRamCore Key="RamCore"><FeedsFroms><FeedsFrom FromParent="true"/></FeedsFroms><JetPower W="30000000000000"/><AnnihilationEfficiency Value="0.5"/><CarriedExhaustFractionOfLight Value="0.4"/><Antimatter Ref="AntiH2" Phase="Liquid"/><ReactionMass Ref="H2" Phase="Liquid"/><MinimumThrottle Value="0.01"/></AntimatterRamCore></RocketCores>
+  <RocketNozzles><MagneticNozzle Key="Nozzle"><FxExitDiameter M="4.605"/><ExhaustLocation X="-1.23"/><ExhaustDirection X="-1"/><SoundEvent Action="On" Ref="DefaultEngineSoundBehavior"/></MagneticNozzle></RocketNozzles>
+`;
 
 describe('5554 propulsion modules', () => {
   it('carries geometry SubPart propulsion into Parts across asset files and merges overlays additively', () => {
-    const geometry = new Map();
-    const parts: CatalogPart[] = [];
-    // The Part's pack can arrive before the pack defining its reusable template.
-    parsePartsFile(
-      xml(
-        '<Assets><Part Id="P"><SubPart Id="placed" InstanceOf="T"/><MagneticScoop Id="GeometryScoop"/></Part></Assets>',
-      ),
-      'Parts.xml',
-      parts,
-      geometry,
-    );
-    parsePartsFile(
-      xml(`<Assets><SubPart Id="T">${MODULES}</SubPart></Assets>`),
-      'Templates.xml',
-      parts,
-      geometry,
-    );
-    const game = {
-      parts: new Map(),
-      subParts: new Map(),
-      subPartColliders: new Map(),
-      subPartLights: new Map(),
-    };
-    parseGameDataFile(
-      xml(
-        '<Assets><PartGameData Id="P"><MagneticScoop Id="OverlayScoop"/></PartGameData><SubPartGameData Id="T"><ThermalCore Id="OverlayCore"><CoreTemperature K="2000"/></ThermalCore></SubPartGameData></Assets>',
-      ),
-      game,
-    );
-    mergeGameData(parts, game, geometry);
+    const partsDoc = xml(`<Assets><Part Id="P"><SubParts><SubPart Key="placed" Ref="T"/></SubParts>
+      <Components><MagneticScoop Key="GeometryScoop"><CaptureRadius Km="1"/><Collects Ref="H2" Phase="Liquid"/></MagneticScoop></Components></Part>
+      <SubPart Id="T"><Components><PartModel Key="model"><Mesh Ref="Tmesh"/><Material Ref="mat"/></PartModel><MagneticScoop Key="Scoop"><CaptureRadius Km="1000"/><Collects Ref="H2" Phase="Liquid"/></MagneticScoop></Components>${MODULES}</SubPart>
+      <Texture Id="tex" Path="Textures/t.ktx2" Category="Vessel"/><PbrMaterial Id="mat"><Diffuse Ref="tex"/><Normal Ref="tex"/><AoRoughMetal Ref="tex"/></PbrMaterial>
+      <Part Id="P" Modify="Patch"><Components Modify="Extend"><MagneticScoop Key="OverlayScoop"><CaptureRadius Km="2"/><Collects Ref="H2" Phase="Liquid"/></MagneticScoop></Components></Part>
+      <SubPart Id="T" Modify="Patch"><RocketCores Modify="Extend"><ThermalCore Key="OverlayCore"><CoreTemperature K="2000"/></ThermalCore></RocketCores></SubPart></Assets>`);
+    const resolved = resolveContent([{ file: 'Parts.xml', doc: partsDoc }]);
+    const parts = catalogPartsFromContent(resolved);
     expect(parts[0].magneticScoops.map((scoop) => scoop.id)).toEqual([
       'GeometryScoop',
       'OverlayScoop',
@@ -81,28 +61,19 @@ describe('5554 propulsion modules', () => {
     const content = buildMultiModContent(
       [{ entryId: 'P', name: 'P', ns: 'P', part }],
       'Geometry',
-      new Map([
-        [
-          'T',
-          {
-            id: 'T',
-            atlasUrl: '/ksa/T.glb',
-            meshNodeName: 'T',
-            materialId: 'Material',
-            sourceFile: 'Templates.xml',
-          },
-        ],
-      ]),
+      new Map(catalogFromContent(resolved, { tmesh: '/ksa/T.glb' }).map((sub) => [sub.id, sub])),
     );
     const output = content.gameDataXml;
     const variantId = content.perPart[0].remap.get('T');
     expect(variantId).toBeTruthy();
-    expect(output).toContain(`<SubPartGameData Id="${variantId}">`);
-    expect(output).toContain('<ThermalCore Id="FusionCore">');
-    expect(output).toContain('<MagneticNozzle Id="Nozzle">');
+    expect(output).toContain(`<SubPart Id="${variantId}" Modify="Patch">`);
+    expect(output).toContain('<ThermalCore Key="FusionCore">');
+    expect(output).toContain('<MagneticNozzle Key="Nozzle">');
   });
   it('normalizes geometry Part/SubPart modules and round-trips them through GameData', () => {
-    const geometry = xml(`<Part Id="P">${MODULES}</Part>`).documentElement;
+    const geometry = xml(
+      `<Part Id="P">${MODULES}<Components><MagneticScoop Key="Scoop"><CaptureRadius Km="1000"/><Collects Ref="H2" Phase="Liquid"/></MagneticScoop></Components></Part>`,
+    ).documentElement;
     const game = engineModulesFromElement(geometry);
     expect(game.thermalCores[0]).toMatchObject({
       reactionId: 'FusionH2',
@@ -120,7 +91,9 @@ describe('5554 propulsion modules', () => {
     part.gameData = game;
     const template = createSubPartGameData('T');
     const subGeometry = engineModulesFromElement(
-      xml(`<SubPart Id="T">${MODULES}</SubPart>`).documentElement,
+      xml(
+        `<SubPart Id="T">${MODULES}<Components><MagneticScoop Key="Scoop"><CaptureRadius Km="1000"/><Collects Ref="H2" Phase="Liquid"/></MagneticScoop></Components></SubPart>`,
+      ).documentElement,
     );
     template.thermalCores = subGeometry.thermalCores;
     template.antimatterRamCores = subGeometry.antimatterRamCores;
@@ -155,7 +128,7 @@ describe('5554 propulsion modules', () => {
       `<PressureCondition><LnPressure Value="10"/><Gamma Value="${gamma}"/><MolarMass GPerMol="${molarMass}"/></PressureCondition>`;
     parseReactionsFile(
       xml(
-        `<Assets><ThermalReaction Id="Heated"><Reactant Id="H2(l)" MassShare="1"/><TemperatureCondition K="1000">${condition(1.4, 2)}</TemperatureCondition><TemperatureCondition K="3000">${condition(1.6, 1)}</TemperatureCondition></ThermalReaction></Assets>`,
+        `<Assets><ThermalReaction Id="Heated"><Reactants><Reactant Ref="H2" Phase="Liquid" MassShare="1"/></Reactants><TemperatureConditions><TemperatureCondition K="1000"><PressureConditions>${condition(1.4, 2)}</PressureConditions></TemperatureCondition><TemperatureCondition K="3000"><PressureConditions>${condition(1.6, 1)}</PressureConditions></TemperatureCondition></TemperatureConditions></ThermalReaction></Assets>`,
       ),
       reactions,
     );

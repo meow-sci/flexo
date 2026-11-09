@@ -1,1267 +1,1912 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <Assets>
-  <SubPartGameData Id="CorePropulsionA_Subpart_EngineALargeVacAssembly">
-    <Rocket Id="Engine">
-      <Core Id="ThrustChamber" />
-      <Nozzle Id="Nozzle" />
-    </Rocket>
-    <Combustor Id="ThrustChamber">
-      <FeedsFrom Parent="true" />
-      <Reaction Id="Hydrolox">
-          <MixtureRatio>5.5</MixtureRatio>
-      </Reaction>
-      <MaxPressure Bar="49" />
-      <ThermalEfficiency Value="1" />
-      <MinimumThrottle Value="0.1" />
-    </Combustor>
-    <DeLavalNozzle Id="Nozzle">
-      <ExitDiameter M="2.5" />
-      <FxExitDiameter M="1.439" />
-      <AreaRatio Value="49" />
-      <FlowEfficiency Value="1" />
-      <ExpansionEfficiency Value="1" />
-      <ExhaustLocation X="-1.23" Y="0.0" Z="0.0" />
-      <ExhaustDirection X="-1" Y="0" Z="0" />
-      <ReactionPlume Default="true">
-        <VolumetricExhaust Id="EngineALarge" />
-      </ReactionPlume>
-      <SoundEvent Action="On" SoundId="DefaultEngineSoundBehavior" />
-    </DeLavalNozzle>
-  </SubPartGameData>
+  <SubPart Id="CorePropulsionA_Subpart_EngineALargeVacAssembly" Modify="Patch">
+    <Rockets Modify="Extend">
+      <Rocket Key="Engine">
+        <Core KeyRef="ThrustChamber" />
+        <Nozzles>
+          <Nozzle KeyRef="Nozzle" />
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <Combustor Key="ThrustChamber">
+        <FeedsFroms>
+          <FeedsFrom FromParent="true" />
+        </FeedsFroms>
+        <Reaction Ref="Hydrolox">
+            <MixtureRatio>5.5</MixtureRatio>
+        </Reaction>
+        <MaxPressure Bar="49" />
+        <ThermalEfficiency Value="1" />
+        <MinimumThrottle Value="0.1" />
+      </Combustor>
+    </RocketCores>
+    <RocketNozzles Modify="Extend">
+      <DeLavalNozzle Key="Nozzle">
+        <ExitDiameter M="2.5" />
+        <FxExitDiameter M="1.439" />
+        <AreaRatio Value="49" />
+        <FlowEfficiency Value="1" />
+        <ExpansionEfficiency Value="1" />
+        <ExhaustLocation X="-1.23" Y="0.0" Z="0.0" />
+        <ExhaustDirection X="-1" Y="0" Z="0" />
+        <ReactionPlumes>
+          <ReactionPlume Default="true">
+            <VolumetricExhaust Ref="EngineALarge" />
+          </ReactionPlume>
+        </ReactionPlumes>
+        <SoundEvent Ref="DefaultEngineSoundBehavior" Action="On" />
+      </DeLavalNozzle>
+    </RocketNozzles>
+  </SubPart>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_FusionTorchAssembly">
-    <Rocket Id="Engine">
-      <Core Id="FusionCore" />
-      <Nozzle Id="Nozzle" />
-    </Rocket>
-    <ThermalCore Id="FusionCore">
-      <FeedsFrom Parent="true" />
-      <Reaction Id="FusionH2" />
-      <CoreTemperature K="3000000" />
-      <MaxPressure Bar="1000" />
-      <ThermalEfficiency Value="0.95" />
-      <MinimumThrottle Value="0.01" />
-    </ThermalCore>
-    <DeLavalNozzle Id="Nozzle">
-      <ExitDiameter M="8.0" />
-      <FxExitDiameter M="4.605" />
-      <AreaRatio Value="200" />
-      <FlowEfficiency Value="1" />
-      <ExpansionEfficiency Value="1" />
-      <ExhaustLocation X="-1.23" Y="0.0" Z="0.0" />
-      <ExhaustDirection X="-1" Y="0" Z="0" />
-      <ReactionPlume Default="true">
-        <VolumetricExhaust Id="EngineALarge" />
-      </ReactionPlume>
-      <SoundEvent Action="On" SoundId="DefaultEngineSoundBehavior" />
-    </DeLavalNozzle>
-  </SubPartGameData>
+  <SubPart Id="CorePropulsionA_Subpart_FusionTorchAssembly" Modify="Patch">
+    <Rockets Modify="Extend">
+      <Rocket Key="Engine">
+        <Core KeyRef="FusionCore" />
+        <Nozzles>
+          <Nozzle KeyRef="Nozzle" />
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <ThermalCore Key="FusionCore">
+        <FeedsFroms>
+          <FeedsFrom FromParent="true" />
+        </FeedsFroms>
+        <Reaction Ref="ThermalH2" />
+        <CoreTemperature K="3000000" />
+        <MaxPressure Bar="1000" />
+        <ThermalEfficiency Value="0.95" />
+        <MinimumThrottle Value="0.01" />
+      </ThermalCore>
+    </RocketCores>
+    <RocketNozzles Modify="Extend">
+      <DeLavalNozzle Key="Nozzle">
+        <ExitDiameter M="8.0" />
+        <FxExitDiameter M="4.605" />
+        <AreaRatio Value="200" />
+        <FlowEfficiency Value="1" />
+        <ExpansionEfficiency Value="1" />
+        <ExhaustLocation X="-1.23" Y="0.0" Z="0.0" />
+        <ExhaustDirection X="-1" Y="0" Z="0" />
+        <ReactionPlumes>
+          <ReactionPlume Default="true">
+            <VolumetricExhaust Ref="EngineALarge" />
+          </ReactionPlume>
+        </ReactionPlumes>
+        <SoundEvent Ref="DefaultEngineSoundBehavior" Action="On" />
+      </DeLavalNozzle>
+    </RocketNozzles>
+  </SubPart>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_AntimatterRamAssembly">
-    <Rocket Id="Engine">
-      <Core Id="RamCore" />
-      <Nozzle Id="Nozzle" />
-    </Rocket>
-    <AntimatterRamCore Id="RamCore">
-      <FeedsFrom Parent="true" />
-      <JetPower TW="30" />
-      <AnnihilationEfficiency Value="0.5" />
-      <CarriedExhaustFractionOfLight Value="0.4" />
-      <Antimatter Id="AntiH2(l)" />
-      <ReactionMass Id="H2(l)" />
-      <MinimumThrottle Value="0.01" />
-    </AntimatterRamCore>
-    <MagneticNozzle Id="Nozzle">
-      <FxExitDiameter M="4.605" />
-      <ExhaustLocation X="-1.23" Y="0.0" Z="0.0" />
-      <ExhaustDirection X="-1" Y="0" Z="0" />
-      <SoundEvent Action="On" SoundId="DefaultEngineSoundBehavior" />
-    </MagneticNozzle>
-  </SubPartGameData>
+  <SubPart Id="CorePropulsionA_Subpart_AntimatterRamAssembly" Modify="Patch">
+    <Rockets Modify="Extend">
+      <Rocket Key="Engine">
+        <Core KeyRef="RamCore" />
+        <Nozzles>
+          <Nozzle KeyRef="Nozzle" />
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <AntimatterRamCore Key="RamCore">
+        <FeedsFroms>
+          <FeedsFrom FromParent="true" />
+        </FeedsFroms>
+        <JetPower TW="30" />
+        <AnnihilationEfficiency Value="0.5" />
+        <CarriedExhaustFractionOfLight Value="0.4" />
+        <Antimatter Ref="AntiH2" Phase="Liquid" />
+        <ReactionMass Ref="H2" Phase="Liquid" />
+        <MinimumThrottle Value="0.01" />
+      </AntimatterRamCore>
+    </RocketCores>
+    <RocketNozzles Modify="Extend">
+      <MagneticNozzle Key="Nozzle">
+        <FxExitDiameter M="4.605" />
+        <ExhaustLocation X="-1.23" Y="0.0" Z="0.0" />
+        <ExhaustDirection X="-1" Y="0" Z="0" />
+        <SoundEvent Ref="DefaultEngineSoundBehavior" Action="On" />
+      </MagneticNozzle>
+    </RocketNozzles>
+  </SubPart>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_EngineAMedBoostAssembly">
-    <Rocket Id="Engine">
-      <Core Id="ThrustChamber" />
-      <Nozzle Id="Nozzle" />
-    </Rocket>
-    <Combustor Id="ThrustChamber">
-      <FeedsFrom Parent="true" />
-      <Reaction Id="Hydrolox">
-          <MixtureRatio>5.5</MixtureRatio>
-      </Reaction>
-      <MaxPressure Bar="150" />
-      <ThermalEfficiency Value="1" />
-      <MinimumThrottle Value="0.2" />
-    </Combustor>
-    <DeLavalNozzle Id="Nozzle">
-      <ExitDiameter M="2.5" />
-      <FxExitDiameter M="0.98334" />
-      <AreaRatio Value="21" />
-      <FlowEfficiency Value="1" />
-      <ExpansionEfficiency Value="1" />
-      <ExhaustLocation X="-0.896623" Y="0.0" Z="0.0" />
-      <ExhaustDirection X="-1" Y="0" Z="0" />
-      <ReactionPlume Default="true">
-        <VolumetricExhaust Id="EngineAMed" />
-      </ReactionPlume>
-      <SoundEvent Action="On" SoundId="DefaultEngineSoundBehavior" />
-    </DeLavalNozzle>
-  </SubPartGameData>
+  <SubPart Id="CorePropulsionA_Subpart_EngineAMedBoostAssembly" Modify="Patch">
+    <Rockets Modify="Extend">
+      <Rocket Key="Engine">
+        <Core KeyRef="ThrustChamber" />
+        <Nozzles>
+          <Nozzle KeyRef="Nozzle" />
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <Combustor Key="ThrustChamber">
+        <FeedsFroms>
+          <FeedsFrom FromParent="true" />
+        </FeedsFroms>
+        <Reaction Ref="Hydrolox">
+            <MixtureRatio>5.5</MixtureRatio>
+        </Reaction>
+        <MaxPressure Bar="150" />
+        <ThermalEfficiency Value="1" />
+        <MinimumThrottle Value="0.2" />
+      </Combustor>
+    </RocketCores>
+    <RocketNozzles Modify="Extend">
+      <DeLavalNozzle Key="Nozzle">
+        <ExitDiameter M="2.5" />
+        <FxExitDiameter M="0.98334" />
+        <AreaRatio Value="21" />
+        <FlowEfficiency Value="1" />
+        <ExpansionEfficiency Value="1" />
+        <ExhaustLocation X="-0.896623" Y="0.0" Z="0.0" />
+        <ExhaustDirection X="-1" Y="0" Z="0" />
+        <ReactionPlumes>
+          <ReactionPlume Default="true">
+            <VolumetricExhaust Ref="EngineAMed" />
+          </ReactionPlume>
+        </ReactionPlumes>
+        <SoundEvent Ref="DefaultEngineSoundBehavior" Action="On" />
+      </DeLavalNozzle>
+    </RocketNozzles>
+  </SubPart>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_EngineACompactVacAssembly">
-    <Rocket Id="Engine">
-      <Core Id="ThrustChamber" />
-      <Nozzle Id="Nozzle" />
-    </Rocket>
-    <Combustor Id="ThrustChamber">
-      <FeedsFrom Parent="true" />
-      <Reaction Id="Hydrolox">
-          <MixtureRatio>5.5</MixtureRatio>
-      </Reaction>
-      <MaxPressure Bar="7" />
-      <ThermalEfficiency Value="1" />
-      <MinimumThrottle Value="0.01" />
-    </Combustor>
-    <DeLavalNozzle Id="Nozzle">
-      <ExitDiameter M="2.2" />
-      <FxExitDiameter M="0.97262" />
-      <AreaRatio Value="47" />
-      <FlowEfficiency Value="1" />
-      <ExpansionEfficiency Value="1" />
-      <ExhaustLocation X="-0.783497" Y="0.0" Z="0.0" />
-      <ExhaustDirection X="-1" Y="0" Z="0" />
-      <ReactionPlume Default="true">
-        <VolumetricExhaust Id="EngineACompact" />
-      </ReactionPlume>
-      <SoundEvent Action="On" SoundId="DefaultEngineSoundBehavior" />
-    </DeLavalNozzle>
-  </SubPartGameData>
+  <SubPart Id="CorePropulsionA_Subpart_EngineACompactVacAssembly" Modify="Patch">
+    <Rockets Modify="Extend">
+      <Rocket Key="Engine">
+        <Core KeyRef="ThrustChamber" />
+        <Nozzles>
+          <Nozzle KeyRef="Nozzle" />
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <Combustor Key="ThrustChamber">
+        <FeedsFroms>
+          <FeedsFrom FromParent="true" />
+        </FeedsFroms>
+        <Reaction Ref="Hydrolox">
+            <MixtureRatio>5.5</MixtureRatio>
+        </Reaction>
+        <MaxPressure Bar="7" />
+        <ThermalEfficiency Value="1" />
+        <MinimumThrottle Value="0.01" />
+      </Combustor>
+    </RocketCores>
+    <RocketNozzles Modify="Extend">
+      <DeLavalNozzle Key="Nozzle">
+        <ExitDiameter M="2.2" />
+        <FxExitDiameter M="0.97262" />
+        <AreaRatio Value="47" />
+        <FlowEfficiency Value="1" />
+        <ExpansionEfficiency Value="1" />
+        <ExhaustLocation X="-0.783497" Y="0.0" Z="0.0" />
+        <ExhaustDirection X="-1" Y="0" Z="0" />
+        <ReactionPlumes>
+          <ReactionPlume Default="true">
+            <VolumetricExhaust Ref="EngineACompact" />
+          </ReactionPlume>
+        </ReactionPlumes>
+        <SoundEvent Ref="DefaultEngineSoundBehavior" Action="On" />
+      </DeLavalNozzle>
+    </RocketNozzles>
+  </SubPart>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_EngineATurbopumpNozzle">
-    <DeLavalNozzle Id="TurbineExhaustNozzle">
-      <ExitDiameter Cm="26.8" />
-      <AreaRatio Value="4" />
-      <FlowEfficiency Value="0.32" />
-      <ExpansionEfficiency Value="0.035" />
-      <ExhaustLocation X="-0.198407" Y="0.0" Z="0.0" />
-      <ExhaustDirection X="-1" Y="0" Z="0" />
-      <ReactionPlume Default="true">
-        <VolumetricExhaust Id="EngineAAuxiliary" />
-      </ReactionPlume>
-    </DeLavalNozzle>
-  </SubPartGameData>
+  <SubPart Id="CorePropulsionA_Subpart_EngineATurbopumpNozzle" Modify="Patch">
+    <RocketNozzles Modify="Extend">
+      <DeLavalNozzle Key="TurbineExhaustNozzle">
+        <ExitDiameter Cm="26.8" />
+        <AreaRatio Value="4" />
+        <FlowEfficiency Value="0.32" />
+        <ExpansionEfficiency Value="0.035" />
+        <ExhaustLocation X="-0.198407" Y="0.0" Z="0.0" />
+        <ExhaustDirection X="-1" Y="0" Z="0" />
+        <ReactionPlumes>
+          <ReactionPlume Default="true">
+            <VolumetricExhaust Ref="EngineAAuxiliary" />
+          </ReactionPlume>
+        </ReactionPlumes>
+      </DeLavalNozzle>
+    </RocketNozzles>
+  </SubPart>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_EngineAVernierNozzle">
-    <DeLavalNozzle Id="VernierNozzle">
-      <ExitDiameter Cm="16.8" />
-      <AreaRatio Value="4" />
-      <FlowEfficiency Value="0.20" />
-      <ExpansionEfficiency Value="0.035" />
-      <ExhaustLocation X="-0.169143" Y="0.0" Z="0.0" />
-      <ExhaustDirection X="-1" Y="0" Z="0" />
-      <ReactionPlume Default="true">
-        <VolumetricExhaust Id="EngineAAuxiliary" />
-      </ReactionPlume>
-    </DeLavalNozzle>
-  </SubPartGameData>
+  <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle" Modify="Patch">
+    <RocketNozzles Modify="Extend">
+      <DeLavalNozzle Key="VernierNozzle">
+        <ExitDiameter Cm="16.8" />
+        <AreaRatio Value="4" />
+        <FlowEfficiency Value="0.20" />
+        <ExpansionEfficiency Value="0.035" />
+        <ExhaustLocation X="-0.169143" Y="0.0" Z="0.0" />
+        <ExhaustDirection X="-1" Y="0" Z="0" />
+        <ReactionPlumes>
+          <ReactionPlume Default="true">
+            <VolumetricExhaust Ref="EngineAAuxiliary" />
+          </ReactionPlume>
+        </ReactionPlumes>
+      </DeLavalNozzle>
+    </RocketNozzles>
+  </SubPart>
 
-  <PartGameData Id="CorePropulsionA_Prefab_EngineA2" DisplayName="LR91 Sea">
-    <EditorTag Value="Engines" />
-    <Diameter M="1"/>
-    <RocketEngineController Id="LR91-AJ-3">
-      <RocketReference Id="Engine" SubPartId="CorePropulsionA_Subpart_EngineAMedBoostAssembly1" />
-      <RocketReference Id="GasGenerator" />
-    </RocketEngineController>
-    <ConsumerFeedWiring Id="ThrustChamber" SubPartId="CorePropulsionA_Subpart_EngineAMedBoostAssembly1">
-      <FeedsFrom Connector="_connector2" />
-    </ConsumerFeedWiring>
-    <Connector Id="_connector2">
-      <Capabilities>BulkFluid</Capabilities>
-    </Connector>
-    <Rocket Id="GasGenerator">
-      <Core Id="GasGeneratorChamber" />
-      <Nozzle Id="TurbineExhaustNozzle" SubPartId="CorePropulsionA_Subpart_EngineATurbopumpNozzle2" />
-    </Rocket>
-    <Combustor Id="GasGeneratorChamber">
-      <FeedsFrom Connector="_connector2" />
-      <Reaction Id="Hydrolox">
-          <MixtureRatio>5.5</MixtureRatio>
-      </Reaction>
-      <MaxPressure Bar="49" />
-      <ThermalEfficiency Value="0.95" />
-      <MinimumThrottle Value="0.1" />
-    </Combustor>
-    <SubPart Id="CorePropulsionA_Subpart_EngineATurbopumpNozzle2">
-      <Gimbal>
+  <Part Id="CorePropulsionA_Prefab_EngineA2" Modify="Patch" DisplayName="LR91 Sea">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Engines" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="1"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="LR91-AJ-3">
+        <Rockets>
+          <Rocket SubPart="CorePropulsionA_Subpart_EngineAMedBoostAssembly1" KeyRef="Engine" />
+          <Rocket KeyRef="GasGenerator" />
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <ConsumerFeedWirings Modify="Extend">
+      <ConsumerFeedWiring SubPart="CorePropulsionA_Subpart_EngineAMedBoostAssembly1" KeyRef="ThrustChamber">
+        <FeedsFroms>
+          <FeedsFrom>
+            <Connector KeyRef="_connector2" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </ConsumerFeedWiring>
+    </ConsumerFeedWirings>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector2" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+    <Rockets Modify="Extend">
+      <Rocket Key="GasGenerator">
+        <Core KeyRef="GasGeneratorChamber" />
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_EngineATurbopumpNozzle2" KeyRef="TurbineExhaustNozzle" />
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <Combustor Key="GasGeneratorChamber">
+        <FeedsFroms>
+          <FeedsFrom>
+            <Connector KeyRef="_connector2" />
+          </FeedsFrom>
+        </FeedsFroms>
+        <Reaction Ref="Hydrolox">
+            <MixtureRatio>5.5</MixtureRatio>
+        </Reaction>
+        <MaxPressure Bar="49" />
+        <ThermalEfficiency Value="0.95" />
+        <MinimumThrottle Value="0.1" />
+      </Combustor>
+    </RocketCores>
+    <Gimbals Modify="Extend">
+      <Gimbal Key="CorePropulsionA_Subpart_EngineATurbopumpNozzle2" Modify="Patch">
         <MaxAngleY Degrees="70" />
       </Gimbal>
-    </SubPart>
-    <SubPart Id="CorePropulsionA_Subpart_EngineAMedBoostAssembly1">
-      <Gimbal>
+      <Gimbal Key="CorePropulsionA_Subpart_EngineAMedBoostAssembly1" Modify="Patch">
         <MaxAngleY Degrees="5" />
         <MaxAngleZ Degrees="5" />
         <ConstrainToCircle Value="false" />
       </Gimbal>
-    </SubPart>
-    <SolidSphereMass>
-      <Mass Kg="1500" />
-      <Radius M="0.25" />
-    </SolidSphereMass>
+    </Gimbals>
+    <InertMasses Modify="Extend">
+      <SolidSphereMass>
+        <Mass Kg="1500" />
+        <Radius M="0.25" />
+      </SolidSphereMass>
+    </InertMasses>
 
-    <Collider Id="Collider1">
-      <Cylinder Id="CylinderCollider1">
-        <LocationAsmb X="0.6" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="1.57" />
-        <LengthY M="1.1728" />
-        <Radius M="0.5" />
-      </Cylinder>
-      <Sphere Id="SphereCollider1">
-        <LocationAsmb X="-0.4" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="0" />
-        <Radius M="0.4" />
-      </Sphere>
-      <Cylinder Id="CylinderCollider2">
-        <LocationAsmb X="-0.85" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="1.57" />
-        <LengthY M="0.1" />
-        <Radius M="0.51" />
-      </Cylinder>
-    </Collider>
-  </PartGameData>
+    <Components Modify="Extend">
+      <Collider Key="Collider1">
+        <Colliders>
+          <Cylinder Key="CylinderCollider1">
+            <LocationAsmb X="0.6" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="1.1728" />
+            <Radius M="0.5" />
+          </Cylinder>
+          <Sphere Key="SphereCollider1">
+            <LocationAsmb X="-0.4" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <Radius M="0.4" />
+          </Sphere>
+          <Cylinder Key="CylinderCollider2">
+            <LocationAsmb X="-0.85" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="0.1" />
+            <Radius M="0.51" />
+          </Cylinder>
+        </Colliders>
+      </Collider>
+    </Components>
+  </Part>
 
-  <PartGameData Id="CorePropulsionA_Prefab_EngineA3" DisplayName="LR91 Vac">
-    <EditorTag Value="Engines" />
-    <Diameter M="1"/>
-    <RocketEngineController Id="LR91-AJ-3">
-      <RocketReference Id="Engine" SubPartId="CorePropulsionA_Subpart_EngineALargeVacAssembly2" />
-      <RocketReference Id="GasGenerator" />
-    </RocketEngineController>
-    <ConsumerFeedWiring Id="ThrustChamber" SubPartId="CorePropulsionA_Subpart_EngineALargeVacAssembly2">
-      <FeedsFrom Connector="_connector3" />
-    </ConsumerFeedWiring>
-    <Connector Id="_connector3">
-      <Capabilities>BulkFluid</Capabilities>
-    </Connector>
-    <Rocket Id="GasGenerator">
-      <Core Id="GasGeneratorChamber" />
-      <Nozzle Id="TurbineExhaustNozzle" SubPartId="CorePropulsionA_Subpart_EngineATurbopumpNozzle3" />
-    </Rocket>
-    <Combustor Id="GasGeneratorChamber">
-      <FeedsFrom Connector="_connector3" />
-      <Reaction Id="Hydrolox">
-          <MixtureRatio>5.5</MixtureRatio>
-      </Reaction>
-      <MaxPressure Bar="49" />
-      <ThermalEfficiency Value="0.95" />
-      <MinimumThrottle Value="0.1" />
-    </Combustor>
-    <SubPart Id="CorePropulsionA_Subpart_EngineATurbopumpNozzle3">
-      <Gimbal>
+  <Part Id="CorePropulsionA_Prefab_EngineA3" Modify="Patch" DisplayName="LR91 Vac">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Engines" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="1"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="LR91-AJ-3">
+        <Rockets>
+          <Rocket SubPart="CorePropulsionA_Subpart_EngineALargeVacAssembly2" KeyRef="Engine" />
+          <Rocket KeyRef="GasGenerator" />
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <ConsumerFeedWirings Modify="Extend">
+      <ConsumerFeedWiring SubPart="CorePropulsionA_Subpart_EngineALargeVacAssembly2" KeyRef="ThrustChamber">
+        <FeedsFroms>
+          <FeedsFrom>
+            <Connector KeyRef="_connector3" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </ConsumerFeedWiring>
+    </ConsumerFeedWirings>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector3" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+    <Rockets Modify="Extend">
+      <Rocket Key="GasGenerator">
+        <Core KeyRef="GasGeneratorChamber" />
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_EngineATurbopumpNozzle3" KeyRef="TurbineExhaustNozzle" />
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <Combustor Key="GasGeneratorChamber">
+        <FeedsFroms>
+          <FeedsFrom>
+            <Connector KeyRef="_connector3" />
+          </FeedsFrom>
+        </FeedsFroms>
+        <Reaction Ref="Hydrolox">
+            <MixtureRatio>5.5</MixtureRatio>
+        </Reaction>
+        <MaxPressure Bar="49" />
+        <ThermalEfficiency Value="0.95" />
+        <MinimumThrottle Value="0.1" />
+      </Combustor>
+    </RocketCores>
+    <Gimbals Modify="Extend">
+      <Gimbal Key="CorePropulsionA_Subpart_EngineATurbopumpNozzle3" Modify="Patch">
         <MaxAngleY Degrees="70" />
       </Gimbal>
-    </SubPart>
-    <SubPart Id="CorePropulsionA_Subpart_EngineALargeVacAssembly2">
-      <Gimbal>
+      <Gimbal Key="CorePropulsionA_Subpart_EngineALargeVacAssembly2" Modify="Patch">
         <MaxAngleY Degrees="2" />
         <MaxAngleZ Degrees="2" />
         <ConstrainToCircle Value="false" />
       </Gimbal>
-    </SubPart>
-    <SolidSphereMass>
-      <Mass Kg="200" />
-      <Radius M="0.25" />
-    </SolidSphereMass>
+    </Gimbals>
+    <InertMasses Modify="Extend">
+      <SolidSphereMass>
+        <Mass Kg="200" />
+        <Radius M="0.25" />
+      </SolidSphereMass>
+    </InertMasses>
 
-    <Collider Id="Collider1">
-      <Cylinder Id="CylinderCollider1">
-        <LocationAsmb X="0.6" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="1.57" />
-        <LengthY M="1.1728" />
-        <Radius M="0.5" />
-      </Cylinder>
-      <Sphere Id="SphereCollider1">
-        <LocationAsmb X="-0.6" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="0" />
-        <Radius M="0.6" />
-      </Sphere>
-      <Cylinder Id="CylinderCollider2">
-        <LocationAsmb X="-1.5" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="1.57" />
-        <LengthY M="0.1" />
-        <Radius M="0.75" />
-      </Cylinder>
-    </Collider>
-  </PartGameData>
+    <Components Modify="Extend">
+      <Collider Key="Collider1">
+        <Colliders>
+          <Cylinder Key="CylinderCollider1">
+            <LocationAsmb X="0.6" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="1.1728" />
+            <Radius M="0.5" />
+          </Cylinder>
+          <Sphere Key="SphereCollider1">
+            <LocationAsmb X="-0.6" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <Radius M="0.6" />
+          </Sphere>
+          <Cylinder Key="CylinderCollider2">
+            <LocationAsmb X="-1.5" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="0.1" />
+            <Radius M="0.75" />
+          </Cylinder>
+        </Colliders>
+      </Collider>
+    </Components>
+  </Part>
 
-  <PartGameData Id="CorePropulsionA_Prefab_AntimatterRamDriveA" DisplayName="RAIR-1 Antimatter Ramjet">
-    <EditorTag Value="Interstellar" />
-    <EditorTag Value="NoFaceSnapping" />
-    <Diameter M="1"/>
-    <RocketEngineController Id="RAIR-1">
-      <RocketReference Id="Engine" SubPartId="CorePropulsionA_Subpart_AntimatterRamAssembly1" />
-    </RocketEngineController>
-    <ConsumerFeedWiring Id="RamCore" SubPartId="CorePropulsionA_Subpart_AntimatterRamAssembly1">
-      <FeedsFrom Connector="_connector47" />
-    </ConsumerFeedWiring>
-    <Connector Id="_connector47">
-      <Capabilities>BulkFluid</Capabilities>
-    </Connector>
-    <SubPart Id="CorePropulsionA_Subpart_AntimatterRamAssembly1">
-      <Gimbal>
+  <Part Id="CorePropulsionA_Prefab_AntimatterRamDriveA" Modify="Patch" DisplayName="RAIR-1 Antimatter Ramjet">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Interstellar" />
+      <EditorTag Ref="NoFaceSnapping" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="1"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="RAIR-1">
+        <Rockets>
+          <Rocket SubPart="CorePropulsionA_Subpart_AntimatterRamAssembly1" KeyRef="Engine" />
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <ConsumerFeedWirings Modify="Extend">
+      <ConsumerFeedWiring SubPart="CorePropulsionA_Subpart_AntimatterRamAssembly1" KeyRef="RamCore">
+        <FeedsFroms>
+          <FeedsFrom>
+            <Connector KeyRef="_connector47" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </ConsumerFeedWiring>
+    </ConsumerFeedWirings>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector47" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+    <Gimbals Modify="Extend">
+      <Gimbal Key="CorePropulsionA_Subpart_AntimatterRamAssembly1" Modify="Patch">
         <MaxAngleY Degrees="2" />
         <MaxAngleZ Degrees="2" />
         <ConstrainToCircle Value="false" />
       </Gimbal>
-    </SubPart>
-    <SolidSphereMass>
-      <Mass Kg="20000" />
-      <Radius M="0.5" />
-    </SolidSphereMass>
-
-    <Collider Id="Collider1">
-      <Cylinder Id="CylinderCollider1">
-        <LocationAsmb X="0.6" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="1.57" />
-        <LengthY M="1.1728" />
+    </Gimbals>
+    <InertMasses Modify="Extend">
+      <SolidSphereMass>
+        <Mass Kg="20000" />
         <Radius M="0.5" />
-      </Cylinder>
-      <Sphere Id="SphereCollider1">
-        <LocationAsmb X="-0.6" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="0" />
-        <Radius M="0.6" />
-      </Sphere>
-      <Cylinder Id="CylinderCollider2">
-        <LocationAsmb X="-1.5" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="1.57" />
-        <LengthY M="0.1" />
-        <Radius M="0.75" />
-      </Cylinder>
-    </Collider>
-  </PartGameData>
+      </SolidSphereMass>
+    </InertMasses>
 
-  <PartGameData Id="CorePropulsionA_Prefab_FusionTorchDriveA" DisplayName="FPD-1 Torch">
-    <EditorTag Value="Interstellar" />
-    <EditorTag Value="NoFaceSnapping" />
-    <Diameter M="1"/>
-    <RocketEngineController Id="FPD-1">
-      <RocketReference Id="Engine" SubPartId="CorePropulsionA_Subpart_FusionTorchAssembly1" />
-    </RocketEngineController>
-    <ConsumerFeedWiring Id="FusionCore" SubPartId="CorePropulsionA_Subpart_FusionTorchAssembly1">
-      <FeedsFrom Connector="_connector47" />
-    </ConsumerFeedWiring>
-    <Connector Id="_connector47">
-      <Capabilities>BulkFluid</Capabilities>
-    </Connector>
-    <SubPart Id="CorePropulsionA_Subpart_FusionTorchAssembly1">
-      <Gimbal>
+    <Components Modify="Extend">
+      <Collider Key="Collider1">
+        <Colliders>
+          <Cylinder Key="CylinderCollider1">
+            <LocationAsmb X="0.6" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="1.1728" />
+            <Radius M="0.5" />
+          </Cylinder>
+          <Sphere Key="SphereCollider1">
+            <LocationAsmb X="-0.6" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <Radius M="0.6" />
+          </Sphere>
+          <Cylinder Key="CylinderCollider2">
+            <LocationAsmb X="-1.5" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="0.1" />
+            <Radius M="0.75" />
+          </Cylinder>
+        </Colliders>
+      </Collider>
+    </Components>
+  </Part>
+
+  <Part Id="CorePropulsionA_Prefab_FusionTorchDriveA" Modify="Patch" DisplayName="FPD-1 Torch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Interstellar" />
+      <EditorTag Ref="NoFaceSnapping" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="1"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="FPD-1">
+        <Rockets>
+          <Rocket SubPart="CorePropulsionA_Subpart_FusionTorchAssembly1" KeyRef="Engine" />
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <ConsumerFeedWirings Modify="Extend">
+      <ConsumerFeedWiring SubPart="CorePropulsionA_Subpart_FusionTorchAssembly1" KeyRef="FusionCore">
+        <FeedsFroms>
+          <FeedsFrom>
+            <Connector KeyRef="_connector47" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </ConsumerFeedWiring>
+    </ConsumerFeedWirings>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector47" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+    <Gimbals Modify="Extend">
+      <Gimbal Key="CorePropulsionA_Subpart_FusionTorchAssembly1" Modify="Patch">
         <MaxAngleY Degrees="2" />
         <MaxAngleZ Degrees="2" />
         <ConstrainToCircle Value="false" />
       </Gimbal>
-    </SubPart>
-    <SolidSphereMass>
-      <Mass Kg="20000" />
-      <Radius M="0.5" />
-    </SolidSphereMass>
-
-    <Collider Id="Collider1">
-      <Cylinder Id="CylinderCollider1">
-        <LocationAsmb X="0.6" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="1.57" />
-        <LengthY M="1.1728" />
+    </Gimbals>
+    <InertMasses Modify="Extend">
+      <SolidSphereMass>
+        <Mass Kg="20000" />
         <Radius M="0.5" />
-      </Cylinder>
-      <Sphere Id="SphereCollider1">
-        <LocationAsmb X="-0.6" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="0" />
-        <Radius M="0.6" />
-      </Sphere>
-      <Cylinder Id="CylinderCollider2">
-        <LocationAsmb X="-1.5" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="1.57" />
-        <LengthY M="0.1" />
-        <Radius M="0.75" />
-      </Cylinder>
-    </Collider>
-  </PartGameData>
+      </SolidSphereMass>
+    </InertMasses>
 
-  <PartGameData Id="CorePropulsionA_Prefab_EngineA4" DisplayName="VTR-10">
-    <EditorTag Value="Engines" />
-    <Diameter M="1"/>
-    <RocketEngineController Id="LR91-AJ-3">
-      <RocketReference Id="Engine" SubPartId="CorePropulsionA_Subpart_EngineACompactVacAssembly1" />
-    </RocketEngineController>
-    <ConsumerFeedWiring Id="ThrustChamber" SubPartId="CorePropulsionA_Subpart_EngineACompactVacAssembly1">
-      <FeedsFrom Connector="_connector4" />
-    </ConsumerFeedWiring>
-    <Connector Id="_connector4">
-      <Capabilities>BulkFluid</Capabilities>
-    </Connector>
-    <SubPart Id="CorePropulsionA_Subpart_EngineACompactVacAssembly1">
-      <Gimbal>
+    <Components Modify="Extend">
+      <Collider Key="Collider1">
+        <Colliders>
+          <Cylinder Key="CylinderCollider1">
+            <LocationAsmb X="0.6" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="1.1728" />
+            <Radius M="0.5" />
+          </Cylinder>
+          <Sphere Key="SphereCollider1">
+            <LocationAsmb X="-0.6" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <Radius M="0.6" />
+          </Sphere>
+          <Cylinder Key="CylinderCollider2">
+            <LocationAsmb X="-1.5" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="0.1" />
+            <Radius M="0.75" />
+          </Cylinder>
+        </Colliders>
+      </Collider>
+    </Components>
+  </Part>
+
+  <Part Id="CorePropulsionA_Prefab_EngineA4" Modify="Patch" DisplayName="VTR-10">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Engines" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="1"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="LR91-AJ-3">
+        <Rockets>
+          <Rocket SubPart="CorePropulsionA_Subpart_EngineACompactVacAssembly1" KeyRef="Engine" />
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <ConsumerFeedWirings Modify="Extend">
+      <ConsumerFeedWiring SubPart="CorePropulsionA_Subpart_EngineACompactVacAssembly1" KeyRef="ThrustChamber">
+        <FeedsFroms>
+          <FeedsFrom>
+            <Connector KeyRef="_connector4" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </ConsumerFeedWiring>
+    </ConsumerFeedWirings>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector4" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+    <Gimbals Modify="Extend">
+      <Gimbal Key="CorePropulsionA_Subpart_EngineACompactVacAssembly1" Modify="Patch">
         <MaxAngleY Degrees="10" />
         <MaxAngleZ Degrees="10" />
         <ConstrainToCircle Value="false" />
       </Gimbal>
-    </SubPart>
-    <SolidSphereMass>
-      <Mass Kg="100" />
-      <Radius M="0.25" />
-    </SolidSphereMass>
+    </Gimbals>
+    <InertMasses Modify="Extend">
+      <SolidSphereMass>
+        <Mass Kg="100" />
+        <Radius M="0.25" />
+      </SolidSphereMass>
+    </InertMasses>
 
-    <Collider Id="Collider1">
-      <Cylinder Id="CylinderCollider1">
-        <LocationAsmb X="0.5" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="1.57" />
-        <LengthY M="1" />
-        <Radius M="0.5" />
-      </Cylinder>
-      <Sphere Id="SphereCollider1">
-        <LocationAsmb X="-0.1" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="0" />
-        <Radius M="0.45" />
-      </Sphere>
-      <Cylinder Id="CylinderCollider2">
-        <LocationAsmb X="-0.5" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="1.57" />
-        <LengthY M="0.1" />
-        <Radius M="0.51" />
-      </Cylinder>
-    </Collider>
-  </PartGameData>
+    <Components Modify="Extend">
+      <Collider Key="Collider1">
+        <Colliders>
+          <Cylinder Key="CylinderCollider1">
+            <LocationAsmb X="0.5" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="1" />
+            <Radius M="0.5" />
+          </Cylinder>
+          <Sphere Key="SphereCollider1">
+            <LocationAsmb X="-0.1" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <Radius M="0.45" />
+          </Sphere>
+          <Cylinder Key="CylinderCollider2">
+            <LocationAsmb X="-0.5" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="0.1" />
+            <Radius M="0.51" />
+          </Cylinder>
+        </Colliders>
+      </Collider>
+    </Components>
+  </Part>
 
-  <PartGameData Id="CorePropulsionA_Prefab_EngineA5" DisplayName="LR91 Vac + Verniers">
-    <EditorTag Value="Engines" />
-    <Diameter M="1"/>
-    <RocketEngineController Id="LR91-AJ-3">
-      <RocketReference Id="Engine" SubPartId="CorePropulsionA_Subpart_EngineALargeVacAssembly3" />
-      <RocketReference Id="GasGenerator" />
-    </RocketEngineController>
-    <ConsumerFeedWiring Id="ThrustChamber" SubPartId="CorePropulsionA_Subpart_EngineALargeVacAssembly3">
-      <FeedsFrom Connector="_connector5" />
-    </ConsumerFeedWiring>
-    <Connector Id="_connector5">
-      <Capabilities>BulkFluid</Capabilities>
-    </Connector>
-    <Rocket Id="GasGenerator">
-      <Core Id="GasGeneratorChamber" />
-      <Nozzle Id="VernierNozzle" SubPartId="CorePropulsionA_Subpart_EngineAVernierNozzle4" />
-      <Nozzle Id="VernierNozzle" SubPartId="CorePropulsionA_Subpart_EngineAVernierNozzle5" />
-      <Nozzle Id="VernierNozzle" SubPartId="CorePropulsionA_Subpart_EngineAVernierNozzle6" />
-      <Nozzle Id="VernierNozzle" SubPartId="CorePropulsionA_Subpart_EngineAVernierNozzle7" />
-    </Rocket>
-    <Combustor Id="GasGeneratorChamber">
-      <FeedsFrom Connector="_connector5" />
-      <Reaction Id="Hydrolox">
-          <MixtureRatio>5.5</MixtureRatio>
-      </Reaction>
-      <MaxPressure Bar="49" />
-      <ThermalEfficiency Value="0.95" />
-      <MinimumThrottle Value="0.1" />
-    </Combustor>
-    <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle4">
-      <Gimbal>
+  <Part Id="CorePropulsionA_Prefab_EngineA5" Modify="Patch" DisplayName="LR91 Vac + Verniers">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Engines" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="1"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="LR91-AJ-3">
+        <Rockets>
+          <Rocket SubPart="CorePropulsionA_Subpart_EngineALargeVacAssembly3" KeyRef="Engine" />
+          <Rocket KeyRef="GasGenerator" />
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <ConsumerFeedWirings Modify="Extend">
+      <ConsumerFeedWiring SubPart="CorePropulsionA_Subpart_EngineALargeVacAssembly3" KeyRef="ThrustChamber">
+        <FeedsFroms>
+          <FeedsFrom>
+            <Connector KeyRef="_connector5" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </ConsumerFeedWiring>
+    </ConsumerFeedWirings>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector5" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+    <Rockets Modify="Extend">
+      <Rocket Key="GasGenerator">
+        <Core KeyRef="GasGeneratorChamber" />
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_EngineAVernierNozzle4" KeyRef="VernierNozzle" />
+          <Nozzle SubPart="CorePropulsionA_Subpart_EngineAVernierNozzle5" KeyRef="VernierNozzle" />
+          <Nozzle SubPart="CorePropulsionA_Subpart_EngineAVernierNozzle6" KeyRef="VernierNozzle" />
+          <Nozzle SubPart="CorePropulsionA_Subpart_EngineAVernierNozzle7" KeyRef="VernierNozzle" />
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <Combustor Key="GasGeneratorChamber">
+        <FeedsFroms>
+          <FeedsFrom>
+            <Connector KeyRef="_connector5" />
+          </FeedsFrom>
+        </FeedsFroms>
+        <Reaction Ref="Hydrolox">
+            <MixtureRatio>5.5</MixtureRatio>
+        </Reaction>
+        <MaxPressure Bar="49" />
+        <ThermalEfficiency Value="0.95" />
+        <MinimumThrottle Value="0.1" />
+      </Combustor>
+    </RocketCores>
+    <Gimbals Modify="Extend">
+      <Gimbal Key="CorePropulsionA_Subpart_EngineAVernierNozzle4" Modify="Patch">
         <MaxAngleY Degrees="70" />
       </Gimbal>
-    </SubPart>
-    <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle5">
-      <Gimbal>
+      <Gimbal Key="CorePropulsionA_Subpart_EngineAVernierNozzle5" Modify="Patch">
         <MaxAngleY Degrees="70" />
       </Gimbal>
-    </SubPart>
-    <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle6">
-      <Gimbal>
+      <Gimbal Key="CorePropulsionA_Subpart_EngineAVernierNozzle6" Modify="Patch">
         <MaxAngleY Degrees="70" />
       </Gimbal>
-    </SubPart>
-    <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle7">
-      <Gimbal>
+      <Gimbal Key="CorePropulsionA_Subpart_EngineAVernierNozzle7" Modify="Patch">
         <MaxAngleY Degrees="70" />
       </Gimbal>
-    </SubPart>
-    <SubPart Id="CorePropulsionA_Subpart_EngineALargeVacAssembly3">
-      <Gimbal>
+      <Gimbal Key="CorePropulsionA_Subpart_EngineALargeVacAssembly3" Modify="Patch">
         <MaxAngleY Degrees="2" />
         <MaxAngleZ Degrees="2" />
         <ConstrainToCircle Value="false" />
       </Gimbal>
-    </SubPart>
-    <SolidSphereMass>
-      <Mass Kg="300" />
-      <Radius M="0.25" />
-    </SolidSphereMass>
+    </Gimbals>
+    <InertMasses Modify="Extend">
+      <SolidSphereMass>
+        <Mass Kg="300" />
+        <Radius M="0.25" />
+      </SolidSphereMass>
+    </InertMasses>
 
-    <Collider Id="Collider1">
-      <Cylinder Id="CylinderCollider1">
-        <LocationAsmb X="0.6" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="1.57" />
-        <LengthY M="1.1728" />
-        <Radius M="0.5" />
-      </Cylinder>
-      <Sphere Id="SphereCollider1">
-        <LocationAsmb X="-0.6" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="0" />
-        <Radius M="0.6" />
-      </Sphere>
-      <Cylinder Id="CylinderCollider2">
-        <LocationAsmb X="-1.5" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="1.57" />
-        <LengthY M="0.1" />
-        <Radius M="0.75" />
-      </Cylinder>
-    </Collider>
-  </PartGameData>
+    <Components Modify="Extend">
+      <Collider Key="Collider1">
+        <Colliders>
+          <Cylinder Key="CylinderCollider1">
+            <LocationAsmb X="0.6" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="1.1728" />
+            <Radius M="0.5" />
+          </Cylinder>
+          <Sphere Key="SphereCollider1">
+            <LocationAsmb X="-0.6" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <Radius M="0.6" />
+          </Sphere>
+          <Cylinder Key="CylinderCollider2">
+            <LocationAsmb X="-1.5" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="0.1" />
+            <Radius M="0.75" />
+          </Cylinder>
+        </Colliders>
+      </Collider>
+    </Components>
+  </Part>
 
-  <PartGameData Id="CorePropulsionA_Prefab_EngineA6" DisplayName="LR91 Vac">
-    <EditorTag Value="Engines" />
-    <Diameter M="1"/>
-    <RocketEngineController Id="LR91-AJ-3">
-      <RocketReference Id="Engine" SubPartId="CorePropulsionA_Subpart_EngineALargeVacAssembly4" />
-      <RocketReference Id="GasGenerator" />
-    </RocketEngineController>
-    <ConsumerFeedWiring Id="ThrustChamber" SubPartId="CorePropulsionA_Subpart_EngineALargeVacAssembly4">
-      <FeedsFrom Connector="_connector6" />
-    </ConsumerFeedWiring>
-    <Connector Id="_connector6">
-      <Capabilities>BulkFluid</Capabilities>
-    </Connector>
-    <Rocket Id="GasGenerator">
-      <Core Id="GasGeneratorChamber" />
-      <Nozzle Id="TurbineExhaustNozzle" SubPartId="CorePropulsionA_Subpart_EngineATurbopumpNozzle4" />
-    </Rocket>
-    <Combustor Id="GasGeneratorChamber">
-      <FeedsFrom Connector="_connector6" />
-      <Reaction Id="Hydrolox">
-          <MixtureRatio>5.5</MixtureRatio>
-      </Reaction>
-      <MaxPressure Bar="49" />
-      <ThermalEfficiency Value="0.95" />
-      <MinimumThrottle Value="0.1" />
-    </Combustor>
-    <SubPart Id="CorePropulsionA_Subpart_EngineATurbopumpNozzle4">
-      <Gimbal>
+  <Part Id="CorePropulsionA_Prefab_EngineA6" Modify="Patch" DisplayName="LR91 Vac">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Engines" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="1"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="LR91-AJ-3">
+        <Rockets>
+          <Rocket SubPart="CorePropulsionA_Subpart_EngineALargeVacAssembly4" KeyRef="Engine" />
+          <Rocket KeyRef="GasGenerator" />
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <ConsumerFeedWirings Modify="Extend">
+      <ConsumerFeedWiring SubPart="CorePropulsionA_Subpart_EngineALargeVacAssembly4" KeyRef="ThrustChamber">
+        <FeedsFroms>
+          <FeedsFrom>
+            <Connector KeyRef="_connector6" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </ConsumerFeedWiring>
+    </ConsumerFeedWirings>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector6" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+    <Rockets Modify="Extend">
+      <Rocket Key="GasGenerator">
+        <Core KeyRef="GasGeneratorChamber" />
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_EngineATurbopumpNozzle4" KeyRef="TurbineExhaustNozzle" />
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <Combustor Key="GasGeneratorChamber">
+        <FeedsFroms>
+          <FeedsFrom>
+            <Connector KeyRef="_connector6" />
+          </FeedsFrom>
+        </FeedsFroms>
+        <Reaction Ref="Hydrolox">
+            <MixtureRatio>5.5</MixtureRatio>
+        </Reaction>
+        <MaxPressure Bar="49" />
+        <ThermalEfficiency Value="0.95" />
+        <MinimumThrottle Value="0.1" />
+      </Combustor>
+    </RocketCores>
+    <Gimbals Modify="Extend">
+      <Gimbal Key="CorePropulsionA_Subpart_EngineATurbopumpNozzle4" Modify="Patch">
         <MaxAngleY Degrees="70" />
       </Gimbal>
-    </SubPart>
-    <SubPart Id="CorePropulsionA_Subpart_EngineALargeVacAssembly4">
-      <Gimbal>
+      <Gimbal Key="CorePropulsionA_Subpart_EngineALargeVacAssembly4" Modify="Patch">
         <MaxAngleY Degrees="2" />
         <MaxAngleZ Degrees="2" />
         <ConstrainToCircle Value="false" />
       </Gimbal>
-    </SubPart>
-    <SolidSphereMass>
-      <Mass Kg="300" />
-      <Radius M="0.25" />
-    </SolidSphereMass>
+    </Gimbals>
+    <InertMasses Modify="Extend">
+      <SolidSphereMass>
+        <Mass Kg="300" />
+        <Radius M="0.25" />
+      </SolidSphereMass>
+    </InertMasses>
 
-    <Collider Id="Collider1">
-      <Cylinder Id="CylinderCollider1">
-        <LocationAsmb X="0.6" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="1.57" />
-        <LengthY M="1.1728" />
-        <Radius M="0.5" />
-      </Cylinder>
-      <Sphere Id="SphereCollider1">
-        <LocationAsmb X="-0.6" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="0" />
-        <Radius M="0.6" />
-      </Sphere>
-      <Cylinder Id="CylinderCollider2">
-        <LocationAsmb X="-1.5" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="1.57" />
-        <LengthY M="0.1" />
-        <Radius M="0.75" />
-      </Cylinder>
-    </Collider>
-  </PartGameData>
+    <Components Modify="Extend">
+      <Collider Key="Collider1">
+        <Colliders>
+          <Cylinder Key="CylinderCollider1">
+            <LocationAsmb X="0.6" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="1.1728" />
+            <Radius M="0.5" />
+          </Cylinder>
+          <Sphere Key="SphereCollider1">
+            <LocationAsmb X="-0.6" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <Radius M="0.6" />
+          </Sphere>
+          <Cylinder Key="CylinderCollider2">
+            <LocationAsmb X="-1.5" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="0.1" />
+            <Radius M="0.75" />
+          </Cylinder>
+        </Colliders>
+      </Collider>
+    </Components>
+  </Part>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeANozzleA">
-    <HollowOpenCylinderMass>
-      <Mass Kg="6"/>
-      <OuterRadius M="0.0451655"/>
-      <WallThickness Mm="4"/>
-      <Length M="0.106"/>
-    </HollowOpenCylinderMass>
-    <SolidMotorNozzle Id="Nozzle">
-      <ExitDiameter M="0.15"/>
-      <FxExitDiameter M="0.074098"/>
-      <FlowEfficiency Value="0.95"/>
-      <ExpansionEfficiency Value="0.98"/>
-      <ExhaustLocation X="-0.052842" Y="0" Z="0"/>
-      <ExhaustDirection X="-1" Y="0" Z="0"/>
-      <ReactionPlume Default="true">
-        <PlumeTrail Id="DefaultPlumeTrail"/>
-      </ReactionPlume>
-      <ReactionPlume Reaction="DoubleBase">
-        <VolumetricExhaust Id="EngineALarge"/>
-      </ReactionPlume>
-      <SoundEvent Action="On" SoundId="DefaultEngineSoundBehavior"/>
-    </SolidMotorNozzle>
-  </SubPartGameData>
-
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeBNozzleA">
-    <HollowOpenCylinderMass>
-      <Mass Kg="25"/>
-      <OuterRadius M="0.0941"/>
-      <WallThickness Mm="6"/>
-      <Length M="0.195"/>
-    </HollowOpenCylinderMass>
-    <SolidMotorNozzle Id="Nozzle">
-      <ExitDiameter M="0.32"/>
-      <FxExitDiameter M="0.160686"/>
-      <FlowEfficiency Value="0.95"/>
-      <ExpansionEfficiency Value="0.98"/>
-      <ExhaustLocation X="-0.097457" Y="0" Z="0"/>
-      <ExhaustDirection X="-1" Y="0" Z="0"/>
-      <ReactionPlume Default="true">
-        <PlumeTrail Id="DefaultPlumeTrail"/>
-      </ReactionPlume>
-      <ReactionPlume Reaction="DoubleBase">
-        <VolumetricExhaust Id="EngineALarge"/>
-      </ReactionPlume>
-      <SoundEvent Action="On" SoundId="DefaultEngineSoundBehavior"/>
-    </SolidMotorNozzle>
-  </SubPartGameData>
-
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeCNozzleA">
-    <HollowOpenCylinderMass>
-      <Mass Kg="100"/>
-      <OuterRadius M="0.1866935"/>
-      <WallThickness Mm="10"/>
-      <Length M="0.39"/>
-    </HollowOpenCylinderMass>
-    <SolidMotorNozzle Id="Nozzle">
-      <ExitDiameter M="0.64"/>
-      <FxExitDiameter M="0.32132"/>
-      <FlowEfficiency Value="0.95"/>
-      <ExpansionEfficiency Value="0.98"/>
-      <ExhaustLocation X="-0.195489" Y="0" Z="0"/>
-      <ExhaustDirection X="-1" Y="0" Z="0"/>
-      <ReactionPlume Default="true">
-        <PlumeTrail Id="DefaultPlumeTrail"/>
-      </ReactionPlume>
-      <ReactionPlume Reaction="DoubleBase">
-        <VolumetricExhaust Id="EngineALarge"/>
-      </ReactionPlume>
-      <SoundEvent Action="On" SoundId="DefaultEngineSoundBehavior"/>
-    </SolidMotorNozzle>
-  </SubPartGameData>
-
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeASmallSegmentA">
-    <SolidGrainSegment Id="Grain">
-      <Grain>
-        <Material Id="Steel.300(s)"/>
-        <OuterRadius M="0.125"/>
-        <WallThickness Mm="3"/>
-        <Length M="0.125"/>
-      </Grain>
-    </SolidGrainSegment>
-  </SubPartGameData>
-
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeASmallSegmentB">
-    <SolidGrainSegment Id="Grain">
-      <Grain>
-        <Material Id="Steel.300(s)"/>
-        <OuterRadius M="0.125"/>
-        <WallThickness Mm="3"/>
-        <Length M="0.125"/>
-      </Grain>
-    </SolidGrainSegment>
-  </SubPartGameData>
-
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeAMediumSegmentA">
-    <SolidGrainSegment Id="Grain">
-      <Grain>
-        <Material Id="Steel.300(s)"/>
-        <OuterRadius M="0.125"/>
-        <WallThickness Mm="3"/>
-        <Length M="0.25"/>
-      </Grain>
-    </SolidGrainSegment>
-  </SubPartGameData>
-
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeAMediumSegmentB">
-    <SolidGrainSegment Id="Grain">
-      <Grain>
-        <Material Id="Steel.300(s)"/>
-        <OuterRadius M="0.125"/>
-        <WallThickness Mm="3"/>
-        <Length M="0.25"/>
-      </Grain>
-    </SolidGrainSegment>
-  </SubPartGameData>
-
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeBSmallSegmentA">
-    <SolidGrainSegment Id="Grain">
-      <Grain>
-        <Material Id="Steel.300(s)"/>
-        <OuterRadius M="0.25"/>
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeANozzleA" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <HollowOpenCylinderMass>
+        <Mass Kg="6"/>
+        <OuterRadius M="0.0451655"/>
         <WallThickness Mm="4"/>
-        <Length M="0.25"/>
-      </Grain>
-    </SolidGrainSegment>
-  </SubPartGameData>
+        <Length M="0.106"/>
+      </HollowOpenCylinderMass>
+    </InertMasses>
+    <RocketNozzles Modify="Extend">
+      <SolidMotorNozzle Key="Nozzle">
+        <ExitDiameter M="0.15"/>
+        <FxExitDiameter M="0.074098"/>
+        <FlowEfficiency Value="0.95"/>
+        <ExpansionEfficiency Value="0.98"/>
+        <ExhaustLocation X="-0.052842" Y="0" Z="0"/>
+        <ExhaustDirection X="-1" Y="0" Z="0"/>
+        <ReactionPlumes>
+          <ReactionPlume Default="true">
+            <PlumeTrail Ref="DefaultPlumeTrail"/>
+          </ReactionPlume>
+          <ReactionPlume>
+            <Reaction Ref="DoubleBase" />
+            <VolumetricExhaust Ref="EngineALarge"/>
+          </ReactionPlume>
+        </ReactionPlumes>
+        <SoundEvent Ref="DefaultEngineSoundBehavior" Action="On"/>
+      </SolidMotorNozzle>
+    </RocketNozzles>
+  </SubPart>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeBSmallSegmentB">
-    <SolidGrainSegment Id="Grain">
-      <Grain>
-        <Material Id="Steel.300(s)"/>
-        <OuterRadius M="0.25"/>
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeBNozzleA" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <HollowOpenCylinderMass>
+        <Mass Kg="25"/>
+        <OuterRadius M="0.0941"/>
+        <WallThickness Mm="6"/>
+        <Length M="0.195"/>
+      </HollowOpenCylinderMass>
+    </InertMasses>
+    <RocketNozzles Modify="Extend">
+      <SolidMotorNozzle Key="Nozzle">
+        <ExitDiameter M="0.32"/>
+        <FxExitDiameter M="0.160686"/>
+        <FlowEfficiency Value="0.95"/>
+        <ExpansionEfficiency Value="0.98"/>
+        <ExhaustLocation X="-0.097457" Y="0" Z="0"/>
+        <ExhaustDirection X="-1" Y="0" Z="0"/>
+        <ReactionPlumes>
+          <ReactionPlume Default="true">
+            <PlumeTrail Ref="DefaultPlumeTrail"/>
+          </ReactionPlume>
+          <ReactionPlume>
+            <Reaction Ref="DoubleBase" />
+            <VolumetricExhaust Ref="EngineALarge"/>
+          </ReactionPlume>
+        </ReactionPlumes>
+        <SoundEvent Ref="DefaultEngineSoundBehavior" Action="On"/>
+      </SolidMotorNozzle>
+    </RocketNozzles>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeCNozzleA" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <HollowOpenCylinderMass>
+        <Mass Kg="100"/>
+        <OuterRadius M="0.1866935"/>
+        <WallThickness Mm="10"/>
+        <Length M="0.39"/>
+      </HollowOpenCylinderMass>
+    </InertMasses>
+    <RocketNozzles Modify="Extend">
+      <SolidMotorNozzle Key="Nozzle">
+        <ExitDiameter M="0.64"/>
+        <FxExitDiameter M="0.32132"/>
+        <FlowEfficiency Value="0.95"/>
+        <ExpansionEfficiency Value="0.98"/>
+        <ExhaustLocation X="-0.195489" Y="0" Z="0"/>
+        <ExhaustDirection X="-1" Y="0" Z="0"/>
+        <ReactionPlumes>
+          <ReactionPlume Default="true">
+            <PlumeTrail Ref="DefaultPlumeTrail"/>
+          </ReactionPlume>
+          <ReactionPlume>
+            <Reaction Ref="DoubleBase" />
+            <VolumetricExhaust Ref="EngineALarge"/>
+          </ReactionPlume>
+        </ReactionPlumes>
+        <SoundEvent Ref="DefaultEngineSoundBehavior" Action="On"/>
+      </SolidMotorNozzle>
+    </RocketNozzles>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeASmallSegmentA" Modify="Patch">
+    <Components Modify="Extend">
+      <SolidGrainSegment Key="Grain">
+        <Grain>
+          <Material Ref="Steel.300" Phase="Solid"/>
+          <OuterRadius M="0.125"/>
+          <WallThickness Mm="3"/>
+          <Length M="0.125"/>
+        </Grain>
+      </SolidGrainSegment>
+    </Components>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeASmallSegmentB" Modify="Patch">
+    <Components Modify="Extend">
+      <SolidGrainSegment Key="Grain">
+        <Grain>
+          <Material Ref="Steel.300" Phase="Solid"/>
+          <OuterRadius M="0.125"/>
+          <WallThickness Mm="3"/>
+          <Length M="0.125"/>
+        </Grain>
+      </SolidGrainSegment>
+    </Components>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeAMediumSegmentA" Modify="Patch">
+    <Components Modify="Extend">
+      <SolidGrainSegment Key="Grain">
+        <Grain>
+          <Material Ref="Steel.300" Phase="Solid"/>
+          <OuterRadius M="0.125"/>
+          <WallThickness Mm="3"/>
+          <Length M="0.25"/>
+        </Grain>
+      </SolidGrainSegment>
+    </Components>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeAMediumSegmentB" Modify="Patch">
+    <Components Modify="Extend">
+      <SolidGrainSegment Key="Grain">
+        <Grain>
+          <Material Ref="Steel.300" Phase="Solid"/>
+          <OuterRadius M="0.125"/>
+          <WallThickness Mm="3"/>
+          <Length M="0.25"/>
+        </Grain>
+      </SolidGrainSegment>
+    </Components>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeBSmallSegmentA" Modify="Patch">
+    <Components Modify="Extend">
+      <SolidGrainSegment Key="Grain">
+        <Grain>
+          <Material Ref="Steel.300" Phase="Solid"/>
+          <OuterRadius M="0.25"/>
+          <WallThickness Mm="4"/>
+          <Length M="0.25"/>
+        </Grain>
+      </SolidGrainSegment>
+    </Components>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeBSmallSegmentB" Modify="Patch">
+    <Components Modify="Extend">
+      <SolidGrainSegment Key="Grain">
+        <Grain>
+          <Material Ref="Steel.300" Phase="Solid"/>
+          <OuterRadius M="0.25"/>
+          <WallThickness Mm="4"/>
+          <Length M="0.25"/>
+        </Grain>
+      </SolidGrainSegment>
+    </Components>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeBMediumSegmentA" Modify="Patch">
+    <Components Modify="Extend">
+      <SolidGrainSegment Key="Grain">
+        <Grain>
+          <Material Ref="Steel.300" Phase="Solid"/>
+          <OuterRadius M="0.25"/>
+          <WallThickness Mm="4"/>
+          <Length M="0.5"/>
+        </Grain>
+      </SolidGrainSegment>
+    </Components>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeBMediumSegmentB" Modify="Patch">
+    <Components Modify="Extend">
+      <SolidGrainSegment Key="Grain">
+        <Grain>
+          <Material Ref="Steel.300" Phase="Solid"/>
+          <OuterRadius M="0.25"/>
+          <WallThickness Mm="4"/>
+          <Length M="0.5"/>
+        </Grain>
+      </SolidGrainSegment>
+    </Components>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeCSmallSegmentA" Modify="Patch">
+    <Components Modify="Extend">
+      <SolidGrainSegment Key="Grain">
+        <Grain>
+          <Material Ref="Steel.300" Phase="Solid"/>
+          <OuterRadius M="0.5"/>
+          <WallThickness Mm="6"/>
+          <Length M="0.5"/>
+        </Grain>
+      </SolidGrainSegment>
+    </Components>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeCSmallSegmentB" Modify="Patch">
+    <Components Modify="Extend">
+      <SolidGrainSegment Key="Grain">
+        <Grain>
+          <Material Ref="Steel.300" Phase="Solid"/>
+          <OuterRadius M="0.5"/>
+          <WallThickness Mm="6"/>
+          <Length M="0.5"/>
+        </Grain>
+      </SolidGrainSegment>
+    </Components>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeCMediumSegmentA" Modify="Patch">
+    <Components Modify="Extend">
+      <SolidGrainSegment Key="Grain">
+        <Grain>
+          <Material Ref="Steel.300" Phase="Solid"/>
+          <OuterRadius M="0.5"/>
+          <WallThickness Mm="6"/>
+          <Length M="1"/>
+        </Grain>
+      </SolidGrainSegment>
+    </Components>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeCLargeSegmentA" Modify="Patch">
+    <Components Modify="Extend">
+      <SolidGrainSegment Key="Grain">
+        <Grain>
+          <Material Ref="Steel.300" Phase="Solid"/>
+          <OuterRadius M="0.5"/>
+          <WallThickness Mm="6"/>
+          <Length M="2"/>
+        </Grain>
+      </SolidGrainSegment>
+    </Components>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeADomeA" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <HollowOpenSemiEllipsoidMass>
+        <Material Ref="Steel.300" Phase="Solid"/>
+        <Length M="0.055"/>
+        <Radius M="0.066"/>
+        <WallThickness Mm="3"/>
+      </HollowOpenSemiEllipsoidMass>
+    </InertMasses>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeADomeB" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <HollowOpenSemiEllipsoidMass>
+        <Material Ref="Steel.300" Phase="Solid"/>
+        <Length M="0.055"/>
+        <Radius M="0.066"/>
+        <WallThickness Mm="3"/>
+      </HollowOpenSemiEllipsoidMass>
+    </InertMasses>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeADomeC" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <HollowOpenSemiEllipsoidMass>
+        <Material Ref="Steel.300" Phase="Solid"/>
+        <Length M="0.055"/>
+        <Radius M="0.066"/>
+        <WallThickness Mm="3"/>
+      </HollowOpenSemiEllipsoidMass>
+    </InertMasses>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeADomeD" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <HollowOpenSemiEllipsoidMass>
+        <Material Ref="Steel.300" Phase="Solid"/>
+        <Length M="0.055"/>
+        <Radius M="0.066"/>
+        <WallThickness Mm="3"/>
+      </HollowOpenSemiEllipsoidMass>
+    </InertMasses>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeBDomeA" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <HollowOpenSemiEllipsoidMass>
+        <Material Ref="Steel.300" Phase="Solid"/>
+        <Length M="0.085"/>
+        <Radius M="0.125"/>
         <WallThickness Mm="4"/>
-        <Length M="0.25"/>
-      </Grain>
-    </SolidGrainSegment>
-  </SubPartGameData>
+      </HollowOpenSemiEllipsoidMass>
+    </InertMasses>
+  </SubPart>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeBMediumSegmentA">
-    <SolidGrainSegment Id="Grain">
-      <Grain>
-        <Material Id="Steel.300(s)"/>
-        <OuterRadius M="0.25"/>
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeBDomeB" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <HollowOpenSemiEllipsoidMass>
+        <Material Ref="Steel.300" Phase="Solid"/>
+        <Length M="0.085"/>
+        <Radius M="0.125"/>
         <WallThickness Mm="4"/>
-        <Length M="0.5"/>
-      </Grain>
-    </SolidGrainSegment>
-  </SubPartGameData>
+      </HollowOpenSemiEllipsoidMass>
+    </InertMasses>
+  </SubPart>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeBMediumSegmentB">
-    <SolidGrainSegment Id="Grain">
-      <Grain>
-        <Material Id="Steel.300(s)"/>
-        <OuterRadius M="0.25"/>
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeBDomeC" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <HollowOpenSemiEllipsoidMass>
+        <Material Ref="Steel.300" Phase="Solid"/>
+        <Length M="0.085"/>
+        <Radius M="0.125"/>
         <WallThickness Mm="4"/>
-        <Length M="0.5"/>
-      </Grain>
-    </SolidGrainSegment>
-  </SubPartGameData>
+      </HollowOpenSemiEllipsoidMass>
+    </InertMasses>
+  </SubPart>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeCSmallSegmentA">
-    <SolidGrainSegment Id="Grain">
-      <Grain>
-        <Material Id="Steel.300(s)"/>
-        <OuterRadius M="0.5"/>
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeBDomeD" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <HollowOpenSemiEllipsoidMass>
+        <Material Ref="Steel.300" Phase="Solid"/>
+        <Length M="0.085"/>
+        <Radius M="0.125"/>
+        <WallThickness Mm="4"/>
+      </HollowOpenSemiEllipsoidMass>
+    </InertMasses>
+  </SubPart>
+
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeCDomeA" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <HollowOpenSemiEllipsoidMass>
+        <Material Ref="Steel.300" Phase="Solid"/>
+        <Length M="0.171"/>
+        <Radius M="0.25"/>
         <WallThickness Mm="6"/>
-        <Length M="0.5"/>
-      </Grain>
-    </SolidGrainSegment>
-  </SubPartGameData>
+      </HollowOpenSemiEllipsoidMass>
+    </InertMasses>
+  </SubPart>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeCSmallSegmentB">
-    <SolidGrainSegment Id="Grain">
-      <Grain>
-        <Material Id="Steel.300(s)"/>
-        <OuterRadius M="0.5"/>
+  <SubPart Id="CorePropulsionA_Subpart_SRBSizeCDomeB" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <HollowOpenSemiEllipsoidMass>
+        <Material Ref="Steel.300" Phase="Solid"/>
+        <Length M="0.171"/>
+        <Radius M="0.25"/>
         <WallThickness Mm="6"/>
-        <Length M="0.5"/>
-      </Grain>
-    </SolidGrainSegment>
-  </SubPartGameData>
+      </HollowOpenSemiEllipsoidMass>
+    </InertMasses>
+  </SubPart>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeCMediumSegmentA">
-    <SolidGrainSegment Id="Grain">
-      <Grain>
-        <Material Id="Steel.300(s)"/>
-        <OuterRadius M="0.5"/>
+  <SubPart Id="CorePropulsionA_Subpart_LESNoseconeA" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <HollowOpenOgiveMass>
+        <LocationAsmb X="-0.3105" Y="0" Z="0"/>
+        <Material Ref="Steel.300" Phase="Solid"/>
+        <Height M="0.621"/>
+        <Radius M="0.25"/>
         <WallThickness Mm="6"/>
-        <Length M="1"/>
-      </Grain>
-    </SolidGrainSegment>
-  </SubPartGameData>
+      </HollowOpenOgiveMass>
+    </InertMasses>
+  </SubPart>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeCLargeSegmentA">
-    <SolidGrainSegment Id="Grain">
-      <Grain>
-        <Material Id="Steel.300(s)"/>
-        <OuterRadius M="0.5"/>
-        <WallThickness Mm="6"/>
-        <Length M="2"/>
-      </Grain>
-    </SolidGrainSegment>
-  </SubPartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBA1" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.125"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="SRBMotor">
+        <Rockets>
+          <Rocket KeyRef="Motor"/>
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <Rockets Modify="Extend">
+      <Rocket Key="Motor">
+        <Core KeyRef="MotorCore"/>
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeANozzleA1" KeyRef="Nozzle"/>
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <SolidMotor Key="MotorCore">
+        <Reaction Ref="DoubleBase"/>
+        <ThermalEfficiency Value="0.9"/>
+        <DefaultPressure Bar="45"/>
+        <Grain Ref="BoostSustain"/>
+        <FeedsFroms>
+          <FeedsFrom>
+            <Container KeyRef="Grain" SubPart="CorePropulsionA_Subpart_SRBSizeASmallSegmentA1" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </SolidMotor>
+    </RocketCores>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector28" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeADomeA">
-    <HollowOpenSemiEllipsoidMass>
-      <Material Id="Steel.300(s)"/>
-      <Length M="0.055"/>
-      <Radius M="0.066"/>
-      <WallThickness Mm="3"/>
-    </HollowOpenSemiEllipsoidMass>
-  </SubPartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBA2" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.125"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="SRBMotor">
+        <Rockets>
+          <Rocket KeyRef="Motor"/>
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <Rockets Modify="Extend">
+      <Rocket Key="Motor">
+        <Core KeyRef="MotorCore"/>
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeANozzleA2" KeyRef="Nozzle"/>
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <SolidMotor Key="MotorCore">
+        <Reaction Ref="DoubleBase"/>
+        <ThermalEfficiency Value="0.9"/>
+        <DefaultPressure Bar="45"/>
+        <Grain Ref="BoostSustain"/>
+        <FeedsFroms>
+          <FeedsFrom>
+            <Container KeyRef="Grain" SubPart="CorePropulsionA_Subpart_SRBSizeAMediumSegmentA1" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </SolidMotor>
+    </RocketCores>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector27" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeADomeB">
-    <HollowOpenSemiEllipsoidMass>
-      <Material Id="Steel.300(s)"/>
-      <Length M="0.055"/>
-      <Radius M="0.066"/>
-      <WallThickness Mm="3"/>
-    </HollowOpenSemiEllipsoidMass>
-  </SubPartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBA3" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.125"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="SRBMotor">
+        <Rockets>
+          <Rocket KeyRef="Motor"/>
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <Rockets Modify="Extend">
+      <Rocket Key="Motor">
+        <Core KeyRef="MotorCore"/>
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeANozzleA3" KeyRef="Nozzle"/>
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <SolidMotor Key="MotorCore">
+        <Reaction Ref="DoubleBase"/>
+        <ThermalEfficiency Value="0.9"/>
+        <DefaultPressure Bar="45"/>
+        <Grain Ref="BoostSustain"/>
+        <FeedsFroms>
+          <FeedsFrom>
+            <Container KeyRef="Grain" SubPart="CorePropulsionA_Subpart_SRBSizeASmallSegmentB" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </SolidMotor>
+    </RocketCores>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector26" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeADomeC">
-    <HollowOpenSemiEllipsoidMass>
-      <Material Id="Steel.300(s)"/>
-      <Length M="0.055"/>
-      <Radius M="0.066"/>
-      <WallThickness Mm="3"/>
-    </HollowOpenSemiEllipsoidMass>
-  </SubPartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBA4" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.125"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="SRBMotor">
+        <Rockets>
+          <Rocket KeyRef="Motor"/>
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <Rockets Modify="Extend">
+      <Rocket Key="Motor">
+        <Core KeyRef="MotorCore"/>
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeANozzleA4" KeyRef="Nozzle"/>
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <SolidMotor Key="MotorCore">
+        <Reaction Ref="DoubleBase"/>
+        <ThermalEfficiency Value="0.9"/>
+        <DefaultPressure Bar="45"/>
+        <Grain Ref="BoostSustain"/>
+        <FeedsFroms>
+          <FeedsFrom>
+            <Container KeyRef="Grain" SubPart="CorePropulsionA_Subpart_SRBSizeAMediumSegmentB1" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </SolidMotor>
+    </RocketCores>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector25" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeADomeD">
-    <HollowOpenSemiEllipsoidMass>
-      <Material Id="Steel.300(s)"/>
-      <Length M="0.055"/>
-      <Radius M="0.066"/>
-      <WallThickness Mm="3"/>
-    </HollowOpenSemiEllipsoidMass>
-  </SubPartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBB1" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.250"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="SRBMotor">
+        <Rockets>
+          <Rocket KeyRef="Motor"/>
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <Rockets Modify="Extend">
+      <Rocket Key="Motor">
+        <Core KeyRef="MotorCore"/>
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeBNozzleA1" KeyRef="Nozzle"/>
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <SolidMotor Key="MotorCore">
+        <Reaction Ref="DoubleBase"/>
+        <ThermalEfficiency Value="0.9"/>
+        <DefaultPressure Bar="45"/>
+        <Grain Ref="BoostSustain"/>
+        <FeedsFroms>
+          <FeedsFrom>
+            <Container KeyRef="Grain" SubPart="CorePropulsionA_Subpart_SRBSizeBSmallSegmentA1" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </SolidMotor>
+    </RocketCores>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector24" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeBDomeA">
-    <HollowOpenSemiEllipsoidMass>
-      <Material Id="Steel.300(s)"/>
-      <Length M="0.085"/>
-      <Radius M="0.125"/>
-      <WallThickness Mm="4"/>
-    </HollowOpenSemiEllipsoidMass>
-  </SubPartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBB2" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.250"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="SRBMotor">
+        <Rockets>
+          <Rocket KeyRef="Motor"/>
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <Rockets Modify="Extend">
+      <Rocket Key="Motor">
+        <Core KeyRef="MotorCore"/>
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeBNozzleA2" KeyRef="Nozzle"/>
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <SolidMotor Key="MotorCore">
+        <Reaction Ref="DoubleBase"/>
+        <ThermalEfficiency Value="0.9"/>
+        <DefaultPressure Bar="45"/>
+        <Grain Ref="BoostSustain"/>
+        <FeedsFroms>
+          <FeedsFrom>
+            <Container KeyRef="Grain" SubPart="CorePropulsionA_Subpart_SRBSizeBMediumSegmentA1" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </SolidMotor>
+    </RocketCores>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector23" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeBDomeB">
-    <HollowOpenSemiEllipsoidMass>
-      <Material Id="Steel.300(s)"/>
-      <Length M="0.085"/>
-      <Radius M="0.125"/>
-      <WallThickness Mm="4"/>
-    </HollowOpenSemiEllipsoidMass>
-  </SubPartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBB3" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.250"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="SRBMotor">
+        <Rockets>
+          <Rocket KeyRef="Motor"/>
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <Rockets Modify="Extend">
+      <Rocket Key="Motor">
+        <Core KeyRef="MotorCore"/>
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeBNozzleA3" KeyRef="Nozzle"/>
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <SolidMotor Key="MotorCore">
+        <Reaction Ref="DoubleBase"/>
+        <ThermalEfficiency Value="0.9"/>
+        <DefaultPressure Bar="45"/>
+        <Grain Ref="BoostSustain"/>
+        <FeedsFroms>
+          <FeedsFrom>
+            <Container KeyRef="Grain" SubPart="CorePropulsionA_Subpart_SRBSizeBSmallSegmentB1" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </SolidMotor>
+    </RocketCores>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector22" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeBDomeC">
-    <HollowOpenSemiEllipsoidMass>
-      <Material Id="Steel.300(s)"/>
-      <Length M="0.085"/>
-      <Radius M="0.125"/>
-      <WallThickness Mm="4"/>
-    </HollowOpenSemiEllipsoidMass>
-  </SubPartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBB4" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.250"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="SRBMotor">
+        <Rockets>
+          <Rocket KeyRef="Motor"/>
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <Rockets Modify="Extend">
+      <Rocket Key="Motor">
+        <Core KeyRef="MotorCore"/>
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeBNozzleA4" KeyRef="Nozzle"/>
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <SolidMotor Key="MotorCore">
+        <Reaction Ref="DoubleBase"/>
+        <ThermalEfficiency Value="0.9"/>
+        <DefaultPressure Bar="45"/>
+        <Grain Ref="BoostSustain"/>
+        <FeedsFroms>
+          <FeedsFrom>
+            <Container KeyRef="Grain" SubPart="CorePropulsionA_Subpart_SRBSizeBMediumSegmentB1" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </SolidMotor>
+    </RocketCores>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector21" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeBDomeD">
-    <HollowOpenSemiEllipsoidMass>
-      <Material Id="Steel.300(s)"/>
-      <Length M="0.085"/>
-      <Radius M="0.125"/>
-      <WallThickness Mm="4"/>
-    </HollowOpenSemiEllipsoidMass>
-  </SubPartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBC1" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.5"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="SRBMotor">
+        <Rockets>
+          <Rocket KeyRef="Motor"/>
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <Rockets Modify="Extend">
+      <Rocket Key="Motor">
+        <Core KeyRef="MotorCore"/>
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeCNozzleA1" KeyRef="Nozzle"/>
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <SolidMotor Key="MotorCore">
+        <Reaction Ref="DoubleBase"/>
+        <ThermalEfficiency Value="0.9"/>
+        <DefaultPressure Bar="45"/>
+        <Grain Ref="BoostSustain"/>
+        <FeedsFroms>
+          <FeedsFrom>
+            <Container KeyRef="Grain" SubPart="CorePropulsionA_Subpart_SRBSizeCSmallSegmentA1" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </SolidMotor>
+    </RocketCores>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector20" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeCDomeA">
-    <HollowOpenSemiEllipsoidMass>
-      <Material Id="Steel.300(s)"/>
-      <Length M="0.171"/>
-      <Radius M="0.25"/>
-      <WallThickness Mm="6"/>
-    </HollowOpenSemiEllipsoidMass>
-  </SubPartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBC2" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.5"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="SRBMotor">
+        <Rockets>
+          <Rocket KeyRef="Motor"/>
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <Rockets Modify="Extend">
+      <Rocket Key="Motor">
+        <Core KeyRef="MotorCore"/>
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeCNozzleA2" KeyRef="Nozzle"/>
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <SolidMotor Key="MotorCore">
+        <Reaction Ref="DoubleBase"/>
+        <ThermalEfficiency Value="0.9"/>
+        <DefaultPressure Bar="45"/>
+        <Grain Ref="BoostSustain"/>
+        <FeedsFroms>
+          <FeedsFrom>
+            <Container KeyRef="Grain" SubPart="CorePropulsionA_Subpart_SRBSizeCMediumSegmentA2" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </SolidMotor>
+    </RocketCores>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector19" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_SRBSizeCDomeB">
-    <HollowOpenSemiEllipsoidMass>
-      <Material Id="Steel.300(s)"/>
-      <Length M="0.171"/>
-      <Radius M="0.25"/>
-      <WallThickness Mm="6"/>
-    </HollowOpenSemiEllipsoidMass>
-  </SubPartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBC3" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.5"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="SRBMotor">
+        <Rockets>
+          <Rocket KeyRef="Motor"/>
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <Rockets Modify="Extend">
+      <Rocket Key="Motor">
+        <Core KeyRef="MotorCore"/>
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeCNozzleA3" KeyRef="Nozzle"/>
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <SolidMotor Key="MotorCore">
+        <Reaction Ref="DoubleBase"/>
+        <ThermalEfficiency Value="0.9"/>
+        <DefaultPressure Bar="45"/>
+        <Grain Ref="BoostSustain"/>
+        <FeedsFroms>
+          <FeedsFrom>
+            <Container KeyRef="Grain" SubPart="CorePropulsionA_Subpart_SRBSizeCLargeSegmentA3" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </SolidMotor>
+    </RocketCores>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector18" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <SubPartGameData Id="CorePropulsionA_Subpart_LESNoseconeA">
-    <HollowOpenOgiveMass>
-      <LocationAsmb X="-0.3105" Y="0" Z="0"/>
-      <Material Id="Steel.300(s)"/>
-      <Height M="0.621"/>
-      <Radius M="0.25"/>
-      <WallThickness Mm="6"/>
-    </HollowOpenOgiveMass>
-  </SubPartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBCSegmentThrustAssemblyA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.5"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="SRBMotor">
+        <Rockets>
+          <Rocket KeyRef="Motor"/>
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <Rockets Modify="Extend">
+      <Rocket Key="Motor">
+        <Core KeyRef="MotorCore"/>
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeCNozzleA4" KeyRef="Nozzle"/>
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <SolidMotor Key="MotorCore">
+        <Reaction Ref="DoubleBase"/>
+        <ThermalEfficiency Value="0.9"/>
+        <DefaultPressure Bar="45"/>
+        <Grain Ref="Neutral"/>
+        <FeedsFroms>
+          <FeedsFrom>
+            <Connector KeyRef="_connector35" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </SolidMotor>
+    </RocketCores>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector35" Modify="Patch">
+        <Capabilities>SolidMotorCase</Capabilities>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <PartGameData Id="CorePropulsionA_Prefab_SRBA1">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.125"/>
-    <RocketEngineController Id="SRBMotor">
-      <RocketReference Id="Motor"/>
-    </RocketEngineController>
-    <Rocket Id="Motor">
-      <Core Id="MotorCore"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeANozzleA1"/>
-    </Rocket>
-    <SolidMotor Id="MotorCore">
-      <Reaction Id="DoubleBase"/>
-      <ThermalEfficiency Value="0.9"/>
-      <DefaultPressure Bar="45"/>
-      <Grain Id="BoostSustain"/>
-      <FeedsFrom SubPart="CorePropulsionA_Subpart_SRBSizeASmallSegmentA1" Container="Grain"/>
-    </SolidMotor>
-    <Connector Id="_connector28">
-      <Flags>ToSurface</Flags>
-    </Connector>
-  </PartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBCSegmentLargeA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.5"/>
+    </Diameters>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector29" Modify="Patch">
+        <Capabilities>SolidMotorCase</Capabilities>
+      </Connector>
+      <Connector Key="_connector30" Modify="Patch">
+        <Capabilities>SolidMotorCase</Capabilities>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <PartGameData Id="CorePropulsionA_Prefab_SRBA2">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.125"/>
-    <RocketEngineController Id="SRBMotor">
-      <RocketReference Id="Motor"/>
-    </RocketEngineController>
-    <Rocket Id="Motor">
-      <Core Id="MotorCore"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeANozzleA2"/>
-    </Rocket>
-    <SolidMotor Id="MotorCore">
-      <Reaction Id="DoubleBase"/>
-      <ThermalEfficiency Value="0.9"/>
-      <DefaultPressure Bar="45"/>
-      <Grain Id="BoostSustain"/>
-      <FeedsFrom SubPart="CorePropulsionA_Subpart_SRBSizeAMediumSegmentA1" Container="Grain"/>
-    </SolidMotor>
-    <Connector Id="_connector27">
-      <Flags>ToSurface</Flags>
-    </Connector>
-  </PartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBCSegmentMediumA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.5"/>
+    </Diameters>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector31" Modify="Patch">
+        <Capabilities>SolidMotorCase</Capabilities>
+      </Connector>
+      <Connector Key="_connector32" Modify="Patch">
+        <Capabilities>SolidMotorCase</Capabilities>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <PartGameData Id="CorePropulsionA_Prefab_SRBA3">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.125"/>
-    <RocketEngineController Id="SRBMotor">
-      <RocketReference Id="Motor"/>
-    </RocketEngineController>
-    <Rocket Id="Motor">
-      <Core Id="MotorCore"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeANozzleA3"/>
-    </Rocket>
-    <SolidMotor Id="MotorCore">
-      <Reaction Id="DoubleBase"/>
-      <ThermalEfficiency Value="0.9"/>
-      <DefaultPressure Bar="45"/>
-      <Grain Id="BoostSustain"/>
-      <FeedsFrom SubPart="CorePropulsionA_Subpart_SRBSizeASmallSegmentB" Container="Grain"/>
-    </SolidMotor>
-    <Connector Id="_connector26">
-      <Flags>ToSurface</Flags>
-    </Connector>
-  </PartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBCSegmentSmallA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.5"/>
+    </Diameters>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector33" Modify="Patch">
+        <Capabilities>SolidMotorCase</Capabilities>
+      </Connector>
+      <Connector Key="_connector34" Modify="Patch">
+        <Capabilities>SolidMotorCase</Capabilities>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <PartGameData Id="CorePropulsionA_Prefab_SRBA4">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.125"/>
-    <RocketEngineController Id="SRBMotor">
-      <RocketReference Id="Motor"/>
-    </RocketEngineController>
-    <Rocket Id="Motor">
-      <Core Id="MotorCore"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeANozzleA4"/>
-    </Rocket>
-    <SolidMotor Id="MotorCore">
-      <Reaction Id="DoubleBase"/>
-      <ThermalEfficiency Value="0.9"/>
-      <DefaultPressure Bar="45"/>
-      <Grain Id="BoostSustain"/>
-      <FeedsFrom SubPart="CorePropulsionA_Subpart_SRBSizeAMediumSegmentB1" Container="Grain"/>
-    </SolidMotor>
-    <Connector Id="_connector25">
-      <Flags>ToSurface</Flags>
-    </Connector>
-  </PartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBCSegmentNoseconeA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.5"/>
+    </Diameters>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector36" Modify="Patch">
+        <Capabilities>SolidMotorCase</Capabilities>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <PartGameData Id="CorePropulsionA_Prefab_SRBB1">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.250"/>
-    <RocketEngineController Id="SRBMotor">
-      <RocketReference Id="Motor"/>
-    </RocketEngineController>
-    <Rocket Id="Motor">
-      <Core Id="MotorCore"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeBNozzleA1"/>
-    </Rocket>
-    <SolidMotor Id="MotorCore">
-      <Reaction Id="DoubleBase"/>
-      <ThermalEfficiency Value="0.9"/>
-      <DefaultPressure Bar="45"/>
-      <Grain Id="BoostSustain"/>
-      <FeedsFrom SubPart="CorePropulsionA_Subpart_SRBSizeBSmallSegmentA1" Container="Grain"/>
-    </SolidMotor>
-    <Connector Id="_connector24">
-      <Flags>ToSurface</Flags>
-    </Connector>
-  </PartGameData>
+  <Part Id="CorePropulsionA_Prefab_SRBCSegmentSmallB" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.5"/>
+    </Diameters>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector38" Modify="Patch">
+        <Capabilities>SolidMotorCase</Capabilities>
+      </Connector>
+      <Connector Key="_connector39" Modify="Patch">
+        <Capabilities>SolidMotorCase</Capabilities>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <PartGameData Id="CorePropulsionA_Prefab_SRBB2">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.250"/>
-    <RocketEngineController Id="SRBMotor">
-      <RocketReference Id="Motor"/>
-    </RocketEngineController>
-    <Rocket Id="Motor">
-      <Core Id="MotorCore"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeBNozzleA2"/>
-    </Rocket>
-    <SolidMotor Id="MotorCore">
-      <Reaction Id="DoubleBase"/>
-      <ThermalEfficiency Value="0.9"/>
-      <DefaultPressure Bar="45"/>
-      <Grain Id="BoostSustain"/>
-      <FeedsFrom SubPart="CorePropulsionA_Subpart_SRBSizeBMediumSegmentA1" Container="Grain"/>
-    </SolidMotor>
-    <Connector Id="_connector23">
-      <Flags>ToSurface</Flags>
-    </Connector>
-  </PartGameData>
+  <Part Id="CorePropulsionA_Prefab_LESA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="1"/>
+      <Diameter M="0.5"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="LESMotor">
+        <Rockets>
+          <Rocket KeyRef="Motor"/>
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <Rockets Modify="Extend">
+      <Rocket Key="Motor">
+        <Core KeyRef="MotorCore"/>
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeBNozzleA5" KeyRef="Nozzle"/>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeBNozzleA6" KeyRef="Nozzle" AreaRatioMultiplier="1.0025"/>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeBNozzleA7" KeyRef="Nozzle"/>
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <SolidMotor Key="MotorCore">
+        <Reaction Ref="APCP"/>
+        <ThermalEfficiency Value="0.9"/>
+        <DefaultPressure Bar="45"/>
+        <Grain Ref="Regressive"/>
+        <FeedsFroms>
+          <FeedsFrom>
+            <Container KeyRef="Grain" SubPart="CorePropulsionA_Subpart_SRBSizeCSmallSegmentB1" />
+          </FeedsFrom>
+          <FeedsFrom>
+            <Container KeyRef="Grain" SubPart="CorePropulsionA_Subpart_SRBSizeCSmallSegmentB3" />
+          </FeedsFrom>
+          <FeedsFrom>
+            <Container KeyRef="Grain" SubPart="CorePropulsionA_Subpart_SRBSizeCSmallSegmentB4" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </SolidMotor>
+    </RocketCores>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector41" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+    </Connectors>
+    <Components Modify="Extend">
+      <Decoupler Key="NoseconeMount" Force="35">
+        <Connector KeyRef="_connector41" />
+      </Decoupler>
+      <Decoupler Key="SkirtMount" Force="300">
+        <Connector KeyRef="_connector43" />
+      </Decoupler>
+    </Components>
+    <PrimarySequenceModule KeyRef="LESMotor" />
+  </Part>
 
-  <PartGameData Id="CorePropulsionA_Prefab_SRBB3">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.250"/>
-    <RocketEngineController Id="SRBMotor">
-      <RocketReference Id="Motor"/>
-    </RocketEngineController>
-    <Rocket Id="Motor">
-      <Core Id="MotorCore"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeBNozzleA3"/>
-    </Rocket>
-    <SolidMotor Id="MotorCore">
-      <Reaction Id="DoubleBase"/>
-      <ThermalEfficiency Value="0.9"/>
-      <DefaultPressure Bar="45"/>
-      <Grain Id="BoostSustain"/>
-      <FeedsFrom SubPart="CorePropulsionA_Subpart_SRBSizeBSmallSegmentB1" Container="Grain"/>
-    </SolidMotor>
-    <Connector Id="_connector22">
-      <Flags>ToSurface</Flags>
-    </Connector>
-  </PartGameData>
+  <Part Id="CorePropulsionA_Prefab_LESSegmentThrustAssemblyA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="1"/>
+      <Diameter M="0.5"/>
+    </Diameters>
+    <RocketEngineControllers Modify="Extend">
+      <RocketEngineController Key="LESMotor">
+        <Rockets>
+          <Rocket KeyRef="Motor"/>
+        </Rockets>
+      </RocketEngineController>
+    </RocketEngineControllers>
+    <Rockets Modify="Extend">
+      <Rocket Key="Motor">
+        <Core KeyRef="MotorCore"/>
+        <Nozzles>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeBNozzleA8" KeyRef="Nozzle"/>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeBNozzleA9" KeyRef="Nozzle" AreaRatioMultiplier="1.0025"/>
+          <Nozzle SubPart="CorePropulsionA_Subpart_SRBSizeBNozzleA10" KeyRef="Nozzle"/>
+        </Nozzles>
+      </Rocket>
+    </Rockets>
+    <RocketCores Modify="Extend">
+      <SolidMotor Key="MotorCore">
+        <Reaction Ref="APCP"/>
+        <ThermalEfficiency Value="0.9"/>
+        <DefaultPressure Bar="45"/>
+        <Grain Ref="Regressive"/>
+        <FeedsFroms>
+          <FeedsFrom>
+            <Connector KeyRef="_connector45" />
+          </FeedsFrom>
+        </FeedsFroms>
+      </SolidMotor>
+    </RocketCores>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector45" Modify="Patch">
+        <Capabilities>SolidMotorCase</Capabilities>
+      </Connector>
+      <Connector Key="_connector42" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+    </Connectors>
+    <Components Modify="Extend">
+      <Decoupler Key="NoseconeMount" Force="35">
+        <Connector KeyRef="_connector42" />
+      </Decoupler>
+      <Decoupler Key="SkirtMount" Force="300">
+        <Connector KeyRef="_connector44" />
+      </Decoupler>
+    </Components>
+    <PrimarySequenceModule KeyRef="LESMotor" />
+  </Part>
 
-  <PartGameData Id="CorePropulsionA_Prefab_SRBB4">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.250"/>
-    <RocketEngineController Id="SRBMotor">
-      <RocketReference Id="Motor"/>
-    </RocketEngineController>
-    <Rocket Id="Motor">
-      <Core Id="MotorCore"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeBNozzleA4"/>
-    </Rocket>
-    <SolidMotor Id="MotorCore">
-      <Reaction Id="DoubleBase"/>
-      <ThermalEfficiency Value="0.9"/>
-      <DefaultPressure Bar="45"/>
-      <Grain Id="BoostSustain"/>
-      <FeedsFrom SubPart="CorePropulsionA_Subpart_SRBSizeBMediumSegmentB1" Container="Grain"/>
-    </SolidMotor>
-    <Connector Id="_connector21">
-      <Flags>ToSurface</Flags>
-    </Connector>
-  </PartGameData>
-
-  <PartGameData Id="CorePropulsionA_Prefab_SRBC1">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.5"/>
-    <RocketEngineController Id="SRBMotor">
-      <RocketReference Id="Motor"/>
-    </RocketEngineController>
-    <Rocket Id="Motor">
-      <Core Id="MotorCore"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeCNozzleA1"/>
-    </Rocket>
-    <SolidMotor Id="MotorCore">
-      <Reaction Id="DoubleBase"/>
-      <ThermalEfficiency Value="0.9"/>
-      <DefaultPressure Bar="45"/>
-      <Grain Id="BoostSustain"/>
-      <FeedsFrom SubPart="CorePropulsionA_Subpart_SRBSizeCSmallSegmentA1" Container="Grain"/>
-    </SolidMotor>
-    <Connector Id="_connector20">
-      <Flags>ToSurface</Flags>
-    </Connector>
-  </PartGameData>
-
-  <PartGameData Id="CorePropulsionA_Prefab_SRBC2">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.5"/>
-    <RocketEngineController Id="SRBMotor">
-      <RocketReference Id="Motor"/>
-    </RocketEngineController>
-    <Rocket Id="Motor">
-      <Core Id="MotorCore"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeCNozzleA2"/>
-    </Rocket>
-    <SolidMotor Id="MotorCore">
-      <Reaction Id="DoubleBase"/>
-      <ThermalEfficiency Value="0.9"/>
-      <DefaultPressure Bar="45"/>
-      <Grain Id="BoostSustain"/>
-      <FeedsFrom SubPart="CorePropulsionA_Subpart_SRBSizeCMediumSegmentA2" Container="Grain"/>
-    </SolidMotor>
-    <Connector Id="_connector19">
-      <Flags>ToSurface</Flags>
-    </Connector>
-  </PartGameData>
-
-  <PartGameData Id="CorePropulsionA_Prefab_SRBC3">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.5"/>
-    <RocketEngineController Id="SRBMotor">
-      <RocketReference Id="Motor"/>
-    </RocketEngineController>
-    <Rocket Id="Motor">
-      <Core Id="MotorCore"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeCNozzleA3"/>
-    </Rocket>
-    <SolidMotor Id="MotorCore">
-      <Reaction Id="DoubleBase"/>
-      <ThermalEfficiency Value="0.9"/>
-      <DefaultPressure Bar="45"/>
-      <Grain Id="BoostSustain"/>
-      <FeedsFrom SubPart="CorePropulsionA_Subpart_SRBSizeCLargeSegmentA3" Container="Grain"/>
-    </SolidMotor>
-    <Connector Id="_connector18">
-      <Flags>ToSurface</Flags>
-    </Connector>
-  </PartGameData>
-
-  <PartGameData Id="CorePropulsionA_Prefab_SRBCSegmentThrustAssemblyA">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.5"/>
-    <RocketEngineController Id="SRBMotor">
-      <RocketReference Id="Motor"/>
-    </RocketEngineController>
-    <Rocket Id="Motor">
-      <Core Id="MotorCore"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeCNozzleA4"/>
-    </Rocket>
-    <SolidMotor Id="MotorCore">
-      <Reaction Id="DoubleBase"/>
-      <ThermalEfficiency Value="0.9"/>
-      <DefaultPressure Bar="45"/>
-      <Grain Id="Neutral"/>
-      <FeedsFrom Connector="_connector35"/>
-    </SolidMotor>
-    <Connector Id="_connector35">
-      <Capabilities>SolidMotorCase</Capabilities>
-    </Connector>
-  </PartGameData>
-
-  <PartGameData Id="CorePropulsionA_Prefab_SRBCSegmentLargeA">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.5"/>
-    <Connector Id="_connector29">
-      <Capabilities>SolidMotorCase</Capabilities>
-    </Connector>
-    <Connector Id="_connector30">
-      <Capabilities>SolidMotorCase</Capabilities>
-    </Connector>
-  </PartGameData>
-
-  <PartGameData Id="CorePropulsionA_Prefab_SRBCSegmentMediumA">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.5"/>
-    <Connector Id="_connector31">
-      <Capabilities>SolidMotorCase</Capabilities>
-    </Connector>
-    <Connector Id="_connector32">
-      <Capabilities>SolidMotorCase</Capabilities>
-    </Connector>
-  </PartGameData>
-
-  <PartGameData Id="CorePropulsionA_Prefab_SRBCSegmentSmallA">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.5"/>
-    <Connector Id="_connector33">
-      <Capabilities>SolidMotorCase</Capabilities>
-    </Connector>
-    <Connector Id="_connector34">
-      <Capabilities>SolidMotorCase</Capabilities>
-    </Connector>
-  </PartGameData>
-
-  <PartGameData Id="CorePropulsionA_Prefab_SRBCSegmentNoseconeA">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.5"/>
-    <Connector Id="_connector36">
-      <Capabilities>SolidMotorCase</Capabilities>
-    </Connector>
-  </PartGameData>
-
-  <PartGameData Id="CorePropulsionA_Prefab_SRBCSegmentSmallB">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.5"/>
-    <Connector Id="_connector38">
-      <Capabilities>SolidMotorCase</Capabilities>
-    </Connector>
-    <Connector Id="_connector39">
-      <Capabilities>SolidMotorCase</Capabilities>
-    </Connector>
-  </PartGameData>
-
-  <PartGameData Id="CorePropulsionA_Prefab_LESA">
-    <EditorTag Value="Booster" />
-    <Diameter M="1"/>
-    <Diameter M="0.5"/>
-    <RocketEngineController Id="LESMotor">
-      <RocketReference Id="Motor"/>
-    </RocketEngineController>
-    <Rocket Id="Motor">
-      <Core Id="MotorCore"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeBNozzleA5"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeBNozzleA6" AreaRatioMultiplier="1.0025"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeBNozzleA7"/>
-    </Rocket>
-    <SolidMotor Id="MotorCore">
-      <Reaction Id="APCP"/>
-      <ThermalEfficiency Value="0.9"/>
-      <DefaultPressure Bar="45"/>
-      <Grain Id="Regressive"/>
-      <FeedsFrom SubPart="CorePropulsionA_Subpart_SRBSizeCSmallSegmentB1" Container="Grain"/>
-      <FeedsFrom SubPart="CorePropulsionA_Subpart_SRBSizeCSmallSegmentB3" Container="Grain"/>
-      <FeedsFrom SubPart="CorePropulsionA_Subpart_SRBSizeCSmallSegmentB4" Container="Grain"/>
-    </SolidMotor>
-    <Connector Id="_connector41">
-      <Flags>Internal</Flags>
-    </Connector>
-    <Decoupler Id="NoseconeMount" ConnectorId="_connector41" Force="35" />
-    <Decoupler Id="SkirtMount" ConnectorId="_connector43" Force="300" />
-    <PrimarySequenceModule Id="LESMotor" />
-  </PartGameData>
-
-  <PartGameData Id="CorePropulsionA_Prefab_LESSegmentThrustAssemblyA">
-    <EditorTag Value="Booster" />
-    <Diameter M="1"/>
-    <Diameter M="0.5"/>
-    <RocketEngineController Id="LESMotor">
-      <RocketReference Id="Motor"/>
-    </RocketEngineController>
-    <Rocket Id="Motor">
-      <Core Id="MotorCore"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeBNozzleA8"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeBNozzleA9" AreaRatioMultiplier="1.0025"/>
-      <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeBNozzleA10"/>
-    </Rocket>
-    <SolidMotor Id="MotorCore">
-      <Reaction Id="APCP"/>
-      <ThermalEfficiency Value="0.9"/>
-      <DefaultPressure Bar="45"/>
-      <Grain Id="Regressive"/>
-      <FeedsFrom Connector="_connector45"/>
-    </SolidMotor>
-    <Connector Id="_connector45">
-      <Capabilities>SolidMotorCase</Capabilities>
-    </Connector>
-    <Connector Id="_connector42">
-      <Flags>Internal</Flags>
-    </Connector>
-    <Decoupler Id="NoseconeMount" ConnectorId="_connector42" Force="35" />
-    <Decoupler Id="SkirtMount" ConnectorId="_connector44" Force="300" />
-    <PrimarySequenceModule Id="LESMotor" />
-  </PartGameData>
-
-  <PartGameData Id="CorePropulsionA_Prefab_LESSegmentNoseconeA">
-    <EditorTag Value="Booster" />
-    <Diameter M="0.5"/>
-    <Connector Id="_connector40">
-      <Capabilities>SolidMotorCase</Capabilities>
-    </Connector>
-  </PartGameData>
+  <Part Id="CorePropulsionA_Prefab_LESSegmentNoseconeA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Booster" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.5"/>
+    </Diameters>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector40" Modify="Patch">
+        <Capabilities>SolidMotorCase</Capabilities>
+      </Connector>
+    </Connectors>
+  </Part>
 </Assets>

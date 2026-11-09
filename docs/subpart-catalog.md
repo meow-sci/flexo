@@ -3,73 +3,40 @@
 How flexo discovers the game's SubParts and resolves the GLB/texture files needed to
 render them.
 
-## What a SubPart is (KSA data model)
+## Current Core content and resolution
 
-In KSA `*Assets.xml`, a `<SubPart Id="...">` template contains a `<PartModel>` with:
-- `<Mesh Id="X"/>` — **X is the name of a node inside a GLB mesh atlas** (verified:
-  the atlas GLB's glTF JSON has `nodes[].name === X`).
-- `<Material Id="...">` — references a `<PbrMaterial>` declared in the same file,
-  whose children (`<Diffuse>/<Normal>/<AoRoughMetal>/<Emissive>`) point at `.ktx2`
-  texture atlases.
+KSA 5801 declares top-level `SubPart` rows. Renderable rows carry
+`PartModel`, `PartModelDynamic`, or `PartModelGlass` components; `Mesh` and
+`Material` use `Ref`. Some templates carry gameplay without any model. Part placements are `SubParts/SubPart` entries with a local `Key` and a
+template `Ref`. Materials and textures are global rows, not file-local paths.
 
-The file also declares `<MeshAtlas Path="Meshes/....glb"/>` — usually one default
-(no `Id`) atlas per file; occasionally a named one (e.g. `circle_light.glb`).
+`coreFiles.ts` lists the relevant Core files in manifest order, including the
+standalone fuel-port gameplay file and the global PartGameData file. Both Part
+and SubPart loaders share the cached `loadCoreContent()` result. The prepass
+flattens `Parent` inheritance only after all later patches have been collected,
+then applies current `Patch`, `Replace`, `Remove`, `IfExists` and `Extend`
+semantics. It rejects malformed content with an exception. KSA instead reports
+individual errors and can continue with unaffected rows; flexo currently fails
+closed at the catalog boundary. File-backed paths are resolved within the one
+Core mod; multi-mod file ownership is not modeled here.
 
-Composite `<Part>` definitions list `<SubPart InstanceOf="templateId">` with
-`<Transform>` — these are placements, not templates (no `<PartModel>`).
+`vite/meshIndex.ts` reads GLB JSON chunks to map referenced mesh names to their
+non-HostOnly atlas. `ksaAssets` serves the index in development and writes it on
+build. The browser resolves each material's texture refs globally. Missing model,
+material or texture refs fail the catalog rather than silently rendering an
+unrelated atlas. `CatalogSubPart.models` preserves all native models and their
+kinds; scalar fields mirror the first model for existing consumers. `raw` and
+`components` retain the flattened template for export; `renderComponents` includes
+MeshView. Metadata-only templates have `models: []`, an empty atlas URL and no mesh node. Their gameplay remains available to whole-Part import and export, while the visual SubPart picker and ICRP piece conversion exclude them. The editor and Part preview create an empty scene group without requesting geometry. Related-appearance metadata combines curated geometry matches with mutually exclusive
+placements from explicit Part families. It is an editor convenience and does not assert a
+game-defined SubPart family.
 
-## Runtime catalog loader — `src/ksa/catalog.ts`
-
-`loadCoreCatalog()` fetches a fixed list (`ASSET_FILES`) of Core `*Assets.xml` files
-from `/ksa/...` — each together with its `*GameData.xml` sibling (`gameDataSibling(file)`;
-a missing sibling is the silent common case) — parses them with the browser `DOMParser`,
-and produces `CatalogSubPart[]`:
-
-```ts
-interface CatalogSubPart {
-  id: string                 // SubPart template id
-  atlasUrl: string           // "/ksa/Meshes/....glb"
-  meshNodeName: string | null// node name in the atlas (null = whole-atlas/named)
-  materialId?: string
-  diffuseUrl?, normalUrl?, aoRoughMetalUrl?, emissiveUrl?  // "/ksa/Textures/*.ktx2"
-  sourceFile: string
-}
-```
-
-Resolution rules per file:
-- Collect the default `<MeshAtlas>` (no `Id`) + any named ones.
-- Map `<PbrMaterial Id>` → its texture child `Path`s.
-- For each `<SubPart>` **that has a `<PartModel>`** (templates only): take the
-  `<PartModel><Mesh Id>`; if it matches a named atlas, `atlasUrl`=that atlas and
-  `meshNodeName=null`, else `atlasUrl`=default atlas and `meshNodeName=<Mesh Id>`.
-  Resolve the `<Material>` to texture URLs. Skip (warn) entries with no `<PartModel>`
-  or no resolvable atlas.
-
-- **Templates in the GameData sibling** (`parseAssetsFile(doc, sourceFile, out, siblingGameDataDoc)`):
-  since KSA 2026.9.7.5402 Core also declares geometry `<SubPart>` templates at the top level of a
-  `*GameData.xml` file (the parachute bay's `CoreUtilityA_Subpart_StandaloneParachuteA/B` in
-  `CoreUtilityAGameData.xml`), referencing the Assets file's default atlas and `<PbrMaterial>` by
-  id — KSA resolves both from one global registry. The loader walks the sibling's `<SubPart>`
-  templates with the **Assets file's** atlas/material tables (the GameData file has none) and
-  records them under the Assets `sourceFile`, so the browsers group them with their pack.
-
-`indexCatalog(entries)` builds an `id → entry` map.
-
-The loader also attaches editable metadata from **all** fetched GameData documents,
-matched by `<SubPartGameData Id>`. This global pass includes `PartGameData.xml` and
-merges repeated template ids additively in file order. `CatalogSubPart.data` carries
-its parsed modules, GameData colliders and lights. **Add ▸ SubPart…** passes that
-payload to `addSubPart`, so adding a built-in engine chamber imports its combustor,
-reaction/mixture ratio, nozzle, rocket, and preserved controller XML with the mesh.
-The first placement seeds template data in the same undo step; later placements
-share existing authored data and preserve user edits. GameData colliders and lights
-join the placement's layer. Geometry colliders remain inherited from the catalog
-entry and are carried forward when export creates a template variant.
-
-Whole-Part import additionally merges `<SubPart><Gimbal>` from geometry with the
-GameData overlay, retaining authored pivots and axes whenever the overlay only
-supplies angle limits. A present Position/Rotation/Scale replaces that complete
-vector, matching KSA's `TransformReference.Apply`.
+Whole Parts are also parsed from the flattened document, preserving every
+concrete ID and its explicit valid ordered `Variants` references. A member
+inherits its parent's final gameplay while retaining its own placements. The
+preview manifest uses the same resolved Part catalog. Tests use byte-identical
+Core XML fixtures and, when available, verify the current private asset mirror and
+mesh index. No licensed binary assets are committed.
 
 ## Catalog in state — `src/state/catalogStore.ts`
 
@@ -110,12 +77,25 @@ name (`imported.meshName`) through the same `MeshAtlasCache`. See
 
 ## Where the asset files come from
 
-`/ksa/...` is served by the `ksaAssets()` Vite plugin in **dev only**, mapping
-`KSA_ASSETS_DIR` (the private assets tree). Production bundling requires extra work — see
-[asset-pipeline.md](./asset-pipeline.md).
+`/ksa/...` is served in development and copied for production by the `ksaAssets()` Vite plugin from `KSA_ASSETS_DIR`; see [asset-pipeline.md](./asset-pipeline.md).
 
 ## Tests
-`src/ksa/catalog.test.ts` parses real Core XML offline (node + `@xmldom/xmldom`),
-asserts a known SubPart resolves correctly, and verifies **every resolved
-`meshNodeName` actually exists as a node in its GLB atlas** (reads the GLB JSON
-chunk).
+
+`contentXml.test.ts` covers merge semantics and malformed input. `partCatalog.test.ts`
+uses the vendored closure and verifies fixture bytes against the private mirror when
+available. `corpus5801.test.ts` checks live mesh and material references, and
+`previewManifest.test.ts` compares the browser and Node catalog results.
+
+## Browsing families and appearances
+
+The Part browser displays one row for each explicit Part variant family. Its Variant
+selector chooses the concrete member for preview and import; searching an exact member
+ID selects that member. Standalone Parts remain separate. The SubPart browser keeps renderable
+IDs searchable and offers a Related appearances selector for verified geometry matches and mutually exclusive
+placements in explicit Part families. Its
+selection previews and adds that concrete template, including its own gameplay data.
+These selections are dialog state, not stored variant links in the document. Each import
+or Add remains one undo step.
+
+All render models in a catalog SubPart appear together in the editor and both previews.
+Custom meshes retain their per-face materials and geometry overrides.

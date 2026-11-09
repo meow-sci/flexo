@@ -1,11 +1,33 @@
 # Scope — Ground clutter (data-only celestial mod)
 
+## Current contract — KSA 2026.11.10.5801
+
+The separate cartoon-moon scaffold remains outside the Part editor upgrade and
+retains its historical incompatibility R1. It must not be represented as a working
+5801 mod generator. Current general content rules are Id/Ref/Key/KeyRef, ordered
+prepass and same-tag Modify patches, as documented in [Part XML](part-and-subpart-xml.md).
+
+ICRP's current StaticObject/System/site export has been updated separately; that
+does not update the clutter generator. Native planetary payloads are not needed
+by Flexo's Part/static browser and are excluded from the production resource copy.
+The older clutter investigation below remains historical research, not a current
+XML specification or proof of a successful game load.
+
+Current implementation evidence and validation are recorded in
+[the 5801 upgrade](../plans/KSA_5801_UPGRADE.md).
+
+## Archived detail from audits through 5554
+
+The remainder records earlier source investigations. Its old XML examples and
+compatibility verdicts apply to their named builds; use the current contract above
+and [Part XML](part-and-subpart-xml.md) when authoring 5801 content.
+
 > A separate mod type from part editing: flexo's `build-cartoon-moon.ts` generates a
 > data-only KSA mod that adds a celestial body with `<GroundClutter>` (cards/meshes scattered
 > on the terrain), using **no custom game code**. Reference scaffold for clutter modding.
 
-**Baseline:** re-verified against KSA build **2026.10.10.5554** (decomp + shipped Core XML).
-**Baseline status:** 🔴 **HISTORICAL BREAKING GAP R1 — scaffold still uses pre-5168 XML.**
+**Historical baseline:** re-verified against KSA build **2026.10.10.5554** (decomp + shipped Core XML).
+**Historical baseline status:** 🔴 **HISTORICAL BREAKING GAP R1 — scaffold still uses pre-5168 XML.**
 5482 adds two optional clutter knobs (`<ClutterObject AngularDamping>`,
 `<GroundClutterMaterial><KeepBackfaceNormals>`) and makes the ecotype `Name` a save key — see
 [What changed in 5482](#what-changed-in-5482); the loader classes are otherwise byte-identical.

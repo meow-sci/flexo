@@ -11,20 +11,38 @@
 
 import { assetBase } from '../assetBase';
 import {
+  captureUnknownChildren,
   collidersFromElement,
-  mergeSubPartGameDataInto,
-  engineModulesFromElement,
-  subPartCollidersFromRoot,
   subPartGameDataFromDoc,
   subPartLightsFromRoot,
 } from './partXmlParser';
-import type { PartCollider, PartLight, SubPartGameData } from './types';
-import { createSubPartGameData, isSubPartGameDataEmpty } from './types';
+import type { PartCollider, PartLight, SubPartGameData, RawXmlNode } from './types';
+import { createSubPartGameData } from './types';
+import { loadCoreContent } from './coreContent';
+import { CORE_CONTENT_FILES } from './coreFiles';
+import { contentSource, type ResolvedContent } from './contentXml';
+import { catalogPartsFromContent } from './partCatalog';
+import { familyAppearanceGroups } from './appearanceGroups';
+
+export interface CatalogRenderModel {
+  kind: 'PartModel' | 'PartModelDynamic' | 'PartModelGlass';
+  atlasUrl: string;
+  meshNodeName: string;
+  materialId?: string;
+  diffuseUrl?: string;
+  normalUrl?: string;
+  aoRoughMetalUrl?: string;
+  emissiveUrl?: string;
+  internal?: boolean;
+  rayTracing?: string;
+  shadowCaster?: boolean;
+  raw: RawXmlNode;
+}
 
 export interface CatalogSubPart {
   /** SubPart template id, e.g. "CoreStructuralA_Subpart_TrussBarA". */
   id: string;
-  /** URL of the GLB mesh atlas, e.g. "/ksa/Meshes/CoreStructuralA_MeshAtlas.glb". */
+  /** URL of the first model atlas; empty for a metadata-only template. */
   atlasUrl: string;
   /**
    * Name of the node to extract from the atlas. null means "use the whole atlas
@@ -76,30 +94,22 @@ export interface CatalogSubPart {
     colliders: PartCollider[];
     lights: PartLight[];
   };
+  /** All native render models; scalar fields above mirror the first for existing consumers. */
+  models?: CatalogRenderModel[];
+  /** Native model and MeshView XML retained for faithful export. */
+  renderComponents?: RawXmlNode[];
+  /** All flattened native Components, in source order. */
+  components?: RawXmlNode[];
+  /** Full flattened template row for export overrides. */
+  raw?: RawXmlNode;
+  appearanceGroupId?: string;
+  appearanceIds?: string[];
   /** Originating XML file (for debugging). */
   sourceFile: string;
 }
 
-/** Core asset files that declare <SubPart> templates with renderable <PartModel>. */
-export const ASSET_FILES = [
-  'CoreStructuralAAssets.xml',
-  'CoreCouplingAAssets.xml',
-  'CoreFuelTankAAssets.xml',
-  'CoreFuelTankBAssets.xml',
-  'CoreCommandAAssets.xml',
-  'CorePropulsionAAssets.xml',
-  'CorePropulsionBAssets.xml',
-  'CorePropulsionCAssets.xml',
-  'CoreElectricalAAssets.xml',
-  'CoreFairingAAssets.xml',
-  'CorePassageAAssets.xml',
-  'CoreLandingAAssets.xml',
-  'CoreServiceModuleAAssets.xml',
-  'CoreIVAPropAAssets.xml',
-  'CoreIVASpaceAAssets.xml',
-  'CoreUtilityAAssets.xml',
-  'PartAssets.xml',
-];
+/** Part/SubPart files in Core manifest order. */
+export const ASSET_FILES = CORE_CONTENT_FILES.filter((f) => f.endsWith('Assets.xml'));
 
 /**
  * Absolute URL of a KSA asset. Respects the shared-asset base (Vite's `base`, or
@@ -158,214 +168,149 @@ export async function fetchXmlFile(file: string): Promise<XmlFetchResult> {
 }
 
 function firstChildByTag(parent: Element, tag: string): Element | null {
-  for (const child of Array.from(parent.childNodes)) {
-    if (child.nodeType === 1 && (child as Element).tagName === tag) return child as Element;
-  }
-  return null;
+  return (
+    (Array.from(parent.childNodes).find(
+      (n) => n.nodeType === 1 && (n as Element).tagName === tag,
+    ) as Element | null) ?? null
+  );
 }
 
-interface MaterialPaths {
-  diffuse?: string;
-  normal?: string;
-  aoRoughMetal?: string;
-  emissive?: string;
-}
+const appearanceGroups = [
+  ['CoreUtilityA_Subpart_ParachuteBayRadialCoverB', 'A', 'B'],
+  ['CorePropulsionB_Subpart_RCSSetACoverSmall', 'A', 'B'],
+  ['CoreIVAPropA_Subpart_WrittenNote', 'B', 'C', 'D'],
+  ['CoreIVAPropA_Subpart_Photo', 'B', 'F'],
+  ['CorePropulsionA_Subpart_SRBSizeASmallSegment', 'A', 'B'],
+  ['CorePropulsionA_Subpart_SRBSizeBMediumSegment', 'A', 'B'],
+  ['CorePropulsionA_Subpart_SRBSizeBSmallSegment', 'A', 'B'],
+  ['CoreCouplingA_Subpart_Decoupler2WSkin', 'A', 'B'],
+  ['CoreCouplingA_Subpart_Decoupler3WSkin', 'A', 'B'],
+  ['CoreCouplingA_Subpart_DecouplerHalfWSkin', 'A', 'B'],
+];
 
-/**
- * @param siblingGameDataDoc The file's `*GameData.xml` sibling, when it has one. Since KSA
- *   2026.9.7.5402 Core authors geometry `<SubPart>` TEMPLATES there too (the parachute bay's
- *   two `StandaloneParachute` templates in `CoreUtilityAGameData.xml`), referencing the
- *   Assets file's default atlas + `<PbrMaterial>`s by id — KSA resolves every `<Mesh Id>` /
- *   `<Material Id>` from one global registry, so the file split is invisible to it. flexo
- *   resolves those templates against THIS file's atlas/material tables (the sibling has none)
- *   and records them under this `sourceFile`, so the browsers group them with their pack.
- */
-export function parseAssetsFile(
-  doc: Document,
-  sourceFile: string,
-  out: CatalogSubPart[],
-  siblingGameDataDoc: Document | null = null,
-): void {
-  const root = doc.documentElement;
-  if (!root) return;
-
-  // Mesh atlases: the default (no Id) and any named ones.
-  let defaultAtlasPath: string | null = null;
-  const namedAtlases = new Map<string, string>();
-  for (const atlas of Array.from(doc.getElementsByTagName('MeshAtlas'))) {
-    const path = atlas.getAttribute('Path');
-    if (!path) continue;
-    const id = atlas.getAttribute('Id');
-    if (id) namedAtlases.set(id, path);
-    else if (defaultAtlasPath === null) defaultAtlasPath = path;
+/** Resolve globally registered material and mesh references in already flattened content. */
+export function catalogFromContent(
+  content: ResolvedContent,
+  meshIndex: Record<string, string>,
+): CatalogSubPart[] {
+  const root = content.doc.documentElement;
+  const rows = Array.from(root.childNodes).filter((n): n is Element => n.nodeType === 1);
+  const textures = new Map(
+    rows
+      .filter((e) => e.tagName === 'Texture')
+      .map((e) => [e.getAttribute('Id')!.toLowerCase(), e.getAttribute('Path')]),
+  );
+  const materials = new Map(
+    rows
+      .filter((e) => e.tagName === 'PbrMaterial')
+      .map((e) => [e.getAttribute('Id')!.toLowerCase(), e]),
+  );
+  const metadata = new Map(
+    subPartGameDataFromDoc(content.doc).map((d) => [d.subPartTemplateId.toLowerCase(), d]),
+  );
+  const lights = subPartLightsFromRoot(root);
+  const rawRows = new Map(
+    captureUnknownChildren(root, new Set())
+      .filter((r) => r.tag === 'SubPart')
+      .map((r) => [r.attrs.Id, r]),
+  );
+  const appearances = familyAppearanceGroups(catalogPartsFromContent(content));
+  for (const [stem, ...suffixes] of appearanceGroups) {
+    const ids = new Set([
+      ...(appearances.get(stem) ?? []),
+      ...suffixes.map((suffix) => stem + suffix),
+    ]);
+    appearances.set(stem, [...ids].sort());
   }
-
-  // PbrMaterials by Id.
-  const materials = new Map<string, MaterialPaths>();
-  for (const mat of Array.from(doc.getElementsByTagName('PbrMaterial'))) {
-    const id = mat.getAttribute('Id');
-    if (!id) continue;
-    materials.set(id, {
-      diffuse: firstChildByTag(mat, 'Diffuse')?.getAttribute('Path') ?? undefined,
-      normal: firstChildByTag(mat, 'Normal')?.getAttribute('Path') ?? undefined,
-      aoRoughMetal: firstChildByTag(mat, 'AoRoughMetal')?.getAttribute('Path') ?? undefined,
-      emissive: firstChildByTag(mat, 'Emissive')?.getAttribute('Path') ?? undefined,
-    });
-  }
-
-  // SubPart templates: those that carry a renderable model. Static parts use
-  // <PartModel>; movable engine parts (actuators, gimbals, flexipipes) use
-  // <PartModelDynamic> with the same inner <Mesh>/<Material>. Instances carry only
-  // InstanceOf and no model element, so they are naturally skipped.
-  const templateSources = siblingGameDataDoc ? [doc, siblingGameDataDoc] : [doc];
-  for (const sub of templateSources.flatMap((d) => Array.from(d.getElementsByTagName('SubPart')))) {
-    const id = sub.getAttribute('Id');
-    if (!id) continue;
-    const partModel = firstChildByTag(sub, 'PartModel') ?? firstChildByTag(sub, 'PartModelDynamic');
-    if (!partModel) continue;
-
-    const meshId = firstChildByTag(partModel, 'Mesh')?.getAttribute('Id');
-    if (!meshId) {
-      console.warn(`catalog: ${sourceFile}: SubPart '${id}' has PartModel without Mesh — skipped`);
-      continue;
+  const out: CatalogSubPart[] = [];
+  for (const sub of rows.filter(
+    (e) => e.tagName === 'SubPart' && e.getAttribute('Test') !== 'true',
+  )) {
+    const id = sub.getAttribute('Id')!;
+    const components = firstChildByTag(sub, 'Components');
+    const raw = components ? captureUnknownChildren(components, new Set()) : [];
+    const renderComponents = raw.filter((r) =>
+      ['PartModel', 'PartModelDynamic', 'PartModelGlass', 'MeshView'].includes(r.tag),
+    );
+    const models: CatalogRenderModel[] = [];
+    for (const model of Array.from(components?.childNodes ?? []).filter(
+      (n): n is Element =>
+        n.nodeType === 1 &&
+        ['PartModel', 'PartModelDynamic', 'PartModelGlass'].includes((n as Element).tagName),
+    )) {
+      const mesh = firstChildByTag(model, 'Mesh')?.getAttribute('Ref');
+      if (!mesh) continue;
+      const atlasPath = meshIndex[mesh.toLowerCase()];
+      if (!atlasPath) throw new Error(`Unresolved mesh ${mesh} on ${id}`);
+      const materialId = firstChildByTag(model, 'Material')?.getAttribute('Ref') ?? undefined;
+      const material = materialId ? materials.get(materialId.toLowerCase()) : undefined;
+      if (materialId && !material) throw new Error(`Unresolved material ${materialId} on ${id}`);
+      const texture = (name: string) => {
+        const ref = material && firstChildByTag(material, name)?.getAttribute('Ref');
+        if (!ref) return undefined;
+        const path = textures.get(ref.toLowerCase());
+        if (!path) throw new Error(`Unresolved texture ${ref} on ${id}`);
+        return toUrl(path);
+      };
+      const shadow = firstChildByTag(model, 'ShadowCaster')?.textContent?.trim();
+      models.push({
+        kind: model.tagName as CatalogRenderModel['kind'],
+        atlasUrl: toUrl(atlasPath),
+        meshNodeName: mesh,
+        materialId,
+        diffuseUrl: texture('Diffuse'),
+        normalUrl: texture('Normal'),
+        aoRoughMetalUrl: texture('AoRoughMetal'),
+        emissiveUrl: texture('Emissive'),
+        internal:
+          firstChildByTag(model, 'Internal')?.textContent?.trim().toLowerCase() === 'true' ||
+          undefined,
+        rayTracing: firstChildByTag(model, 'RayTracing')?.textContent?.trim() || undefined,
+        shadowCaster: shadow === undefined ? undefined : shadow.toLowerCase() === 'true',
+        raw: raw.find(
+          (r) =>
+            r.tag === model.tagName && (r.attrs.Key ?? '') === (model.getAttribute('Key') ?? ''),
+        )!,
+      });
     }
-
-    // Resolve atlas: a Mesh Id matching a named atlas = whole-atlas mesh,
-    // otherwise it names a node inside the file's default atlas.
-    let atlasPath: string | null;
-    let meshNodeName: string | null;
-    if (namedAtlases.has(meshId)) {
-      atlasPath = namedAtlases.get(meshId)!;
-      meshNodeName = null;
-    } else {
-      atlasPath = defaultAtlasPath;
-      meshNodeName = meshId;
-    }
-    if (!atlasPath) {
-      console.warn(
-        `catalog: ${sourceFile}: SubPart '${id}' has no resolvable mesh atlas — skipped`,
-      );
-      continue;
-    }
-
-    const materialId = firstChildByTag(partModel, 'Material')?.getAttribute('Id') ?? undefined;
-    const mat = materialId ? materials.get(materialId) : undefined;
-
-    // <Internal>true</Internal> marks an interior-only (IVA) prop — see CatalogSubPart.internal.
-    const internal =
-      firstChildByTag(partModel, 'Internal')?.textContent?.trim().toLowerCase() === 'true';
-    // Raw token, copied verbatim onto an export variant — see CatalogSubPart.rayTracing.
-    const rayTracing = firstChildByTag(partModel, 'RayTracing')?.textContent?.trim() || undefined;
-    // A bool (unlike <RayTracing>'s enum token) — see CatalogSubPart.shadowCaster. Absent stays
-    // undefined so "authors none" and "explicitly true" don't collapse into "false".
-    const shadowCasterText = firstChildByTag(partModel, 'ShadowCaster')?.textContent?.trim();
-    const shadowCaster =
-      shadowCasterText === undefined ? undefined : shadowCasterText.toLowerCase() === 'true';
-
     const colliders = collidersFromElement(sub, id);
-    const engines = engineModulesFromElement(sub);
-    const data = {
-      ...createSubPartGameData(id),
-      massDefinitions: engines.massDefinitions,
-      massDefinitionsOverride: engines.massDefinitions.length > 0,
-      combustors: engines.combustors,
-      thermalCores: engines.thermalCores,
-      antimatterRamCores: engines.antimatterRamCores,
-      magneticNozzles: engines.magneticNozzles,
-      magneticScoops: engines.magneticScoops,
-      solidMotors: engines.solidMotors,
-      solidNozzles: engines.solidNozzles,
-      solidGrainSegments: engines.solidGrainSegments,
-      nozzles: engines.nozzles,
-      rockets: engines.rockets,
-      rocketControllers: engines.rocketControllers,
-    };
-
+    const ownedLights = lights.filter((l) => l.ownerTemplateId?.toLowerCase() === id.toLowerCase());
+    const gameData =
+      metadata.get(id.toLowerCase()) ??
+      (colliders.length || ownedLights.length ? createSubPartGameData(id) : undefined);
+    const group = [...appearances].find(([, ids]) => ids.includes(id));
     out.push({
       id,
-      atlasUrl: toUrl(atlasPath),
-      meshNodeName,
-      materialId,
-      diffuseUrl: mat?.diffuse ? toUrl(mat.diffuse) : undefined,
-      normalUrl: mat?.normal ? toUrl(mat.normal) : undefined,
-      aoRoughMetalUrl: mat?.aoRoughMetal ? toUrl(mat.aoRoughMetal) : undefined,
-      emissiveUrl: mat?.emissive ? toUrl(mat.emissive) : undefined,
-      internal: internal || undefined,
-      rayTracing,
-      shadowCaster,
-      colliders: colliders.length > 0 ? colliders : undefined,
-      sourceFile,
-      data: isSubPartGameDataEmpty(data)
-        ? undefined
-        : { gameData: data, colliders: [], lights: [] },
+      ...models[0],
+      atlasUrl: models[0]?.atlasUrl ?? '',
+      meshNodeName: models[0]?.meshNodeName ?? null,
+      models,
+      renderComponents,
+      components: raw,
+      raw: rawRows.get(id),
+      appearanceGroupId: group?.[0],
+      appearanceIds: group?.[1],
+      colliders: colliders.length ? colliders : undefined,
+      data:
+        gameData || colliders.length || ownedLights.length
+          ? { gameData, colliders, lights: ownedLights }
+          : undefined,
+      sourceFile: contentSource(content, 'SubPart', id),
     });
   }
+  return out.sort((a, b) => a.id.localeCompare(b.id));
 }
 
-/** The `*GameData.xml` sibling of a Core asset file (not every asset file has one). */
-export function gameDataSibling(assetFile: string): string {
-  return assetFile.replace(/Assets\.xml$/, 'GameData.xml');
-}
-
-/**
- * Fetches and parses every Core asset file (plus each one's GameData sibling, for the SubPart
- * templates KSA 2026.9.7.5402 started authoring there) into a sorted SubPart catalog.
- */
+/** Fetch the shared resolved content and the Vite-generated GLB mesh-name index. */
 export async function loadCoreCatalog(): Promise<CatalogSubPart[]> {
-  const out: CatalogSubPart[] = [];
-  const gameDataDocs = await Promise.all(
-    ASSET_FILES.map(async (file) => {
-      const [r, sibling] = await Promise.all([
-        fetchXmlFile(file),
-        fetchXmlFile(gameDataSibling(file)),
-      ]);
-      if (r.kind === 'missing') {
-        console.error(`catalog: required asset file ${file} not found`);
-        return;
-      }
-      // A missing sibling is the common case and silent; parse errors are logged by fetchXmlFile.
-      if (r.kind === 'ok') {
-        parseAssetsFile(r.doc, file, out, sibling.kind === 'ok' ? sibling.doc : null);
-      }
-      return sibling.kind === 'ok' ? sibling.doc : undefined;
-    }),
-  );
-  attachSubPartGameData(
-    out,
-    gameDataDocs.filter((doc): doc is Document => doc != null),
-  );
-  out.sort((a, b) => a.id.localeCompare(b.id));
-  console.info(`flexo catalog: ${out.length} SubParts loaded`);
-  return out;
+  const [content, response] = await Promise.all([
+    loadCoreContent(),
+    fetch(toUrl('mesh-index.json')),
+  ]);
+  if (!response.ok) throw new Error('Unable to load KSA mesh index');
+  return catalogFromContent(content, (await response.json()) as Record<string, string>);
 }
 
-/** Metadata can live in another pack's GameData file (notably PartGameData.xml). */
-export function attachSubPartGameData(entries: CatalogSubPart[], docs: Document[]): void {
-  const byId = new Map<string, SubPartGameData>();
-  const colliders: PartCollider[] = [];
-  const lights: PartLight[] = [];
-  for (const doc of docs) {
-    for (const spd of subPartGameDataFromDoc(doc)) {
-      const existing = byId.get(spd.subPartTemplateId);
-      if (existing) mergeSubPartGameDataInto(existing, spd);
-      else byId.set(spd.subPartTemplateId, spd);
-    }
-    colliders.push(...subPartCollidersFromRoot(doc.documentElement));
-    lights.push(...subPartLightsFromRoot(doc.documentElement));
-  }
-  for (const entry of entries) {
-    const overlay = byId.get(entry.id);
-    const geometry = entry.data?.gameData;
-    if (geometry && overlay) mergeSubPartGameDataInto(geometry, overlay);
-    const gameData = geometry ?? overlay;
-    const ownedColliders = colliders.filter((c) => c.ownerTemplateId === entry.id);
-    const ownedLights = lights.filter((l) => l.ownerTemplateId === entry.id);
-    if (gameData || ownedColliders.length || ownedLights.length)
-      entry.data = { gameData, colliders: ownedColliders, lights: ownedLights };
-  }
-}
-
-/** Builds an id->entry index for O(1) lookups by template id. */
 export function indexCatalog(entries: CatalogSubPart[]): Map<string, CatalogSubPart> {
   return new Map(entries.map((e) => [e.id, e]));
 }

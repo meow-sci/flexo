@@ -1,33 +1,36 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <Assets>
 
-    <PartGameData Id="CoreIVASpaceA_Prefab_MediumCapsuleA">
-        <EditorTag Value="Hidden"/>
+    <Part Id="CoreIVASpaceA_Prefab_MediumCapsuleA" Modify="Patch">
+        <EditorTags Modify="Extend">
+            <EditorTag Ref="Hidden"/>
+        </EditorTags>
 
-        <Light>
-            <Type>Point</Type>
-            <Transform>
-                <Position X="-0.275" Z="-0.80" />
-            </Transform>
-            <Range Value="1.5" />
-            <Intensity Value="0.05" />
-            <Color R="1.0" G="0.9" B="0.7" />
-            <RayTracing>true</RayTracing>
-        </Light>
+        <Components Modify="Extend">
+            <Light>
+                <Type>Point</Type>
+                <Transform>
+                    <Position X="-0.275" Z="-0.80" />
+                </Transform>
+                <Range Value="1.5" />
+                <Intensity Value="0.05" />
+                <Color R="1.0" G="0.9" B="0.7" />
+                <RayTracing>true</RayTracing>
+            </Light>
 
-        <IVASeat Id="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA">
-            <Position X="-0.45" Y="0.42" Z="-0.35" />
-            <ForwardAxis X="1" />
-            <UpAxis Z="-1" />
-        </IVASeat>
+            <IVASeat Key="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA">
+                <Position X="-0.45" Y="0.42" Z="-0.35" />
+                <ForwardAxis X="1" />
+                <UpAxis Z="-1" />
+            </IVASeat>
 
-        <IVASeat Id="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatB">
-            <Position X="-0.45" Y="-0.42" Z="-0.35" />
-            <ForwardAxis X="1" />
-            <UpAxis Z="-1" />
-        </IVASeat>
+            <IVASeat Key="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatB">
+                <Position X="-0.45" Y="-0.42" Z="-0.35" />
+                <ForwardAxis X="1" />
+                <UpAxis Z="-1" />
+            </IVASeat>
 
-        <!-- Face-fill lights, positioned in front of each seated kitten's face (seat Position offset
+            <!-- Face-fill lights, positioned in front of each seated kitten's face (seat Position offset
              along its ForwardAxis/UpAxis) - roughly 0.35 forward of and 0.10 below the face, between
              it and the portrait camera. Off while a player is actually seated in IVA (DisableInIva)
              so it doesn't shine into their own view - on for external/portrait-camera views.
@@ -38,29 +41,30 @@
              so at this ~0.36m throw it needs to be far lower than a room light's. 2.0 predates these
              lights actually reaching a viewport at all and blows the face out; 0.5 puts a mid-albedo
              face near 0.8 linear. Needs in-game tuning. -->
-        <Light Id="Right">
-            <Type>Point</Type>
-            <Transform>
-                <Position X="-0.10" Y="0.42" Z="-0.60" />
-            </Transform>
-            <Range Value="1.0" />
-            <Intensity Value="0.5" />
-            <Color R="1.0" G="0.95" B="0.85" />
-            <RayTracing>false</RayTracing>
-            <DisableInIva>true</DisableInIva>
-        </Light>
+            <Light Key="Right">
+                <Type>Point</Type>
+                <Transform>
+                    <Position X="-0.10" Y="0.42" Z="-0.60" />
+                </Transform>
+                <Range Value="1.0" />
+                <Intensity Value="0.5" />
+                <Color R="1.0" G="0.95" B="0.85" />
+                <RayTracing>false</RayTracing>
+                <DisableInIva>true</DisableInIva>
+            </Light>
 
-        <Light Id="Left">
-            <Type>Point</Type>
-            <Transform>
-                <Position X="-0.10" Y="-0.42" Z="-0.60" />
-            </Transform>
-            <Range Value="1.0" />
-            <Intensity Value="0.5" />
-            <Color R="1.0" G="0.95" B="0.85" />
-            <RayTracing>false</RayTracing>
-            <DisableInIva>true</DisableInIva>
-        </Light>
-    </PartGameData>
+            <Light Key="Left">
+                <Type>Point</Type>
+                <Transform>
+                    <Position X="-0.10" Y="-0.42" Z="-0.60" />
+                </Transform>
+                <Range Value="1.0" />
+                <Intensity Value="0.5" />
+                <Color R="1.0" G="0.95" B="0.85" />
+                <RayTracing>false</RayTracing>
+                <DisableInIva>true</DisableInIva>
+            </Light>
+        </Components>
+    </Part>
 
 </Assets>

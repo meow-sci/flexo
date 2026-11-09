@@ -1,3 +1,4 @@
+import { lookupLocalKey } from './idRemap';
 import {
   COLLIDER_SHAPES,
   CONNECTOR_CAPABILITIES,
@@ -12,6 +13,7 @@ import { SEAT_LOCAL_FORWARD, SEAT_LOCAL_UP, seatRotationFromAxes } from './ivaSe
 import {
   createMassDefinition,
   MASS_SHAPES,
+  MASS_XML_TAGS,
   MASS_SHAPE_DEFS,
   type MassDefinition,
   type MassShape,
@@ -106,12 +108,12 @@ export function parsePartPlacements(
  */
 export function placementsFromPartElement(part: Element): SubPartPlacement[] {
   const placements: SubPartPlacement[] = [];
-  for (const sub of directChildren(part, 'SubPart')) {
-    const instanceOf = sub.getAttribute('InstanceOf');
+  for (const sub of domainChildren(part, 'SubPart')) {
+    const instanceOf = sub.getAttribute('Ref');
     if (!instanceOf) continue; // skip non-instance entries
-    const transform = directChildren(sub, 'Transform')[0] ?? null;
+    const transform = domainChildren(sub, 'Transform')[0] ?? null;
     placements.push({
-      instanceId: sub.getAttribute('Id') ?? instanceOf,
+      instanceId: sub.getAttribute('Key') ?? instanceOf,
       subPartTemplateId: instanceOf,
       position: readVec(transform, 'Position', 0),
       rotation: readVec(transform, 'Rotation', 0) as EulerXYZ,
@@ -137,7 +139,7 @@ export function crashToleranceFromPartElement(part: Element): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
-const CONNECTOR_FLAG_SET = new Set<ConnectorFlag>(['Internal', 'ToSurface', 'FromSurface']);
+const CONNECTOR_FLAG_SET = new Set<ConnectorFlag>(['Internal', 'ToSurface', 'FromSurface', 'Edge']);
 
 /**
  * The separator .NET's `XmlSerializationReader.ToEnum` uses for a `[Flags]` enum body:
@@ -146,7 +148,7 @@ const CONNECTOR_FLAG_SET = new Set<ConnectorFlag>(['Internal', 'ToSurface', 'Fro
  * flexo itself always EMITS the whitespace form, since a comma-joined body makes KSA
  * throw `CreateUnknownConstantException` on the token `"Internal,"`.
  */
-const FLAG_SEPARATOR = /[\s,]+/;
+const FLAG_SEPARATOR = /\s+/;
 
 /**
  * Parses a whitespace-separated `<Flags>` body (e.g. "Internal ToSurface") into the
@@ -183,24 +185,24 @@ export function parseConnectorCapabilities(raw: string | null | undefined): Conn
  */
 export function connectorsFromPartElement(part: Element): Connector[] {
   const connectors: Connector[] = [];
-  for (const conn of directChildren(part, 'Connector')) {
-    const id = conn.getAttribute('Id');
+  for (const conn of domainChildren(part, 'Connector')) {
+    const id = conn.getAttribute('Key');
     if (!id) continue;
-    const transform = directChildren(conn, 'Transform')[0] ?? null;
+    const transform = domainChildren(conn, 'Transform')[0] ?? null;
     connectors.push({
       id,
       position: readVec(transform, 'Position', 0),
       rotation: readVec(transform, 'Rotation', 0) as EulerXYZ,
       scale: readVec(transform, 'Scale', 1),
-      flags: parseConnectorFlags(directChildren(conn, 'Flags')[0]?.textContent),
+      flags: parseConnectorFlags(domainChildren(conn, 'Flags')[0]?.textContent),
       // <Capabilities> — KSA ORs the geometry and GameData values, so reading both is safe.
       capabilities: parseConnectorCapabilities(
-        directChildren(conn, 'Capabilities')[0]?.textContent,
+        domainChildren(conn, 'Capabilities')[0]?.textContent,
       ),
       // <Sibling Id/> children group this connector with the part's other attach nodes
       // (KSA 2026.7 multi-mount prefabs); preserved verbatim, dropping any without an Id.
-      siblingIds: directChildren(conn, 'Sibling')
-        .map((s) => s.getAttribute('Id') ?? '')
+      siblingIds: domainChildren(conn, 'Sibling')
+        .map((s) => s.getAttribute('KeyRef') ?? '')
         .filter((s) => s),
       // XML carries no layers: everything parsed lands on Default, exactly like the
       // SubPart placements it sits with (an import then re-homes the whole Part).
@@ -229,51 +231,55 @@ export function collidersFromElement(
   ownerTemplateId: string | null,
 ): PartCollider[] {
   const out: PartCollider[] = [];
-  for (const component of directChildren(owner, 'Collider')) {
-    for (const shapeEl of childElements(component)) {
-      const shape = COLLIDER_SHAPE_SET.has(shapeEl.tagName as ColliderShape)
-        ? (shapeEl.tagName as ColliderShape)
-        : null;
-      if (!shape) continue;
-      const dims = {
-        lengthXM: readDistanceM(directChildren(shapeEl, 'LengthX')[0]),
-        lengthYM: readDistanceM(directChildren(shapeEl, 'LengthY')[0]),
-        lengthZM: readDistanceM(directChildren(shapeEl, 'LengthZ')[0]),
-        radiusM: readDistanceM(directChildren(shapeEl, 'Radius')[0]),
-      };
-      // A DistanceReference with no unit attribute reads back as NaN in KSA, poisoning
-      // the Bepu shape. Substitute a visible default and say so — flexo always emits.
-      const missing = colliderDimensionNames(shape).filter(
-        (name) => dims[DIMENSION_FIELD[name]] == null,
-      );
-      if (missing.length > 0) {
-        console.warn(
-          `flexo import: <${shapeEl.tagName} Id="${shapeEl.getAttribute('Id') ?? ''}"> is missing ` +
-            `<${missing.join('>, <')}> — KSA would build a NaN shape from it; ` +
-            `defaulting each to ${DEFAULT_COLLIDER_SIZE_M} m.`,
+  for (const component of domainChildren(owner, 'Collider')) {
+    for (const shapes of directChildren(component, 'Colliders'))
+      for (const shapeEl of childElements(shapes)) {
+        const shape = COLLIDER_SHAPE_SET.has(shapeEl.tagName as ColliderShape)
+          ? (shapeEl.tagName as ColliderShape)
+          : null;
+        if (!shape) continue;
+        const dims = {
+          lengthXM: readDistanceM(domainChildren(shapeEl, 'LengthX')[0]),
+          lengthYM: readDistanceM(domainChildren(shapeEl, 'LengthY')[0]),
+          lengthZM: readDistanceM(domainChildren(shapeEl, 'LengthZ')[0]),
+          radiusM: readDistanceM(domainChildren(shapeEl, 'Radius')[0]),
+        };
+        // A DistanceReference with no unit attribute reads back as NaN in KSA, poisoning
+        // the Bepu shape. Substitute a visible default and say so — flexo always emits.
+        const missing = colliderDimensionNames(shape).filter(
+          (name) => dims[DIMENSION_FIELD[name]] == null,
         );
+        if (missing.length > 0) {
+          console.warn(
+            `flexo import: <${shapeEl.tagName} Id="${shapeEl.getAttribute('Id') ?? ''}"> is missing ` +
+              `<${missing.join('>, <')}> — KSA would build a NaN shape from it; ` +
+              `defaulting each to ${DEFAULT_COLLIDER_SIZE_M} m.`,
+          );
+        }
+        const hullScale = domainChildren(shapeEl, 'Scale')[0];
+        out.push({
+          id: shapeEl.getAttribute('Key') ?? `${shape.toLowerCase()}_collider`,
+          shape,
+          ...(shape === 'ConvexHull'
+            ? { meshId: domainChildren(shapeEl, 'Mesh')[0]?.getAttribute('Ref') ?? '' }
+            : {}),
+          ownerTemplateId,
+          position: readVec3Attrs(domainChildren(shapeEl, 'LocationAsmb')[0], ZERO_VEC3),
+          // <Collider2Asmb> is Euler XYZ radians — the same convention as a <Rotation>.
+          rotation: readVec3Attrs(
+            domainChildren(shapeEl, 'Collider2Asmb')[0],
+            ZERO_VEC3,
+          ) as EulerXYZ,
+          scale:
+            shape === 'ConvexHull'
+              ? hullScale
+                ? readVec3Attrs(hullScale, ZERO_VEC3)
+                : { x: 1, y: 1, z: 1 }
+              : colliderSizeFromDimensions(shape, dims),
+          // XML carries no layers — Default, like the placements/connectors alongside it.
+          layerId: DEFAULT_LAYER_ID,
+        });
       }
-      const hullScale = directChildren(shapeEl, 'Scale')[0];
-      out.push({
-        id: shapeEl.getAttribute('Id') ?? `${shape.toLowerCase()}_collider`,
-        shape,
-        ...(shape === 'ConvexHull'
-          ? { meshId: directChildren(shapeEl, 'Mesh')[0]?.getAttribute('Id') ?? '' }
-          : {}),
-        ownerTemplateId,
-        position: readVec3Attrs(directChildren(shapeEl, 'LocationAsmb')[0], ZERO_VEC3),
-        // <Collider2Asmb> is Euler XYZ radians — the same convention as a <Rotation>.
-        rotation: readVec3Attrs(directChildren(shapeEl, 'Collider2Asmb')[0], ZERO_VEC3) as EulerXYZ,
-        scale:
-          shape === 'ConvexHull'
-            ? hullScale
-              ? readVec3Attrs(hullScale, ZERO_VEC3)
-              : { x: 1, y: 1, z: 1 }
-            : colliderSizeFromDimensions(shape, dims),
-        // XML carries no layers — Default, like the placements/connectors alongside it.
-        layerId: DEFAULT_LAYER_ID,
-      });
-    }
   }
   return out;
 }
@@ -298,7 +304,7 @@ const ZERO_VEC3: Vec3 = { x: 0, y: 0, z: 0 };
  */
 export function subPartCollidersFromRoot(root: Element): PartCollider[] {
   const out: PartCollider[] = [];
-  for (const spEl of directChildren(root, 'SubPartGameData')) {
+  for (const spEl of domainChildren(root, 'SubPart')) {
     const templateId = spEl.getAttribute('Id');
     if (!templateId) continue;
     out.push(...collidersFromElement(spEl, templateId));
@@ -322,11 +328,11 @@ export function subPartCollidersFromRoot(root: Element): PartCollider[] {
  */
 export function ivaSeatsFromElement(owner: Element): IvaSeat[] {
   const out: IvaSeat[] = [];
-  for (const el of directChildren(owner, 'IVASeat')) {
+  for (const el of domainChildren(owner, 'IVASeat')) {
     // Element ABSENT ⇒ the C# field default. Element PRESENT ⇒ each missing attribute is 0
     // (`Vector3Reference` initialises X/Y/Z to 0), which is a zero look direction.
-    const fwdEl = directChildren(el, 'ForwardAxis')[0];
-    const upEl = directChildren(el, 'UpAxis')[0];
+    const fwdEl = domainChildren(el, 'ForwardAxis')[0];
+    const upEl = domainChildren(el, 'UpAxis')[0];
     const forward = fwdEl ? readVec3Attrs(fwdEl, ZERO_VEC3) : { ...SEAT_LOCAL_FORWARD };
     const up = upEl ? readVec3Attrs(upEl, ZERO_VEC3) : { ...SEAT_LOCAL_UP };
     const rotation = seatRotationFromAxes(forward, up);
@@ -341,8 +347,8 @@ export function ivaSeatsFromElement(owner: Element): IvaSeat[] {
       id: `_seat${out.length + 1}`,
       // The AUTHORED `<IVASeat Id>` (KSA `TemplateDataBase.Id`) — kept verbatim so an
       // `<EVADoor SeatId>` pointing at it survives the round trip. Absent ⇒ null.
-      ksaId: el.getAttribute('Id') || null,
-      position: readVec3Attrs(directChildren(el, 'Position')[0], ZERO_VEC3),
+      ksaId: el.getAttribute('Key') || null,
+      position: readVec3Attrs(domainChildren(el, 'Position')[0], ZERO_VEC3),
       rotation,
       // KSA has no seat size; scale is unused and never emitted.
       scale: { x: 1, y: 1, z: 1 },
@@ -389,22 +395,27 @@ export interface ParsedGameData {
 /** Parses the <KeyframeAnimationModule> children of a <PartGameData> element. */
 export function animationModulesFromGameData(gd: Element): CatalogAnimationModule[] {
   const out: CatalogAnimationModule[] = [];
-  for (const mod of directChildren(gd, 'KeyframeAnimationModule')) {
-    const kf = directChildren(mod, 'KeyframeAnimation')[0];
-    const glbPath = kf?.getAttribute('Path');
+  for (const mod of domainChildren(gd, 'KeyframeAnimationModule')) {
+    const kf = domainChildren(mod, 'KeyframeAnimation')[0];
+    const animationId = kf?.getAttribute('Ref') ?? '';
+    const definition = Array.from(gd.ownerDocument.getElementsByTagName('KeyframeAnimation')).find(
+      (el) =>
+        el.parentNode === gd.ownerDocument.documentElement && el.getAttribute('Id') === animationId,
+    );
+    const glbPath = definition?.getAttribute('Path');
     if (!glbPath) continue; // a module without a GLB reference is unusable
-    const st = directChildren(mod, 'SolarTracking')[0] ?? null;
+    const st = domainChildren(mod, 'SolarTracking')[0] ?? null;
     out.push({
-      moduleId: mod.getAttribute('Id') ?? '',
+      moduleId: mod.getAttribute('Key') ?? 'KeyframeAnimationModule',
       showDeployRetract: (mod.getAttribute('ShowDeployRetract') ?? '').toLowerCase() === 'true',
       glbPath,
-      glbId: kf?.getAttribute('Id') ?? '',
+      glbId: animationId,
       solarTracking: st
         ? {
             degreesPerSecond: readNum(st, 'DegreesPerSecond') ?? 0,
-            subPartOriginalId: st.getAttribute('SubPart') ?? '',
-            excludeOriginalIds: directChildren(st, 'ExcludeSubPart')
-              .map((e) => e.textContent?.trim() ?? '')
+            subPartOriginalId: directChildren(st, 'Tracked')[0]?.getAttribute('KeyRef') ?? '',
+            excludeOriginalIds: domainChildren(st, 'ExcludeSubPart')
+              .map((e) => e.getAttribute('KeyRef') ?? '')
               .filter(Boolean),
           }
         : null,
@@ -459,7 +470,7 @@ function sumUnitChild(
   childTag: string,
   tokens: readonly (readonly [string, number])[],
 ): number {
-  const el = directChildren(parent, childTag)[0];
+  const el = domainChildren(parent, childTag)[0];
   if (!el) return 0;
   let total = 0;
   for (const [attr, scale] of tokens) {
@@ -488,7 +499,7 @@ function readImpulseNs(parent: Element, childTag: string): number {
  * `TransformReference` schema — including the partial-`<Scale>` warning in `readVec`.
  */
 export function readTransform(parent: Element): Transform {
-  const t = directChildren(parent, 'Transform')[0] ?? null;
+  const t = domainChildren(parent, 'Transform')[0] ?? null;
   return {
     position: readVec(t, 'Position', 0),
     rotation: readVec(t, 'Rotation', 0) as EulerXYZ,
@@ -498,7 +509,11 @@ export function readTransform(parent: Element): Transform {
 
 /** Parses one `<SolarPanel>` element: its `<Produced W>` and orientation `<Transform>`. */
 function parseSolarPanel(el: Element): SolarPanel {
-  return { outputWatts: readPowerWatts(el, 'Produced'), transform: readTransform(el) };
+  return {
+    outputWatts: readPowerWatts(el, 'Produced'),
+    transform: readTransform(el),
+    ...(el.getAttribute('Key') ? { ksaId: el.getAttribute('Key')! } : {}),
+  };
 }
 
 /**
@@ -509,20 +524,20 @@ function parseSolarPanel(el: Element): SolarPanel {
 function tankFromElement(wrapper: Element, shapeEl: Element, shape: TankShape): Tank {
   const conical = shape === 'Conical';
   return {
-    id: wrapper.getAttribute('Id') ?? '',
-    magneticTrap: readBoolValue(directChildren(wrapper, 'MagneticTrap')[0]) ?? false,
-    locationAsmb: readVec3Attrs(directChildren(shapeEl, 'LocationAsmb')[0], { x: 0, y: 0, z: 0 }),
+    id: wrapper.getAttribute('Key') ?? 'Tank',
+    magneticTrap: readBoolValue(domainChildren(wrapper, 'MagneticTrap')[0]) ?? false,
+    locationAsmb: readVec3Attrs(domainChildren(shapeEl, 'LocationAsmb')[0], { x: 0, y: 0, z: 0 }),
     shape,
-    wallMaterialId: directChildren(shapeEl, 'Material')[0]?.getAttribute('Id') ?? '',
-    lengthM: readNum(directChildren(shapeEl, 'Length')[0], 'M') ?? 0,
+    wallMaterialId: phaseId(domainChildren(shapeEl, 'Material')[0]),
+    lengthM: readNum(domainChildren(shapeEl, 'Length')[0], 'M') ?? 0,
     outerRadiusM:
-      readNum(directChildren(shapeEl, conical ? 'RadiusBase' : 'OuterRadius')[0], 'M') ?? 0,
+      readNum(domainChildren(shapeEl, conical ? 'RadiusBase' : 'OuterRadius')[0], 'M') ?? 0,
     radiusTopM: conical
-      ? (readNum(directChildren(shapeEl, 'RadiusTop')[0], 'M') ?? 0)
+      ? (readNum(domainChildren(shapeEl, 'RadiusTop')[0], 'M') ?? 0)
       : createTank().radiusTopM,
-    wallThicknessMm: readNum(directChildren(shapeEl, 'WallThickness')[0], 'Mm') ?? 0,
+    wallThicknessMm: readNum(domainChildren(shapeEl, 'WallThickness')[0], 'Mm') ?? 0,
     // <RoleAffinity> — which consumer kind the tank feeds (KSA 2026.7.5); absent ⇒ Engine.
-    roleAffinity: readRoleAffinity(directChildren(shapeEl, 'RoleAffinity')[0]),
+    roleAffinity: readRoleAffinity(domainChildren(shapeEl, 'RoleAffinity')[0]),
   };
 }
 
@@ -536,9 +551,9 @@ const TANK_SHAPE_ELEMENTS: readonly (readonly [string, TankShape])[] = [
 /** Parses every `<Tank>` child of a `<PartGameData>`/`<SubPartGameData>` element. */
 function tanksFromElement(parent: Element): Tank[] {
   const out: Tank[] = [];
-  for (const tankEl of directChildren(parent, 'Tank')) {
+  for (const tankEl of domainChildren(parent, 'Tank')) {
     for (const [name, shape] of TANK_SHAPE_ELEMENTS) {
-      const shapeEl = directChildren(tankEl, name)[0];
+      const shapeEl = domainChildren(tankEl, name)[0];
       if (shapeEl) {
         out.push(tankFromElement(tankEl, shapeEl, shape));
         break;
@@ -556,13 +571,10 @@ function tanksFromElement(parent: Element): Tank[] {
 function readRoleAffinity(el: Element | undefined): TankRoleAffinity {
   const raw = el?.textContent?.trim();
   if (!raw) return 'Engine';
-  const tokens = new Set(raw.split(/[\s,]+/));
-  const engine = tokens.has('Engine');
-  const thruster = tokens.has('Thruster');
-  if (engine && thruster) return 'Engine Thruster';
-  if (thruster) return 'Thruster';
-  if (tokens.has('None')) return 'None';
-  return 'Engine';
+  const tokens = raw
+    .split(/[\s,]+/)
+    .filter((token) => ['Engine', 'Thruster', 'Air', 'Water'].includes(token));
+  return tokens.length ? tokens.join(' ') : 'None';
 }
 
 /**
@@ -577,30 +589,30 @@ function readRoleAffinity(el: Element | undefined): TankRoleAffinity {
  */
 function lightFromElement(el: Element): Omit<PartLight, 'id' | 'ownerTemplateId' | 'layerId'> {
   const type: LightType =
-    directChildren(el, 'Type')[0]?.textContent?.trim() === 'Point' ? 'Point' : 'Spot';
-  const colorEl = directChildren(el, 'Color')[0];
+    domainChildren(el, 'Type')[0]?.textContent?.trim() === 'Point' ? 'Point' : 'Spot';
+  const colorEl = domainChildren(el, 'Color')[0];
   const transform = readTransform(el);
   return {
     // `<Light Id>` — KSA's module id (`ModuleBase.TemplateDataBase.Id`). Core names every
     // light since 5348 and duplicate Components ids now log an Error, so it is preserved.
-    ksaId: el.getAttribute('Id') || null,
+    ksaId: el.getAttribute('Key') || null,
     type,
     position: transform.position,
     rotation: transform.rotation,
     // KSA ignores light scale (LightModule reads only Position/Rotation) — pinned.
     scale: { x: 1, y: 1, z: 1 },
-    rangeM: readNum(directChildren(el, 'Range')[0], 'Value') ?? 1,
-    intensity: readNum(directChildren(el, 'Intensity')[0], 'Value') ?? 1,
+    rangeM: readNum(domainChildren(el, 'Range')[0], 'Value') ?? 1,
+    intensity: readNum(domainChildren(el, 'Intensity')[0], 'Value') ?? 1,
     color: {
       r: readNum(colorEl, 'R') ?? 1,
       g: readNum(colorEl, 'G') ?? 1,
       b: readNum(colorEl, 'B') ?? 1,
     },
-    innerAngleRad: readNum(directChildren(el, 'InnerAngle')[0], 'Value') ?? Math.PI / 8,
-    outerAngleRad: readNum(directChildren(el, 'OuterAngle')[0], 'Value') ?? Math.PI / 4,
-    rayTracing: directChildren(el, 'RayTracing')[0]?.textContent?.trim().toLowerCase() === 'true',
+    innerAngleRad: readNum(domainChildren(el, 'InnerAngle')[0], 'Value') ?? Math.PI / 8,
+    outerAngleRad: readNum(domainChildren(el, 'OuterAngle')[0], 'Value') ?? Math.PI / 4,
+    rayTracing: domainChildren(el, 'RayTracing')[0]?.textContent?.trim().toLowerCase() === 'true',
     disableInIva:
-      directChildren(el, 'DisableInIva')[0]?.textContent?.trim().toLowerCase() === 'true',
+      domainChildren(el, 'DisableInIva')[0]?.textContent?.trim().toLowerCase() === 'true',
   };
 }
 
@@ -620,7 +632,7 @@ function lightFromElement(el: Element): Omit<PartLight, 'id' | 'ownerTemplateId'
  * owner, else the SubPart template id.
  */
 export function lightsFromElement(owner: Element, ownerTemplateId: string | null): PartLight[] {
-  return directChildren(owner, 'Light').map((el, i) => ({
+  return domainChildren(owner, 'Light').map((el, i) => ({
     ...lightFromElement(el),
     id: `_light${i + 1}`,
     ownerTemplateId,
@@ -639,7 +651,7 @@ export function lightsFromElement(owner: Element, ownerTemplateId: string | null
  */
 export function subPartLightsFromRoot(root: Element): PartLight[] {
   const out: PartLight[] = [];
-  for (const spEl of directChildren(root, 'SubPartGameData')) {
+  for (const spEl of domainChildren(root, 'SubPart')) {
     const templateId = spEl.getAttribute('Id');
     if (!templateId) continue;
     out.push(...lightsFromElement(spEl, templateId));
@@ -657,8 +669,8 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   game.displayName = gd.getAttribute('DisplayName') ?? '';
 
   const editorTags: string[] = [];
-  for (const tag of directChildren(gd, 'EditorTag')) {
-    const v = tag.getAttribute('Value');
+  for (const tag of domainChildren(gd, 'EditorTag')) {
+    const v = tag.getAttribute('Ref');
     if (v && !editorTags.includes(v)) editorTags.push(v);
   }
 
@@ -666,26 +678,37 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
 
   // <Diameter M/> — a repeatable DistanceReference (KSA 2026.7). The first is the
   // editable size class; the rest (adapter prefabs list several) are preserved verbatim.
-  const diameters = directChildren(gd, 'Diameter')
+  const diameters = domainChildren(gd, 'Diameter')
     .map((el) => readDistanceM(el))
     .filter((m): m is number => m != null);
   game.diameterM = diameters[0] ?? null;
   game.extraDiametersM = diameters.slice(1);
   // <Control/> — a bare command-capability marker (ControlTemplate has no fields).
-  game.controllable = directChildren(gd, 'Control').length > 0;
+  const control = domainChildren(gd, 'Control')[0];
+  game.controllable = !!control;
+  if (control?.getAttribute('Key')) game.controlKey = control.getAttribute('Key')!;
 
   // Battery capacity is an EnergyReference (`J`); the model holds Wh.
   // Generator/Solar/Consumer rates are a PowerReference (`W`).
-  for (const el of directChildren(gd, 'Battery'))
-    game.batteries.push({ capacityWh: readEnergyJoules(el, 'MaximumCapacity') / 3600 });
-  for (const el of directChildren(gd, 'Generator'))
-    game.generators.push({ outputWatts: readPowerWatts(el, 'Produced') });
-  for (const el of directChildren(gd, 'SolarPanel')) game.solarPanels.push(parseSolarPanel(el));
+  for (const el of domainChildren(gd, 'Battery'))
+    game.batteries.push({
+      capacityWh: readEnergyJoules(el, 'MaximumCapacity') / 3600,
+      ...(el.getAttribute('HasStatusLight') === 'true' ? { hasStatusLight: true } : {}),
+      ...(el.getAttribute('Key') ? { ksaId: el.getAttribute('Key')! } : {}),
+    });
+  for (const el of domainChildren(gd, 'Generator'))
+    game.generators.push({
+      outputWatts: readPowerWatts(el, 'Produced'),
+      ...(el.getAttribute('Key') ? { ksaId: el.getAttribute('Key')! } : {}),
+    });
+  for (const el of domainChildren(gd, 'SolarPanel')) game.solarPanels.push(parseSolarPanel(el));
   // KSA has a single Part.LightSwitch slot, so flexo keeps ONE consumer per part:
   // prefer the first LightSwitch=true (the one KSA would actually wire up), else the
   // first. No shipped part has >1, so the >1 branch is purely defensive.
-  const consumers = directChildren(gd, 'PowerConsumer').map((el) => ({
+  const consumerElements = domainChildren(gd, 'PowerConsumer');
+  const consumers = consumerElements.map((el) => ({
     consumedWatts: readPowerWatts(el, 'Consumed'),
+    ...(el.getAttribute('Key') ? { ksaId: el.getAttribute('Key')! } : {}),
     lightSwitch: el.getAttribute('LightSwitch')?.trim().toLowerCase() === 'true',
     lightIsActive: el.getAttribute('LightIsActive')?.trim().toLowerCase() === 'true',
   }));
@@ -699,34 +722,36 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
 
   const connectorFlags = new Map<string, ConnectorFlag[]>();
   const connectorCapabilities = new Map<string, ConnectorCapability[]>();
-  for (const conn of directChildren(gd, 'Connector')) {
-    const connId = conn.getAttribute('Id');
+  for (const conn of domainChildren(gd, 'Connector')) {
+    const connId = conn.getAttribute('Key');
     if (!connId) continue;
-    const flags = parseConnectorFlags(directChildren(conn, 'Flags')[0]?.textContent);
+    const flags = parseConnectorFlags(domainChildren(conn, 'Flags')[0]?.textContent);
     if (flags.length > 0) connectorFlags.set(connId, flags);
-    const caps = parseConnectorCapabilities(directChildren(conn, 'Capabilities')[0]?.textContent);
+    const caps = parseConnectorCapabilities(domainChildren(conn, 'Capabilities')[0]?.textContent);
     if (caps.length > 0) connectorCapabilities.set(connId, caps);
   }
 
-  const dec = directChildren(gd, 'Decoupler')[0];
+  const dec = domainChildren(gd, 'Decoupler')[0];
   if (dec)
     game.decoupler = {
-      ...(dec.getAttribute('Id') ? { ksaId: dec.getAttribute('Id')! } : {}),
-      connectorId: dec.getAttribute('ConnectorId') ?? '',
+      ...(dec.getAttribute('Key') ? { ksaId: dec.getAttribute('Key')! } : {}),
+      connectorId: domainChildren(dec, 'Connector')[0]?.getAttribute('KeyRef') ?? '',
       force: readNum(dec, 'Force') ?? 0,
     };
-  const dp = directChildren(gd, 'DockingPort')[0];
+  const dp = domainChildren(gd, 'DockingPort')[0];
   if (dp) {
     // <DockingPort><ConnectorId Value/><LatchingKineticEnergy J/><PushoffImpulse Ns/></DockingPort>.
     game.dockingPort = {
-      connectorId: directChildren(dp, 'ConnectorId')[0]?.getAttribute('Value') ?? '',
+      ...(dp.getAttribute('Key') ? { ksaId: dp.getAttribute('Key')! } : {}),
+      connectorId: domainChildren(dp, 'Connector')[0]?.getAttribute('KeyRef') ?? '',
       latchingKineticEnergyJ: readEnergyJoules(dp, 'LatchingKineticEnergy'),
       pushoffImpulseNs: readImpulseNs(dp, 'PushoffImpulse'),
     };
   }
-  const eva = directChildren(gd, 'EVADoor')[0];
+  const eva = domainChildren(gd, 'EVADoor')[0];
   if (eva) {
     game.evaDoor = {
+      ...(eva.getAttribute('Key') ? { ksaId: eva.getAttribute('Key')! } : {}),
       // `<EVADoor SeatId>` (KSA 5117) — the `<IVASeat Id>` this hatch is aligned to, and
       // `EVADoorTemplate`'s ONLY field. The element's presence is the hatch itself.
       seatId: eva.getAttribute('SeatId') || null,
@@ -743,10 +768,10 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   game.gimbals = applyGimbalOverlays([], gimbalOverlaysFromElement(gd));
 
   // <ConsumerFeedWiring> — how this Part satisfies a placed SubPart's <FeedsFrom Parent>.
-  for (const w of directChildren(gd, 'ConsumerFeedWiring')) {
+  for (const w of domainChildren(gd, 'ConsumerFeedWiring')) {
     game.consumerFeedWiring.push({
-      consumerId: w.getAttribute('Id') ?? '',
-      subPartInstanceId: w.getAttribute('SubPartId') || null,
+      consumerId: w.getAttribute('KeyRef') ?? '',
+      subPartInstanceId: w.getAttribute('SubPart') || null,
       // KSA errors on a Parent="true" inside a wiring entry ("cannot itself defer to
       // Parent") — drop it here rather than round-trip a load error.
       feeds: feedsFromElement(w).filter((f) => f.kind !== 'parent'),
@@ -755,8 +780,17 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
 
   // Preserve anything flexo doesn't model so import → export doesn't silently drop it.
   game.unknownAttrs = captureUnknownAttrs(gd, KNOWN_PART_GAMEDATA_ATTRS);
-  game.unknownChildren = captureUnknownChildren(gd, KNOWN_PART_GAMEDATA_CHILDREN);
-  game.unknownChildren.push(...directChildren(gd, 'Decoupler').slice(1).map(elementToRawNode));
+  game.unknownChildren = captureUnknownChildren(gd, KNOWN_ROW_CHILDREN);
+  game.unknownChildren.push(...unknownMasses(gd));
+  game.unknownComponents = directChildren(gd, 'Components').flatMap((c) =>
+    captureUnknownChildren(c, KNOWN_PART_GAMEDATA_CHILDREN),
+  );
+  const chosenConsumer = consumers.findIndex((c) => c === game.powerConsumer);
+  game.unknownComponents.push(
+    ...consumerElements.filter((_, index) => index !== chosenConsumer).map(elementToRawNode),
+  );
+  for (const tag of ['Control', 'Decoupler', 'DockingPort', 'EVADoor'])
+    game.unknownComponents.push(...domainChildren(gd, tag).slice(1).map(elementToRawNode));
 
   return {
     editorTags,
@@ -792,35 +826,35 @@ const REACTION_CATEGORY_TOKENS: ReadonlySet<string> = new Set([
  */
 export function customReactionsFromRoot(root: Element): CustomReaction[] {
   const out: CustomReaction[] = [];
-  for (const proc of directChildren(root, 'FixedReaction')) {
+  for (const proc of domainChildren(root, 'FixedReaction')) {
     const id = proc.getAttribute('Id');
     if (!id) continue;
-    const name = directChildren(proc, 'Name')[0]?.getAttribute('Value')?.trim() || id;
+    const name = domainChildren(proc, 'Name')[0]?.getAttribute('Value')?.trim() || id;
     const rawCategory = proc.getAttribute('Category');
     // KSA's FixedReaction category fallback is Monopropellant (ResolveCategory).
     const category =
       rawCategory && REACTION_CATEGORY_TOKENS.has(rawCategory)
         ? (rawCategory as ReactionCategory)
         : 'Monopropellant';
-    const reactants = directChildren(proc, 'Reactant')
+    const reactants = domainChildren(proc, 'Reactant')
       .map((r) => ({
-        phaseId: r.getAttribute('Id') ?? '',
+        phaseId: phaseId(r),
         massShare: readNum(r, 'MassShare') ?? 0,
       }))
       .filter((r) => r.phaseId);
-    const lut = directChildren(proc, 'PressureCondition').map((c) => ({
-      lnPressure: readNum(directChildren(c, 'LnPressure')[0], 'Value') ?? 0,
-      temperatureK: readNum(directChildren(c, 'Temperature')[0], 'K') ?? 0,
-      gamma: readNum(directChildren(c, 'Gamma')[0], 'Value') ?? 0,
-      molarMassGPerMol: readNum(directChildren(c, 'MolarMass')[0], 'GPerMol') ?? 0,
+    const lut = domainChildren(proc, 'PressureCondition').map((c) => ({
+      lnPressure: readNum(domainChildren(c, 'LnPressure')[0], 'Value') ?? 0,
+      temperatureK: readNum(domainChildren(c, 'Temperature')[0], 'K') ?? 0,
+      gamma: readNum(domainChildren(c, 'Gamma')[0], 'Value') ?? 0,
+      molarMassGPerMol: readNum(domainChildren(c, 'MolarMass')[0], 'GPerMol') ?? 0,
     }));
     // Solid-propellant data — MANDATORY on a Category="Solid" reaction
     // (FixedReactionTemplate.Create throws without it), absent on every other category.
-    const br = directChildren(proc, 'BurnRate')[0];
+    const br = domainChildren(proc, 'BurnRate')[0];
     out.push({
       id,
       name,
-      description: directChildren(proc, 'Description')[0]?.getAttribute('Value') ?? '',
+      description: domainChildren(proc, 'Description')[0]?.getAttribute('Value') ?? '',
       category,
       reactants,
       lut,
@@ -830,10 +864,10 @@ export function customReactionsFromRoot(root: Element): CustomReaction[] {
             exponent: readNum(br, 'Exponent') ?? 0,
           }
         : null,
-      minimumBurnPressurePa: readPressurePa(directChildren(proc, 'MinimumBurnPressure')[0]),
-      maxStablePressurePa: readPressurePa(directChildren(proc, 'MaxStablePressure')[0]),
+      minimumBurnPressurePa: readPressurePa(domainChildren(proc, 'MinimumBurnPressure')[0]),
+      maxStablePressurePa: readPressurePa(domainChildren(proc, 'MaxStablePressure')[0]),
       exhaustCondensedFraction: readNum(
-        directChildren(proc, 'ExhaustCondensedFraction')[0],
+        domainChildren(proc, 'ExhaustCondensedFraction')[0],
         'Value',
       ),
     });
@@ -861,21 +895,27 @@ export function subPartGameDataFromDoc(doc: Document): SubPartGameData[] {
  */
 function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
   const byId = new Map<string, SubPartGameData>();
-  for (const spEl of directChildren(root, 'SubPartGameData')) {
+  for (const spEl of domainChildren(root, 'SubPart')) {
     const subPartTemplateId = spEl.getAttribute('Id');
     if (!subPartTemplateId) continue;
     const spd = createSubPartGameData(subPartTemplateId);
     spd.massDefinitions = massDefinitionsFromElement(spEl);
-    spd.massDefinitionsOverride = spd.massDefinitions.length > 0;
+    spd.massDefinitionsOverride = directChildren(spEl, 'InertMasses').some((wrapper) =>
+      childElements(wrapper).some((el) => MASS_XML_TAGS.has(el.tagName)),
+    );
     spd.tanks = tanksFromElement(spEl);
-    spd.solarPanels = directChildren(spEl, 'SolarPanel').map(parseSolarPanel);
+    spd.solarPanels = domainChildren(spEl, 'SolarPanel').map(parseSolarPanel);
     // <Light> is NOT read here — lights are first-class part entities gathered by
     // subPartLightsFromRoot (each tagged with this template id as its owner).
     // Reusable thrust-chamber modules (rocket/combustor/nozzle) that travel with the mesh.
     parseEngineModules(spEl, spd);
     // Preserve unmodeled attrs (e.g. Core's `DisplayName`) + child elements verbatim.
     spd.unknownAttrs = captureUnknownAttrs(spEl, KNOWN_SUBPART_GAMEDATA_ATTRS);
-    spd.unknownChildren = captureUnknownChildren(spEl, KNOWN_SUBPART_GAMEDATA_CHILDREN);
+    spd.unknownChildren = captureUnknownChildren(spEl, KNOWN_ROW_CHILDREN);
+    spd.unknownChildren.push(...unknownMasses(spEl));
+    spd.unknownComponents = directChildren(spEl, 'Components').flatMap((c) =>
+      captureUnknownChildren(c, KNOWN_SUBPART_COMPONENTS),
+    );
     const existing = byId.get(subPartTemplateId);
     if (existing) mergeSubPartGameDataInto(existing, spd);
     else byId.set(subPartTemplateId, spd);
@@ -909,6 +949,7 @@ export function mergeSubPartGameDataInto(base: SubPartGameData, add: SubPartGame
   base.solidNozzles.push(...add.solidNozzles);
   base.solidGrainSegments.push(...add.solidGrainSegments);
   base.unknownChildren.push(...add.unknownChildren);
+  base.unknownComponents.push(...add.unknownComponents);
   for (const [k, v] of Object.entries(add.unknownAttrs)) base.unknownAttrs[k] ??= v;
 }
 
@@ -926,13 +967,13 @@ export function gameDataFromAssets(
   if (doc.getElementsByTagName('parsererror').length > 0) {
     throw new Error(`partXmlParser: parse error parsing PartGameData '${partId}'`);
   }
-  const gd = Array.from(doc.getElementsByTagName('PartGameData')).find(
+  const gd = Array.from(doc.getElementsByTagName('Part')).find(
     (g) => g.getAttribute('Id') === partId,
   );
   if (!gd) return null;
   const root = doc.documentElement as Element;
   const parsed = parseGameDataElement(gd);
-  const geometry = directChildren(root, 'Part').find((p) => p.getAttribute('Id') === partId);
+  const geometry = domainChildren(root, 'Part').find((p) => p.getAttribute('Id') === partId);
   if (geometry)
     parsed.gameData.gimbals = applyGimbalOverlays(
       applyGimbalOverlays([], gimbalOverlaysFromElement(geometry)),
@@ -957,6 +998,80 @@ export function directChildren(parent: Element, tag: string): Element[] {
     if (node.nodeType === 1 && (node as Element).tagName === tag) out.push(node as Element);
   }
   return out;
+}
+
+/** Reads the declared array wrapper for each current schema item. */
+function domainChildren(parent: Element, tag: string): Element[] {
+  const owner = parent.tagName === 'Part' || parent.tagName === 'SubPart';
+  const ownerWrappers: Record<string, string> = {
+    SubPart: 'SubParts',
+    Connector: 'Connectors',
+    Gimbal: 'Gimbals',
+    EditorTag: 'EditorTags',
+    Diameter: 'Diameters',
+    ConsumerFeedWiring: 'ConsumerFeedWirings',
+    Rocket: 'Rockets',
+    RocketEngineController: 'RocketEngineControllers',
+    RocketThrusterController: 'RocketThrusterControllers',
+    Combustor: 'RocketCores',
+    ThermalCore: 'RocketCores',
+    AntimatterRamCore: 'RocketCores',
+    SolidMotor: 'RocketCores',
+    DeLavalNozzle: 'RocketNozzles',
+    MagneticNozzle: 'RocketNozzles',
+    SolidMotorNozzle: 'RocketNozzles',
+    Tank: 'Components',
+    Battery: 'Components',
+    Generator: 'Components',
+    PowerConsumer: 'Components',
+    SolarPanel: 'Components',
+    Control: 'Components',
+    Decoupler: 'Components',
+    DockingPort: 'Components',
+    EVADoor: 'Components',
+    Collider: 'Components',
+    Light: 'Components',
+    IVASeat: 'Components',
+    KeyframeAnimationModule: 'Components',
+    SolidGrainSegment: 'Components',
+    MagneticScoop: 'Components',
+  };
+  if (owner && (MASS_SHAPES as readonly string[]).includes(tag)) ownerWrappers[tag] = 'InertMasses';
+  const wrapper = owner
+    ? ownerWrappers[tag]
+    : parent.tagName === 'Collider'
+      ? 'Colliders'
+      : parent.tagName === 'Connector' && tag === 'Sibling'
+        ? 'Siblings'
+        : tag === 'FeedsFrom'
+          ? 'FeedsFroms'
+          : tag === 'ReactionPlume'
+            ? 'ReactionPlumes'
+            : tag === 'Reactant'
+              ? 'Reactants'
+              : tag === 'PressureCondition'
+                ? 'PressureConditions'
+                : parent.tagName === 'Rocket' && tag === 'Nozzle'
+                  ? 'Nozzles'
+                  : (parent.tagName === 'RocketEngineController' ||
+                        parent.tagName === 'RocketThrusterController') &&
+                      tag === 'RocketReference'
+                    ? 'Rockets'
+                    : parent.tagName === 'SolarTracking' && tag === 'ExcludeSubPart'
+                      ? 'ExcludeSubParts'
+                      : undefined;
+  return wrapper
+    ? directChildren(parent, wrapper).flatMap((el) => directChildren(el, tag))
+    : directChildren(parent, tag);
+}
+
+/** Game phase references are stored internally as runtime phase IDs. */
+function phaseId(el: Element | null | undefined): string {
+  if (!el) return '';
+  const suffix: Record<string, string> = { Solid: 's', Liquid: 'l', Gas: 'g', Plasma: 'p' };
+  const ref = el.getAttribute('Ref') ?? '';
+  const phase = el.getAttribute('Phase') ?? '';
+  return ref && suffix[phase] ? `${ref}(${suffix[phase]})` : ref;
 }
 
 /** All direct child *elements* of `parent` (any tag), in document order. */
@@ -1036,8 +1151,35 @@ const KNOWN_SUBPART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
   'SolidMotorNozzle',
   'SolidGrainSegment',
 ]);
+const KNOWN_ROW_CHILDREN = new Set([
+  'SubParts',
+  'Connectors',
+  'Components',
+  'Gimbals',
+  'Variants',
+  'EditorTags',
+  'Diameters',
+  'InertMasses',
+  'Rockets',
+  'RocketCores',
+  'RocketNozzles',
+  'RocketEngineControllers',
+  'RocketThrusterControllers',
+  'ConsumerFeedWirings',
+]);
+const KNOWN_SUBPART_COMPONENTS = new Set([
+  ...KNOWN_SUBPART_GAMEDATA_CHILDREN,
+  'PartModel',
+  'PartModelDynamic',
+  'PartModelGlass',
+  'MeshView',
+]);
 /** `<PartGameData>` attributes flexo models (`DisplayName` is read; `Id` keys the entry). */
-const KNOWN_PART_GAMEDATA_ATTRS: ReadonlySet<string> = new Set(['Id', 'DisplayName']);
+const KNOWN_PART_GAMEDATA_ATTRS: ReadonlySet<string> = new Set([
+  'Id',
+  'DisplayName',
+  'CrashTolerance',
+]);
 /** `<SubPartGameData>` attributes flexo models (only `Id`; Core also authors an unmodeled `DisplayName`). */
 const KNOWN_SUBPART_GAMEDATA_ATTRS: ReadonlySet<string> = new Set(['Id']);
 
@@ -1061,17 +1203,29 @@ export function captureUnknownChildren(parent: Element, known: ReadonlySet<strin
     .map(elementToRawNode);
 }
 
+/** Keep current native inert-mass items that do not yet have typed editors. */
+function unknownMasses(parent: Element): RawXmlNode[] {
+  return directChildren(parent, 'InertMasses')
+    .flatMap(childElements)
+    .filter(
+      (el) =>
+        MASS_XML_TAGS.has(el.tagName) && !(MASS_SHAPES as readonly string[]).includes(el.tagName),
+    )
+    .map(elementToRawNode);
+}
+
 /** Stock inert-mass entries in document order, at any Part/SubPart authoring site. */
 export function massDefinitionsFromElement(parent: Element): MassDefinition[] {
-  return childElements(parent)
+  return directChildren(parent, 'InertMasses')
+    .flatMap(childElements)
     .filter((el) => (MASS_SHAPES as readonly string[]).includes(el.tagName))
     .map((el, index) => {
       const shape = el.tagName as MassShape;
       const definition = createMassDefinition(shape, `_mass${index}`);
-      const child = (tag: string) => directChildren(el, tag)[0];
+      const child = (tag: string) => domainChildren(el, tag)[0];
       definition.massKg = readMassKg(child('Mass'));
       definition.densityKgM3 = readDensityKgM3(child('Density'));
-      definition.materialId = child('Material')?.getAttribute('Id') ?? null;
+      definition.materialId = phaseId(child('Material')) || null;
       definition.dimensions = {};
       for (const field of MASS_SHAPE_DEFS[shape].dimensions) {
         const value = readDistanceM(child(field.xmlTag));
@@ -1164,17 +1318,9 @@ export function readDensityKgM3(el: Element | null | undefined): number | null {
  * `<SymmetryGroup>`) and `<Sibling>` (inside `<Connector>`). Modeled connector
  * bindings (Decoupler/DockingPort/EVADoor) never land in `unknownChildren`.
  */
-const CONNECTOR_REF_TAGS: ReadonlySet<string> = new Set(['ConnectorRef', 'Sibling']);
+const CONNECTOR_REF_TAGS: ReadonlySet<string> = new Set(['Connector', 'ConnectorRef', 'Sibling']);
+const PLACEMENT_REF_TAGS: ReadonlySet<string> = new Set(['Tracked', 'ExcludeSubPart', 'SubPart']);
 
-/**
- * Returns a copy of preserved-passthrough XML with every connector reference
- * (`<ConnectorRef Id>` / `<Sibling Id>`, at any depth) rewritten through
- * `connectorIdMap` — imports regenerate `_connectorN` ids, so refs kept verbatim
- * would point at the wrong (or a colliding pre-existing) connector. Ids without a
- * mapping are left untouched: the raw structure can't be safely pruned, and a
- * whole-Part import maps every connector the refs can legitimately name. The optional
- * placement map also rewrites preserved controller `<RocketReference SubPartId>` values.
- */
 export function remapRawConnectorRefs(
   nodes: readonly RawXmlNode[],
   connectorIdMap: ReadonlyMap<string, string>,
@@ -1182,21 +1328,17 @@ export function remapRawConnectorRefs(
 ): RawXmlNode[] {
   return nodes.map((node) => {
     const attrs = { ...node.attrs };
-    if (node.tag === 'Decoupler' && attrs.ConnectorId)
-      attrs.ConnectorId = connectorIdMap.get(attrs.ConnectorId) ?? attrs.ConnectorId;
-    if (CONNECTOR_REF_TAGS.has(node.tag) && attrs.Id) {
-      const mapped = connectorIdMap.get(attrs.Id);
-      if (mapped) attrs.Id = mapped;
-    }
-    if (node.tag === 'RocketReference' && attrs.SubPartId)
-      attrs.SubPartId = instanceIdMap.get(attrs.SubPartId) ?? attrs.SubPartId;
-    const out: RawXmlNode = {
-      tag: node.tag,
+    if (attrs.KeyRef && CONNECTOR_REF_TAGS.has(node.tag))
+      attrs.KeyRef = lookupLocalKey(connectorIdMap, attrs.KeyRef) ?? attrs.KeyRef;
+    if (attrs.KeyRef && PLACEMENT_REF_TAGS.has(node.tag))
+      attrs.KeyRef = lookupLocalKey(instanceIdMap, attrs.KeyRef) ?? attrs.KeyRef;
+    if (attrs.SubPart)
+      attrs.SubPart = lookupLocalKey(instanceIdMap, attrs.SubPart) ?? attrs.SubPart;
+    return {
+      ...node,
       attrs,
       children: remapRawConnectorRefs(node.children ?? [], connectorIdMap, instanceIdMap),
     };
-    if (node.text != null) out.text = node.text;
-    return out;
   });
 }
 
@@ -1215,26 +1357,12 @@ export function captureUnknownAttrs(
 function readVec(transform: Element | null, tag: string, def: number): Vec3 {
   const v: Vec3 = { x: def, y: def, z: def };
   if (!transform) return v;
-  const el = directChildren(transform, tag)[0];
+  const el = domainChildren(transform, tag)[0];
   if (!el) return v;
   const read = (attr: string) => {
     const raw = el.getAttribute(attr);
-    return raw === null ? def : Number.parseFloat(raw);
+    return raw === null ? 0 : Number.parseFloat(raw);
   };
-  if (tag === 'Scale') {
-    // KSA's Vector3Reference defaults a MISSING attribute to 0 (not 1), so a partial
-    // <Scale> collapses the mesh in-game. Keep the lenient 1 (what the author meant) but
-    // don't hide it: such a file was written by a flexo build older than 2026-08-23.
-    const missing = ['X', 'Y', 'Z'].filter((a) => !el.hasAttribute(a));
-    if (missing.length > 0) {
-      const owner = transform.parentElement;
-      console.warn(
-        `flexo import: <${owner?.tagName ?? '?'} Id="${owner?.getAttribute('Id') ?? ''}"> has a ` +
-          `<Scale> missing ${missing.join('/')} — KSA reads a missing Scale axis as 0 and the ` +
-          `mesh collapses in-game; this file was probably written by an older flexo — re-export it.`,
-      );
-    }
-  }
   return { x: read('X'), y: read('Y'), z: read('Z') };
 }
 
@@ -1330,13 +1458,14 @@ function readBoolValue(el: Element | null | undefined): boolean | null {
  * would just round-trip a load error.
  */
 function feedFromElement(el: Element): FeedSource | null {
-  const container = el.getAttribute('Container')?.trim() ?? '';
-  const connector = el.getAttribute('Connector')?.trim() ?? '';
-  const parent = (el.getAttribute('Parent') ?? '').trim().toLowerCase() === 'true';
+  const containerEl = directChildren(el, 'Container')[0];
+  const container = containerEl?.getAttribute('KeyRef')?.trim() ?? '';
+  const connector = directChildren(el, 'Connector')[0]?.getAttribute('KeyRef')?.trim() ?? '';
+  const parent = (el.getAttribute('FromParent') ?? '').trim().toLowerCase() === 'true';
   const set = (container ? 1 : 0) + (connector ? 1 : 0) + (parent ? 1 : 0);
   if (set !== 1) return null;
   if (container) {
-    const subPart = el.getAttribute('SubPart')?.trim() ?? '';
+    const subPart = containerEl?.getAttribute('SubPart')?.trim() ?? '';
     return { kind: 'container', containerId: container, subPartInstanceId: subPart || null };
   }
   if (connector) return { kind: 'connector', connectorId: connector };
@@ -1345,7 +1474,7 @@ function feedFromElement(el: Element): FeedSource | null {
 
 /** All `<FeedsFrom>` children of an element, malformed entries dropped. */
 function feedsFromElement(el: Element): FeedSource[] {
-  return directChildren(el, 'FeedsFrom')
+  return domainChildren(el, 'FeedsFrom')
     .map(feedFromElement)
     .filter((f): f is FeedSource => f != null);
 }
@@ -1366,28 +1495,28 @@ function nozzleRefFromElement(el: Element): RocketNozzleRef {
 /** Parses a `<Core>`/`<Nozzle>`/`<RocketReference>` into a {@link SubPartIdRef}. */
 function refFromElement(el: Element | null | undefined): SubPartIdRef {
   return {
-    id: el?.getAttribute('Id') ?? '',
-    subPartInstanceId: el?.getAttribute('SubPartId') || null,
+    id: el?.getAttribute('KeyRef') ?? '',
+    subPartInstanceId: el?.getAttribute('SubPart') || null,
   };
 }
 
 /** Parses one `<Combustor>` element. Missing fields fall back to CombustorTemplate defaults. */
 function thermalCoreFromElement(el: Element): ThermalCore {
   return {
-    id: el.getAttribute('Id') ?? '',
-    reactionId: directChildren(el, 'Reaction')[0]?.getAttribute('Id') ?? '',
-    coreTemperatureK: readNum(directChildren(el, 'CoreTemperature')[0], 'K') ?? Number.NaN,
-    maxPressurePa: readPressurePa(directChildren(el, 'MaxPressure')[0]) ?? 5_000_000,
-    thermalEfficiency: readNum(directChildren(el, 'ThermalEfficiency')[0], 'Value') ?? 1,
-    minimumThrottle: readNum(directChildren(el, 'MinimumThrottle')[0], 'Value') ?? 1,
-    minimumPulseTimeS: readSeconds(directChildren(el, 'MinimumPulseTime')[0]),
+    id: el.getAttribute('Key') ?? el.tagName,
+    reactionId: domainChildren(el, 'Reaction')[0]?.getAttribute('Ref') ?? '',
+    coreTemperatureK: readNum(domainChildren(el, 'CoreTemperature')[0], 'K') ?? Number.NaN,
+    maxPressurePa: readPressurePa(domainChildren(el, 'MaxPressure')[0]) ?? 5_000_000,
+    thermalEfficiency: readNum(domainChildren(el, 'ThermalEfficiency')[0], 'Value') ?? 1,
+    minimumThrottle: readNum(domainChildren(el, 'MinimumThrottle')[0], 'Value') ?? 1,
+    minimumPulseTimeS: readSeconds(domainChildren(el, 'MinimumPulseTime')[0]),
     feeds: feedsFromElement(el),
-    plumbing: readPlumbing(directChildren(el, 'Plumbing')[0]),
+    plumbing: readPlumbing(domainChildren(el, 'Plumbing')[0]),
   };
 }
 
 function antimatterRamCoreFromElement(el: Element): AntimatterRamCore {
-  const power = directChildren(el, 'JetPower')[0];
+  const power = domainChildren(el, 'JetPower')[0];
   const powerUnits = { W: 1, KW: 1e3, MW: 1e6, GW: 1e9, TW: 1e12 };
   const authoredPower = power
     ? Object.entries(powerUnits).reduce(
@@ -1396,36 +1525,36 @@ function antimatterRamCoreFromElement(el: Element): AntimatterRamCore {
       )
     : 30e12;
   return {
-    id: el.getAttribute('Id') ?? '',
+    id: el.getAttribute('Key') ?? el.tagName,
     jetPowerW: authoredPower,
     annihilationEfficiency:
-      readNum(directChildren(el, 'AnnihilationEfficiency')[0], 'Value') ?? 0.5,
+      readNum(domainChildren(el, 'AnnihilationEfficiency')[0], 'Value') ?? 0.5,
     carriedExhaustFractionOfLight:
-      readNum(directChildren(el, 'CarriedExhaustFractionOfLight')[0], 'Value') ?? 0.4,
-    antimatterId: directChildren(el, 'Antimatter')[0]?.getAttribute('Id') ?? 'AntiH2(l)',
-    reactionMassId: directChildren(el, 'ReactionMass')[0]?.getAttribute('Id') ?? 'H2(l)',
-    minimumThrottle: readNum(directChildren(el, 'MinimumThrottle')[0], 'Value') ?? 0.01,
-    minimumPulseTimeS: readSeconds(directChildren(el, 'MinimumPulseTime')[0]),
+      readNum(domainChildren(el, 'CarriedExhaustFractionOfLight')[0], 'Value') ?? 0.4,
+    antimatterId: phaseId(domainChildren(el, 'Antimatter')[0]) || 'AntiH2(l)',
+    reactionMassId: phaseId(domainChildren(el, 'ReactionMass')[0]) || 'H2(l)',
+    minimumThrottle: readNum(domainChildren(el, 'MinimumThrottle')[0], 'Value') ?? 0.01,
+    minimumPulseTimeS: readSeconds(domainChildren(el, 'MinimumPulseTime')[0]),
     feeds: feedsFromElement(el),
   };
 }
 
 function combustorFromElement(el: Element): Combustor {
-  const reactionEl = directChildren(el, 'Reaction')[0];
+  const reactionEl = domainChildren(el, 'Reaction')[0];
   const ratioRaw = reactionEl
-    ? directChildren(reactionEl, 'MixtureRatio')[0]?.textContent?.trim()
+    ? domainChildren(reactionEl, 'MixtureRatio')[0]?.textContent?.trim()
     : undefined;
   const ratio = ratioRaw ? Number.parseFloat(ratioRaw) : Number.NaN;
   return {
-    id: el.getAttribute('Id') ?? '',
-    reactionId: reactionEl?.getAttribute('Id') ?? '',
+    id: el.getAttribute('Key') ?? el.tagName,
+    reactionId: reactionEl?.getAttribute('Ref') ?? '',
     mixtureRatio: Number.isFinite(ratio) ? ratio : null,
-    maxPressurePa: readPressurePa(directChildren(el, 'MaxPressure')[0]) ?? 5_000_000,
-    thermalEfficiency: readNum(directChildren(el, 'ThermalEfficiency')[0], 'Value') ?? 1,
-    minimumThrottle: readNum(directChildren(el, 'MinimumThrottle')[0], 'Value') ?? 1,
-    minimumPulseTimeS: readSeconds(directChildren(el, 'MinimumPulseTime')[0]),
+    maxPressurePa: readPressurePa(domainChildren(el, 'MaxPressure')[0]) ?? 5_000_000,
+    thermalEfficiency: readNum(domainChildren(el, 'ThermalEfficiency')[0], 'Value') ?? 1,
+    minimumThrottle: readNum(domainChildren(el, 'MinimumThrottle')[0], 'Value') ?? 1,
+    minimumPulseTimeS: readSeconds(domainChildren(el, 'MinimumPulseTime')[0]),
     feeds: feedsFromElement(el),
-    plumbing: readPlumbing(directChildren(el, 'Plumbing')[0]),
+    plumbing: readPlumbing(domainChildren(el, 'Plumbing')[0]),
   };
 }
 
@@ -1441,33 +1570,33 @@ function readPlumbing(el: Element | null | undefined): PlumbingClass {
  * as `exitArea / 12` in `SolidMotorNozzleTemplate.Create`).
  */
 function commonNozzleFields(el: Element): Omit<SolidMotorNozzle, 'id'> {
-  const fxLoc = directChildren(el, 'FxExhaustLocation')[0];
-  const fxDir = directChildren(el, 'FxExhaustDirection')[0];
-  const soundEl = directChildren(el, 'SoundEvent')[0];
+  const fxLoc = domainChildren(el, 'FxExhaustLocation')[0];
+  const fxDir = domainChildren(el, 'FxExhaustDirection')[0];
+  const soundEl = domainChildren(el, 'SoundEvent')[0];
   return {
-    exitDiameterM: readDistanceM(directChildren(el, 'ExitDiameter')[0]) ?? 1,
-    fxExitDiameterM: readDistanceM(directChildren(el, 'FxExitDiameter')[0]),
-    flowEfficiency: readNum(directChildren(el, 'FlowEfficiency')[0], 'Value') ?? 1,
-    expansionEfficiency: readNum(directChildren(el, 'ExpansionEfficiency')[0], 'Value') ?? 1,
-    exhaustLocation: readVec3Attrs(directChildren(el, 'ExhaustLocation')[0], { x: 0, y: 0, z: 0 }),
-    exhaustDirection: readVec3Attrs(directChildren(el, 'ExhaustDirection')[0], {
+    exitDiameterM: readDistanceM(domainChildren(el, 'ExitDiameter')[0]) ?? 1,
+    fxExitDiameterM: readDistanceM(domainChildren(el, 'FxExitDiameter')[0]),
+    flowEfficiency: readNum(domainChildren(el, 'FlowEfficiency')[0], 'Value') ?? 1,
+    expansionEfficiency: readNum(domainChildren(el, 'ExpansionEfficiency')[0], 'Value') ?? 1,
+    exhaustLocation: readVec3Attrs(domainChildren(el, 'ExhaustLocation')[0], { x: 0, y: 0, z: 0 }),
+    exhaustDirection: readVec3Attrs(domainChildren(el, 'ExhaustDirection')[0], {
       x: -1,
       y: 0,
       z: 0,
     }),
     fxExhaustLocation: fxLoc ? readVec3Attrs(fxLoc, { x: 0, y: 0, z: 0 }) : null,
     fxExhaustDirection: fxDir ? readVec3Attrs(fxDir, { x: -1, y: 0, z: 0 }) : null,
-    reactionPlumes: directChildren(el, 'ReactionPlume').map((p) => ({
-      reactionId: p.getAttribute('Reaction') || null,
+    reactionPlumes: domainChildren(el, 'ReactionPlume').map((p) => ({
+      reactionId: directChildren(p, 'Reaction')[0]?.getAttribute('Ref') || null,
       isDefault: p.getAttribute('Default') === 'true',
-      volumetricExhaustId: directChildren(p, 'VolumetricExhaust')[0]?.getAttribute('Id') ?? null,
-      plumeTrailId: directChildren(p, 'PlumeTrail')[0]?.getAttribute('Id') ?? null,
+      volumetricExhaustId: domainChildren(p, 'VolumetricExhaust')[0]?.getAttribute('Ref') ?? null,
+      plumeTrailId: domainChildren(p, 'PlumeTrail')[0]?.getAttribute('Ref') ?? null,
     })),
-    exhaustLight: readBoolValue(directChildren(el, 'ExhaustLight')[0]) ?? true,
+    exhaustLight: readBoolValue(domainChildren(el, 'ExhaustLight')[0]) ?? true,
     sound: soundEl
       ? {
           action: (soundEl.getAttribute('Action') as RocketSoundAction) || 'On',
-          soundId: soundEl.getAttribute('SoundId') ?? '',
+          soundId: soundEl.getAttribute('Ref') ?? '',
         }
       : null,
   };
@@ -1476,27 +1605,27 @@ function commonNozzleFields(el: Element): Omit<SolidMotorNozzle, 'id'> {
 /** Parses one `<DeLavalNozzle>` element. Missing fields fall back to nozzle template defaults. */
 function nozzleFromElement(el: Element): DeLavalNozzle {
   return {
-    id: el.getAttribute('Id') ?? '',
+    id: el.getAttribute('Key') ?? el.tagName,
     ...commonNozzleFields(el),
     // KSA's AreaRatio default is NaN (a broken engine); preserve that so validation can flag it.
-    areaRatio: readNum(directChildren(el, 'AreaRatio')[0], 'Value') ?? Number.NaN,
+    areaRatio: readNum(domainChildren(el, 'AreaRatio')[0], 'Value') ?? Number.NaN,
   };
 }
 
 /** Parses one `<SolidMotorNozzle>` element (the DeLaval schema minus `<AreaRatio>`). */
 function solidNozzleFromElement(el: Element): SolidMotorNozzle {
-  return { id: el.getAttribute('Id') ?? '', ...commonNozzleFields(el) };
+  return { id: el.getAttribute('Key') ?? el.tagName, ...commonNozzleFields(el) };
 }
 
 /** Parses one `<SolidMotor>` element. Defaults mirror `SolidMotorTemplate.cs`. */
 function solidMotorFromElement(el: Element): SolidMotor {
   return {
-    id: el.getAttribute('Id') ?? '',
-    reactionId: directChildren(el, 'Reaction')[0]?.getAttribute('Id') ?? '',
-    thermalEfficiency: readNum(directChildren(el, 'ThermalEfficiency')[0], 'Value') ?? 1,
-    defaultPressurePa: readPressurePa(directChildren(el, 'DefaultPressure')[0]) ?? 7_000_000,
+    id: el.getAttribute('Key') ?? el.tagName,
+    reactionId: domainChildren(el, 'Reaction')[0]?.getAttribute('Ref') ?? '',
+    thermalEfficiency: readNum(domainChildren(el, 'ThermalEfficiency')[0], 'Value') ?? 1,
+    defaultPressurePa: readPressurePa(domainChildren(el, 'DefaultPressure')[0]) ?? 7_000_000,
     // '' ⇒ KSA takes GrainGeometryLibrary.Default.
-    grainGeometryId: directChildren(el, 'Grain')[0]?.getAttribute('Id') ?? '',
+    grainGeometryId: domainChildren(el, 'Grain')[0]?.getAttribute('Ref') ?? '',
     feeds: feedsFromElement(el),
   };
 }
@@ -1507,12 +1636,12 @@ function solidMotorFromElement(el: Element): SolidMotor {
  * + hollow-cylinder dimensions + the assembly-frame mass offset.
  */
 function solidGrainSegmentFromElement(el: Element): SolidGrainSegment {
-  const g = directChildren(el, 'Grain')[0];
+  const g = domainChildren(el, 'Grain')[0];
   return {
-    id: el.getAttribute('Id') ?? '',
-    wallMaterialId: g ? (directChildren(g, 'Material')[0]?.getAttribute('Id') ?? '') : '',
+    id: el.getAttribute('Key') ?? el.tagName,
+    wallMaterialId: g ? phaseId(domainChildren(g, 'Material')[0]) : '',
     massKg:
-      g && directChildren(g, 'Mass').length
+      g && domainChildren(g, 'Mass').length
         ? sumUnitChild(g, 'Mass', [
             ['Kg', 1],
             ['G', 0.001],
@@ -1531,7 +1660,7 @@ function solidGrainSegmentFromElement(el: Element): SolidGrainSegment {
           ])
         : null,
     densityKgM3:
-      g && directChildren(g, 'Density').length
+      g && domainChildren(g, 'Density').length
         ? sumUnitChild(g, 'Density', [
             ['TonnePerM3', 1e3],
             ['KgPerM3', 1],
@@ -1541,13 +1670,13 @@ function solidGrainSegmentFromElement(el: Element): SolidGrainSegment {
             ['GPerCm3', 1e3],
           ])
         : null,
-    paf2Asmb: readVec3Attrs(g ? directChildren(g, 'Paf2Asmb')[0] : undefined, { x: 0, y: 0, z: 0 }),
-    outerRadiusM: (g && readDistanceM(directChildren(g, 'OuterRadius')[0])) || 0,
+    paf2Asmb: readVec3Attrs(g ? domainChildren(g, 'Paf2Asmb')[0] : undefined, { x: 0, y: 0, z: 0 }),
+    outerRadiusM: (g && readDistanceM(domainChildren(g, 'OuterRadius')[0])) || 0,
     // WallThickness is a DistanceReference (authored as Mm); the model holds millimeters.
-    wallThicknessMm: g ? (readDistanceM(directChildren(g, 'WallThickness')[0]) ?? 0) * 1000 : 0,
-    lengthM: (g && readDistanceM(directChildren(g, 'Length')[0])) || 0,
+    wallThicknessMm: g ? (readDistanceM(domainChildren(g, 'WallThickness')[0]) ?? 0) * 1000 : 0,
+    lengthM: (g && readDistanceM(domainChildren(g, 'Length')[0])) || 0,
     locationAsmb: g
-      ? readVec3Attrs(directChildren(g, 'LocationAsmb')[0], { x: 0, y: 0, z: 0 })
+      ? readVec3Attrs(domainChildren(g, 'LocationAsmb')[0], { x: 0, y: 0, z: 0 })
       : { x: 0, y: 0, z: 0 },
   };
 }
@@ -1555,20 +1684,22 @@ function solidGrainSegmentFromElement(el: Element): SolidGrainSegment {
 /** Parses one `<Rocket>` element (core + nozzle references). */
 function rocketFromElement(el: Element): Rocket {
   return {
-    id: el.getAttribute('Id') ?? '',
-    core: refFromElement(directChildren(el, 'Core')[0]),
-    nozzles: directChildren(el, 'Nozzle').map(nozzleRefFromElement),
+    id: el.getAttribute('Key') ?? el.tagName,
+    core: refFromElement(domainChildren(el, 'Core')[0]),
+    nozzles: domainChildren(el, 'Nozzle').map(nozzleRefFromElement),
   };
 }
 
 /** Parses a `<RocketEngineController>`/`<RocketThrusterController>` element. */
 function controllerFromElement(el: Element, kind: RocketControllerKind): RocketController {
-  const controlMapEl = directChildren(el, 'ControlMap')[0];
+  const controlMapEl = domainChildren(el, 'ControlMap')[0];
   const csv = controlMapEl?.getAttribute('CSV');
   return {
-    id: el.getAttribute('Id') ?? '',
+    id: el.getAttribute('Key') ?? el.tagName,
     kind,
-    rocketRefs: directChildren(el, 'RocketReference').map(refFromElement),
+    rocketRefs: directChildren(el, 'Rockets')
+      .flatMap((wrapper) => directChildren(wrapper, 'Rocket'))
+      .map(refFromElement),
     controlMapFlags: controlMapEl
       ? (csv ?? '')
           .split(',')
@@ -1582,34 +1713,36 @@ function controllerFromElement(el: Element, kind: RocketControllerKind): RocketC
 export function gimbalOverlaysFromElement(gd: Element) {
   const out: Array<{
     subPartInstanceId: string;
+    key?: string;
     maxAngleYDeg?: number;
     maxAngleZDeg?: number;
     constrainToCircle?: boolean;
     transform: Partial<Transform>;
   }> = [];
-  for (const sub of directChildren(gd, 'SubPart')) {
-    const instanceId = sub.getAttribute('Id');
+  for (const gel of domainChildren(gd, 'Gimbal')) {
+    const instanceId = directChildren(gel, 'SubPart')[0]?.getAttribute('KeyRef');
     if (!instanceId) continue;
-    const gel = directChildren(sub, 'Gimbal')[0];
-    if (!gel) continue;
-    const transformEl = directChildren(gel, 'Transform')[0];
+    const transformEl = domainChildren(gel, 'Transform')[0];
     const fullTransform = readTransform(gel);
     const transform: Partial<Transform> = {};
     if (transformEl) {
-      if (directChildren(transformEl, 'Position').length)
+      if (domainChildren(transformEl, 'Position').length)
         transform.position = fullTransform.position;
-      if (directChildren(transformEl, 'Rotation').length)
+      if (domainChildren(transformEl, 'Rotation').length)
         transform.rotation = fullTransform.rotation;
-      if (directChildren(transformEl, 'Scale').length) transform.scale = fullTransform.scale;
+      if (domainChildren(transformEl, 'Scale').length) transform.scale = fullTransform.scale;
     }
-    const y = directChildren(gel, 'MaxAngleY')[0];
-    const z = directChildren(gel, 'MaxAngleZ')[0];
+    const y = domainChildren(gel, 'MaxAngleY')[0];
+    const z = domainChildren(gel, 'MaxAngleZ')[0];
     out.push({
       subPartInstanceId: instanceId,
+      ...(gel.getAttribute('Key') && gel.getAttribute('Key') !== instanceId
+        ? { key: gel.getAttribute('Key')! }
+        : {}),
       ...(y ? { maxAngleYDeg: readDegrees(y) } : {}),
       ...(z ? { maxAngleZDeg: readDegrees(z) } : {}),
-      ...(directChildren(gel, 'ConstrainToCircle').length
-        ? { constrainToCircle: readBoolValue(directChildren(gel, 'ConstrainToCircle')[0]) ?? true }
+      ...(domainChildren(gel, 'ConstrainToCircle').length
+        ? { constrainToCircle: readBoolValue(domainChildren(gel, 'ConstrainToCircle')[0]) ?? true }
         : {}),
       transform,
     });
@@ -1621,10 +1754,10 @@ export function applyGimbalOverlays(
   base: Gimbal[],
   overlays: ReturnType<typeof gimbalOverlaysFromElement>,
 ): Gimbal[] {
-  const byId = new Map(base.map((g) => [g.subPartInstanceId, g]));
+  const byId = new Map(base.map((g) => [g.key ?? g.subPartInstanceId, g]));
   for (const overlay of overlays) {
-    const previous = byId.get(overlay.subPartInstanceId);
-    byId.set(overlay.subPartInstanceId, {
+    const previous = byId.get(overlay.key ?? overlay.subPartInstanceId);
+    byId.set(overlay.key ?? overlay.subPartInstanceId, {
       maxAngleYDeg: 0,
       maxAngleZDeg: 0,
       constrainToCircle: true,
@@ -1663,41 +1796,44 @@ function parseEngineModules(
     solidGrainSegments: SolidGrainSegment[];
   },
 ): void {
-  for (const c of childElements(el)) {
+  for (const c of [
+    ...domainChildren(el, 'RocketEngineController'),
+    ...domainChildren(el, 'RocketThrusterController'),
+  ]) {
     if (c.tagName === 'RocketEngineController')
       target.rocketControllers.push(controllerFromElement(c, 'engine'));
     else if (c.tagName === 'RocketThrusterController')
       target.rocketControllers.push(controllerFromElement(c, 'thruster'));
   }
-  for (const r of directChildren(el, 'Rocket')) target.rockets.push(rocketFromElement(r));
-  for (const c of directChildren(el, 'ThermalCore'))
+  for (const r of domainChildren(el, 'Rocket')) target.rockets.push(rocketFromElement(r));
+  for (const c of domainChildren(el, 'ThermalCore'))
     target.thermalCores.push(thermalCoreFromElement(c));
-  for (const c of directChildren(el, 'AntimatterRamCore'))
+  for (const c of domainChildren(el, 'AntimatterRamCore'))
     target.antimatterRamCores.push(antimatterRamCoreFromElement(c));
-  for (const n of directChildren(el, 'MagneticNozzle')) {
+  for (const n of domainChildren(el, 'MagneticNozzle')) {
     const { exitDiameterM, flowEfficiency, expansionEfficiency, ...common } = commonNozzleFields(n);
     void exitDiameterM;
     void flowEfficiency;
     void expansionEfficiency;
     target.magneticNozzles.push({
-      id: n.getAttribute('Id') ?? '',
+      id: n.getAttribute('Key') ?? n.tagName,
       ...common,
-      fxExitDiameterM: readDistanceM(directChildren(n, 'FxExitDiameter')[0]) ?? 1,
+      fxExitDiameterM: readDistanceM(domainChildren(n, 'FxExitDiameter')[0]) ?? 1,
     });
   }
-  for (const c of directChildren(el, 'MagneticScoop'))
+  for (const c of domainChildren(el, 'MagneticScoop'))
     target.magneticScoops.push({
-      id: c.getAttribute('Id') ?? '',
-      captureRadiusM: readDistanceM(directChildren(c, 'CaptureRadius')[0]) ?? 1_000_000,
-      collectsId: directChildren(c, 'Collects')[0]?.getAttribute('Id') ?? 'H2(l)',
+      id: c.getAttribute('Key') ?? c.tagName,
+      captureRadiusM: readDistanceM(domainChildren(c, 'CaptureRadius')[0]) ?? 1_000_000,
+      collectsId: phaseId(domainChildren(c, 'Collects')[0]) || 'H2(l)',
     });
-  for (const c of directChildren(el, 'Combustor')) target.combustors.push(combustorFromElement(c));
-  for (const n of directChildren(el, 'DeLavalNozzle')) target.nozzles.push(nozzleFromElement(n));
-  for (const m of directChildren(el, 'SolidMotor'))
+  for (const c of domainChildren(el, 'Combustor')) target.combustors.push(combustorFromElement(c));
+  for (const n of domainChildren(el, 'DeLavalNozzle')) target.nozzles.push(nozzleFromElement(n));
+  for (const m of domainChildren(el, 'SolidMotor'))
     target.solidMotors.push(solidMotorFromElement(m));
-  for (const n of directChildren(el, 'SolidMotorNozzle'))
+  for (const n of domainChildren(el, 'SolidMotorNozzle'))
     target.solidNozzles.push(solidNozzleFromElement(n));
-  for (const s of directChildren(el, 'SolidGrainSegment'))
+  for (const s of domainChildren(el, 'SolidGrainSegment'))
     target.solidGrainSegments.push(solidGrainSegmentFromElement(s));
 }
 
@@ -1712,7 +1848,7 @@ export function engineModulesFromElement(el: Element): PartGameData {
 /** Geometry SubPart templates can carry the same propulsion modules as GameData. */
 export function subPartEngineModulesFromRoot(root: Element): SubPartGameData[] {
   const modules: SubPartGameData[] = [];
-  for (const el of directChildren(root, 'SubPart')) {
+  for (const el of domainChildren(root, 'SubPart')) {
     const id = el.getAttribute('Id');
     if (!id) continue;
     const data = createSubPartGameData(id);

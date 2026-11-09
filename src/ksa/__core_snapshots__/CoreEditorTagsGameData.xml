@@ -1,0 +1,25 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<Assets>
+    <!-- Well-known editor tags. Order here determines the order of category buttons in the part picker. -->
+    <!-- Modders can define additional tags in their own XML files using the same EditorTagDef element. -->
+    <EditorTagDef Id="Booster" RootPartWhitelist="true" FaceSnapTargetWhitelist="true" />
+    <EditorTagDef Id="Capsules" FaceSnapBlacklist="true" RootPartWhitelist="true" FaceSnapTargetWhitelist="true" DiameterFilterlist="true" />
+    <EditorTagDef Id="Engines" FaceSnapBlacklist="true" RootPartWhitelist="true" DiameterFilterlist="true" />
+    <EditorTagDef Id="RCS" />
+    <EditorTagDef Id="Fuel Tanks" RootPartWhitelist="true" FaceSnapTargetWhitelist="true" DiameterFilterlist="true" />
+    <EditorTagDef Id="Electrical" />
+    <EditorTagDef Id="Coupling" RootPartWhitelist="true" DiameterFilterlist="true" />
+    <EditorTagDef Id="Structural" RootPartWhitelist="true" FaceSnapTargetWhitelist="true" DiameterFilterlist="true" />
+    <EditorTagDef Id="Panels" RootPartWhitelist="true" FaceSnapTargetWhitelist="true" />
+    <EditorTagDef Id="Landing" />
+    <EditorTagDef Id="Interstage" FaceSnapBlacklist="true" RootPartWhitelist="true" DiameterFilterlist="true" NotaCategory="true"/>
+    <EditorTagDef Id="Cargo" RootPartWhitelist="true"/>
+    <EditorTagDef Id="Lights" />
+    <EditorTagDef Id="Life Support" />
+    <!-- Placeholder parts for interstellar flight, until they are replaced with real parts. -->
+    <EditorTagDef Id="Interstellar" RootPartWhitelist="true" FaceSnapTargetWhitelist="true" />
+    <EditorTagDef Id="Radial" FaceSnapTargetBlacklist="true"  NotaCategory="true" />
+    <EditorTagDef Id="NoFaceSnapping" FaceSnapBlacklist="true" NotaCategory="true" />
+    <EditorTagDef Id="All"  NotaCategory="true" />
+    <EditorTagDef Id="Hidden"  NotaCategory="true" />
+</Assets>

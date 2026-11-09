@@ -1,0 +1,110 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<Assets>
+    <Part Id="CoreCommandA_Prefab_MediumCapsuleVariantA" Modify="Patch">
+        <EditorTags Modify="Extend">
+            <EditorTag Ref="Capsules" />
+        </EditorTags>
+        <Diameters Modify="Extend">
+            <Diameter M="1"/>
+        </Diameters>
+        <InertMasses Modify="Extend">
+            <CustomMass>
+                <LocationAsmb X="-0.3601690873" />
+                <Mass Kg="1800" />
+                <MassSpecificInertia Ixx="0.3252281349" Iyy="0.668371379" Izz="0.668371379" />
+            </CustomMass>
+        </InertMasses>
+        <Components Modify="Extend">
+            <AttachedInternal>
+                <Internal Ref="CoreIVASpaceA_Prefab_MediumCapsuleA" />
+            </AttachedInternal>
+            <!-- A Gemini/Apollo-class hull gives about 5 g/cm² of aluminium (Apollo CM 3-5.5, Murrow, National Academies).
+             The liner adds 5 g/cm² of polyethylene over the cabin, the 0.89 m sphere around the seats, like the ISS crew quarters' liners.
+             Hydrogen makes it worth 7.5 g/cm² of aluminium against solar storms and belt protons and 6.3 against cosmic rays.
+             Over the bare hull it cuts a solar storm to a third, belt protons by about half and cosmic rays by about 15%. -->
+            <RadiationShield Key="CabinLiner" HullGPerCm2="5">
+                <Material Ref="Polyethylene.HD" />
+                <Area M2="10" />
+                <Mass Kg="500" />
+                <LocationAsmb X="-0.11" />
+            </RadiationShield>
+            <Light Key="RightWindow">
+                <Type>Spot</Type>
+                <Transform>
+                    <Position X="0.09" Y="0.43640" Z="-0.61633" />
+                </Transform>
+                <Range Value="2.5" />
+                <Intensity Value="2.0" />
+                <Color R="1.0" G="1.0" B="1.0" />
+                <OuterAngle Value="1.57" />
+            </Light>
+
+            <Light Key="LeftWindow">
+                <Type>Spot</Type>
+                <Transform>
+                    <Position X="0.09" Y="-0.43640" Z="-0.61633" />
+                </Transform>
+                <Range Value="2.5" />
+                <Intensity Value="2.0" />
+                <Color R="1.0" G="1.0" B="1.0" />
+                <OuterAngle Value="1.57" />
+            </Light>
+
+            <!-- Three days for both kittens, like a Gemini or Apollo flight: six kitten-days each of oxygen (5.4 kg at
+                 203 bar), water (19.2 kg) and this storage's 18 meals and 4 LiOH canisters, at Apollo/Gemini-era
+                 sizes. Gemini-class: about 1.4 m³ habitable for two (US National Park Service, Man in Space study). -->
+            <Habitat Key="Cabin">
+                <HabitableVolume M3="1.4" />
+                <StorageVolume M3="0.042" />
+                <LocationAsmb X="-0.3601690873" />
+            </Habitat>
+            <Tank Key="OxygenBottle">
+                <SphericalTank>
+                    <LocationAsmb X="-0.3601690873" />
+                    <Material Ref="Aluminum.2014" Phase="Solid" />
+                    <OuterRadius M="0.175" />
+                    <WallThickness Mm="8.3" />
+                    <RoleAffinity>Air</RoleAffinity>
+                </SphericalTank>
+            </Tank>
+            <Tank Key="WaterTank">
+                <SphericalTank>
+                    <LocationAsmb X="-0.3601690873" />
+                    <Material Ref="Aluminum.2014" Phase="Solid" />
+                    <OuterRadius M="0.1672" />
+                    <WallThickness Mm="1" />
+                    <RoleAffinity>Water</RoleAffinity>
+                </SphericalTank>
+            </Tank>
+            <Battery>
+                <MaximumCapacity J="20000" />
+            </Battery>
+            <PowerConsumer LightSwitch="true" LightIsActive="true">
+                <Consumed W="10" />
+            </PowerConsumer>
+            <Control />
+        </Components>
+        <Grabs Modify="Extend">
+            <Grab Key="spine1">
+                <Position X="-0.65" Y="0" Z="-1.0987" />
+                <Normal X="0.4219" Y="0" Z="-0.9066" />
+            </Grab>
+            <Grab Key="spine2">
+                <Position X="-0.474" Y="0" Z="-1.0168" />
+                <Normal X="0.4219" Y="0" Z="-0.9066" />
+            </Grab>
+            <Grab Key="spine3">
+                <Position X="-0.298" Y="0" Z="-0.9339" />
+                <Normal X="0.4219" Y="0" Z="-0.9066" />
+            </Grab>
+            <Grab Key="spine4">
+                <Position X="-0.018" Y="0" Z="-0.8046" />
+                <Normal X="0.4219" Y="0" Z="-0.9066" />
+            </Grab>
+            <Grab Key="spine5">
+                <Position X="0.262" Y="0" Z="-0.6743" />
+                <Normal X="0.4219" Y="0" Z="-0.9066" />
+            </Grab>
+        </Grabs>
+    </Part>
+</Assets>

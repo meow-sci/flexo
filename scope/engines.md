@@ -1,3 +1,10 @@
+> Build 5801 schema update: reaction arrays use `Reactants`, `PressureConditions`,
+> `MixtureRatioConditions`, and `TemperatureConditions` wrappers. Reactants use
+> `Ref` plus `Phase`; the internal runtime ID retains its `(s)`, `(l)`, or `(g)`
+> suffix. Grain profiles use `DepthConditions`. Core has six mixture, four fixed,
+> and six thermal reactions, and five grain profiles. The historical notes below
+> describe earlier baselines; use this update where XML shapes differ.
+
 # Scope — Engines (thrust/Isp physics, combustion, engine designer)
 
 > flexo's most math-heavy KSA port. `src/ksa/enginePhysics.ts` is copied **verbatim** from
@@ -328,11 +335,11 @@ Transform.RotationValue` (`decomp/KSA/GimbalReference.cs:36-46`); the commanded 
   follows `−ExhaustDirection` (identity for a stock −X bell).
 - `<FixedReaction>` (custom propellants; also Core monoprops/solids): `Id`, `Category` attr
   (Bipropellant/Hypergolic/Monopropellant[default]/Solid/Thermal), `<Name Value>`,
-  `<Description Value>`, `<Reactant Id MassShare>`, `<PressureCondition>`→`<LnPressure Value>`/`<Temperature K>`/`<Gamma Value>`/`<MolarMass GPerMol>`.
+  `<Description Value>`, `<Reactants><Reactant Ref Phase MassShare></Reactants>`, `<PressureConditions><PressureCondition>`→`<LnPressure Value>`/`<Temperature K>`/`<Gamma Value>`/`<MolarMass GPerMol>`.
 - `<MixtureReaction>` (Core bipropellants; parse-only via the catalog, flexo never authors one):
   adds `<DefaultMixtureRatio>` (text) and wraps the pressure rows in `<MixtureRatioCondition Value>`
   rows (2-D LUT: O/F ratio × lnP, rectangular, exactly 2 reactants = fuel then oxidizer).
-- `<ThermalReaction>`: parsed as `<TemperatureCondition K>` rows containing `<PressureCondition>`
+- `<ThermalReaction>`: parsed as `<TemperatureConditions><TemperatureCondition K>` rows containing `<PressureConditions><PressureCondition>`
   columns with `<LnPressure Value>`, `<Gamma Value>`, and `<MolarMass GPerMol|KgPerMol>`.
   ThermalCore consumes the temperature × log-pressure LUT; the exact new module schema is
   documented in the 5554 audit above.
@@ -818,10 +825,10 @@ Two facts the port depends on, both verified in the decomp:
 `src/ksa/grainGeometryCatalog.ts`, both loaded by `src/state/solidCurveStore.ts` on Engine-mode
 entry):
 
-| File                   | Read for                                                                          |
-| ---------------------- | --------------------------------------------------------------------------------- |
-| `GrainGeometries.xml`  | `<GrainGeometry Id>` → `<DepthCondition><Depth/><Perimeter/><PortArea/>` triplets |
-| `SolidPropellants.xml` | `<Substance Id><Solid><StorageDensity KgPerM3>` — the grain density               |
+| File                   | Read for                                                                                           |
+| ---------------------- | -------------------------------------------------------------------------------------------------- |
+| `GrainGeometries.xml`  | `<GrainGeometry Id>` → `<DepthConditions><DepthCondition><Depth/><Perimeter/><PortArea/>` triplets |
+| `SolidPropellants.xml` | `<Substance Id><Solid><StorageDensity KgPerM3>` — the grain density                                |
 
 Both are optional served assets. Missing grain tables or solid phase density produces an
 explicit preview-unavailable reason. A custom reaction using a known solid phase can use its

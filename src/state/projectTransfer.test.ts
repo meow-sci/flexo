@@ -899,9 +899,9 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
         tag: 'Aligned',
         attrs: {},
         children: [
-          { tag: 'ConnectorRef', attrs: { Id: '_connector1' }, children: [] },
+          { tag: 'Connector', attrs: { KeyRef: '_connector1' }, children: [] },
           // Dangling ref (no such connector in the export) — left verbatim.
-          { tag: 'ConnectorRef', attrs: { Id: '_connector99' }, children: [] },
+          { tag: 'Connector', attrs: { KeyRef: '_connector99' }, children: [] },
         ],
       },
     ];
@@ -922,8 +922,8 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
         tag: 'Aligned',
         attrs: {},
         children: [
-          { tag: 'ConnectorRef', attrs: { Id: '_connector2' }, children: [] },
-          { tag: 'ConnectorRef', attrs: { Id: '_connector99' }, children: [] },
+          { tag: 'Connector', attrs: { KeyRef: '_connector2' }, children: [] },
+          { tag: 'Connector', attrs: { KeyRef: '_connector99' }, children: [] },
         ],
       },
     ]);
@@ -959,7 +959,7 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
           children: [
             {
               tag: 'RocketReference',
-              attrs: { Id: 'PeerRocket', SubPartId: 'wing_1' },
+              attrs: { KeyRef: 'PeerRocket', SubPart: 'wing_1' },
               children: [],
             },
           ],
@@ -1027,7 +1027,7 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
     ]);
     const spd = part.subPartGameData.find((x) => x.subPartTemplateId === 'Core.Wing')!;
     expect(spd.unknownAttrs).toEqual({ DisplayName: 'Wing hardware' });
-    expect(spd.unknownChildren[0].children[0].attrs.SubPartId).toBe(newWingId);
+    expect(spd.unknownChildren[0].children[0].attrs.SubPart).toBe(newWingId);
     expect(spd.rocketControllers[0].rocketRefs).toEqual([
       { id: 'PeerRocket', subPartInstanceId: newWingId },
       { id: 'LocalRocket', subPartInstanceId: null },
@@ -1576,6 +1576,10 @@ it('remaps thermal and antimatter core feed references on project paste at both 
   const connectorId = source.connectors[0].id;
   const instanceId = source.placements[0].instanceId;
   const template = createSubPartGameData(source.placements[0].subPartTemplateId);
+  // A fresh template exercises imported reference remapping. If the destination already
+  // contains the same template key, it remains authoritative on repeated import.
+  template.subPartTemplateId = `${template.subPartTemplateId}_Imported`;
+  source.placements[0].subPartTemplateId = template.subPartTemplateId;
   for (const owner of [source.gameData, template]) {
     owner.thermalCores.push({
       ...createThermalCore('Heat'),
@@ -1599,9 +1603,8 @@ it('remaps thermal and antimatter core feed references on project paste at both 
   expect(merged.gameData.antimatterRamCores[0].feeds).toEqual([
     { kind: 'container', containerId: 'Fuel', subPartInstanceId: importedInstance },
   ]);
-  const sub = merged.subPartGameData.find(
-    (s) => s.subPartTemplateId === template.subPartTemplateId,
-  )!;
+  const importedTemplateId = merged.placements[destination.placements.length].subPartTemplateId;
+  const sub = merged.subPartGameData.find((s) => s.subPartTemplateId === importedTemplateId)!;
   expect(sub.thermalCores[0].feeds).toEqual([
     { kind: 'connector', connectorId: importedConnector },
   ]);

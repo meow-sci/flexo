@@ -1,3 +1,4 @@
+import { catalogRenderModels } from './catalogRenderModels';
 import * as THREE from 'three';
 import type { CatalogSubPart } from '../ksa/catalog';
 import type { SubPartPlacement } from '../ksa/types';
@@ -37,19 +38,19 @@ export class SubPartObject {
   private readonly materials: THREE.MeshStandardMaterial[];
   private readonly baseEmissives: Array<{ color: THREE.Color; intensity: number }>;
   private readonly opacityBases: MaterialOpacityBase[];
-  private readonly mesh: THREE.Mesh;
-  private readonly baseGeometry: THREE.BufferGeometry;
+  private readonly mesh: THREE.Mesh | null;
+  private readonly baseGeometry: THREE.BufferGeometry | null;
 
   private constructor(
     instanceId: string,
     templateId: string,
-    mesh: THREE.Mesh,
+    meshes: THREE.Mesh[],
     materials: THREE.MeshStandardMaterial[],
   ) {
     this.instanceId = instanceId;
     this.templateId = templateId;
-    this.mesh = mesh;
-    this.baseGeometry = mesh.geometry;
+    this.mesh = meshes[0] ?? null;
+    this.baseGeometry = this.mesh?.geometry ?? null;
     this.materials = materials;
     this.baseEmissives = materials.map((m) => ({
       color: m.emissive.clone(),
@@ -58,7 +59,7 @@ export class SubPartObject {
     this.opacityBases = materials.map(captureOpacityBase);
     this.group.name = `subpart:${instanceId}`;
     this.group.userData.selectable = { kind: 'subpart', id: instanceId };
-    this.group.add(mesh);
+    for (const mesh of meshes) this.group.add(mesh);
   }
 
   static async create(
@@ -67,38 +68,44 @@ export class SubPartObject {
   ): Promise<SubPartObject> {
     const prebuilt = customMeshRenderCache.get(catalog.id);
 
-    let geometry: THREE.BufferGeometry;
+    let meshes: THREE.Mesh[];
     let materials: THREE.MeshStandardMaterial[];
 
     if (prebuilt) {
-      // Custom mesh: use pre-built geometry + per-face materials from the render cache.
-      // Clone each material per-instance so highlight edits don't bleed across instances.
-      geometry = prebuilt.geometry;
+      // Custom geometry can have one material per face.
       materials = prebuilt.materials.map((shared) => {
         const m = shared.clone();
         applyKsaShaderPatches(m, { normal: !!m.normalMap, emissive: !!m.emissiveMap });
         return m;
       });
+      meshes = [
+        new THREE.Mesh(prebuilt.geometry, materials.length === 1 ? materials[0] : materials),
+      ];
     } else {
-      // Core/built-in SubPart: load geometry from atlas GLB + build shared material.
-      const [geo, shared] = await Promise.all([
-        getSubPartGeometry(catalog.atlasUrl, catalog.meshNodeName),
-        getSharedMaterial(catalog),
-      ]);
-      geometry = geo;
-      const m = shared.clone();
-      applyKsaShaderPatches(m, { normal: !!m.normalMap, emissive: !!m.emissiveMap });
-      materials = [m];
+      const models = catalogRenderModels(catalog);
+      meshes = await Promise.all(
+        models.map(async (model) => {
+          const [geometry, shared] = await Promise.all([
+            getSubPartGeometry(model.atlasUrl, model.meshNodeName),
+            getSharedMaterial(model),
+          ]);
+          const material = shared.clone();
+          applyKsaShaderPatches(material, {
+            normal: !!material.normalMap,
+            emissive: !!material.emissiveMap,
+          });
+          return new THREE.Mesh(geometry, material);
+        }),
+      );
+      materials = meshes.map((mesh) => mesh.material as THREE.MeshStandardMaterial);
     }
 
-    const matArg: THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[] =
-      materials.length === 1 ? materials[0] : materials;
-    const mesh = new THREE.Mesh(geometry, matArg);
-    mesh.userData.selectable = { kind: 'subpart', id: placement.instanceId };
+    for (const mesh of meshes)
+      mesh.userData.selectable = { kind: 'subpart', id: placement.instanceId };
     const obj = new SubPartObject(
       placement.instanceId,
       placement.subPartTemplateId,
-      mesh,
+      meshes,
       materials,
     );
     obj.setPlacement(placement);
@@ -188,7 +195,7 @@ export class SubPartObject {
    * the field's commit reaches `$part`.
    */
   setGeometryOverride(geometry: THREE.BufferGeometry | null): void {
-    this.mesh.geometry = geometry ?? this.baseGeometry;
+    if (this.mesh && this.baseGeometry) this.mesh.geometry = geometry ?? this.baseGeometry;
   }
 
   /** Dims this instance to `factor` (0–1) of its base opacity for the layer fade. */

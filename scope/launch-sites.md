@@ -1,142 +1,37 @@
-# Launch sites & system mods (`apps/icrp`)
+# Launch sites and system mods (ICRP)
 
-How KSA defines **launch sites** and what a mod can (and cannot) do about them —
-the contract behind ICRP's site management + self-contained system-mod export.
-Full evidence: [analysis/icrp/KSA_LAUNCH_SITES_AND_MODS.md](../analysis/icrp/KSA_LAUNCH_SITES_AND_MODS.md)
-and [analysis/icrp/PEBKAC_SYSTEM_MODS.md](../analysis/icrp/PEBKAC_SYSTEM_MODS.md);
-plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (L1–L9) + §Phase 7.
+ICRP targets the KSA build 5801 contract in `SystemTemplate.cs`,
+`SystemBodyEntry.cs`, `AstronomicalTemplate.cs`, `LocationReference.cs`,
+`LandmarkReference.cs`, `ModifierReference.cs`, `DecalModifierReference.cs`,
+`Mod.cs`, and Core's `Astronomicals.xml`, `SolSystemAstronomicals.xml`,
+`SolSystemVehicles.xml`, and `SolSystem.xml`.
 
-**Baseline:** re-verified against KSA build **2026.10.10.5554** — the existing launch-site
-contract and `SolSystem.xml` are intact; Earth adds a city and the game adds interstellar
-scenarios. See [What changed in 5554](#what-changed-in-5554).
+A system is a top-level `<System Id>` in an `<Assets>` document. Its `Bodies`
+array contains `<Body Ref HomeBody>` and its `Vehicles` array contains
+`<Vehicle Ref>`. The game discovers the XML through `assets` in `mod.toml`;
+there is no separate `systems` manifest field. Body definitions are top-level
+assets, and `ParentBody Ref` belongs to the body. Vehicle definitions likewise
+own a `ParentBody Ref` and a `Situation Ref`.
 
-## What changed in 5554
+The exporter clones a body when a site targets it, gives the clone a distinct
+mod-suffixed ID, redirects the system entry, and clones descendants and starting
+vehicles whose `ParentBody` must refer to a renamed body. Other system fields,
+body rows and vehicle references are retained. Core textures are global `Texture`
+assets referenced by `Ref`, so the clone does not rewrite texture paths. The
+private mirror currently omits `SolSystemAstronomicals.xml` and
+`SolSystemVehicles.xml`; byte-identical 5801 copies are bundled as fallbacks and
+should be refreshed with the game's Core data. Live mirror files take precedence.
 
-**Existing launch-site export — intact.** `Astronomicals.xml` adds only Earth city
-`<City Id="Metline"><Latitude Degrees="37.2333"/><Longitude Degrees="10.05"/></City>`;
-ICRP clones current Earth on export and naturally retains it. The miniature Earth and
-SolSystem fixtures' selected fields match 5554, so no fixture trim is required.
-`SolSystem.xml`, location/decal classes and the first-wins registry contract are unchanged.
+Body `Landmarks` contain `<Landmark Key IsLaunchPad>` with a child
+`<StaticObject Ref>` and latitude/longitude. A matching Key retargets the stock
+landmark; otherwise a new row is appended. A terrain flattener is a keyed `Decal`
+inside `Terrain/ProceduralModifiers`, with keyed `Biomes/Biome KeyRef`, a keyed
+`Location`, and `<HeightMap Ref="Circle">`. The game evaluates both radius and
+altitude in kilometre space. ICRP fields are metres and divide by 1000 at export.
+Stock VSFB currently records `AltitudeOffset Km="180"`; this is not evidence
+that the Km attribute means metres. `IsLaunchPad` gates pad rendering and
+collision. The persisted ground-clutter scaffold is outside this update.
 
-The game also adds `<Barycenter>` (`BarycenterTemplate.cs`), stellar `<Position>` /
-`<SphereOfInfluence>` / `<Orbit>`, orbit `<CentralMass>` / `<TwoBody>` / `<Barycentric>`,
-and system `<InterstellarGas AtomsPerCm3>`. These belong to new interstellar scenarios;
-ICRP exports the existing selected SolSystem with launch sites and does not author those
-scenarios. `AssetBundle`'s new Barycenter entry leaves the existing top-level body
-registration and duplicate-id rule unchanged. This extends the existing celestial scope,
-not the Part authoring contract.
-
-## Contract facts
-
-1. **A mod cannot patch a Core body** (L1): `<Landmark>`s and terrain `<Modifier>`s live
-   only inside the body element (`CelestialTemplate.cs:37-41`,
-   `ProceduralModifiersReference.cs:17-18`); a second `<AtmosphericBody Id="Earth">` is
-   **silently dropped** first-wins (`AssetBundle.cs:86-92`, `SerializedCollection.cs:20-35`).
-   No patch element exists. Hence ICRP ships a whole `<System>` (D2).
-2. **Inline bodies in a mod's own `<System>` don't collide with Core** (`SystemTemplate.cs:21-27,
-43-48` — system-local lookup; Core inlines Titan/Neptune itself). `<LoadFromLibrary Id Parent>`
-   pulls Core bodies. A mod's `systems=[…]` files appear in the game's system picker
-   (`Mod.cs:417-441`). Writer: `apps/icrp/src/ksa/systemXml.ts`.
-3. **The one partial-override hook**: `<StaticObjectGameData Id="CoreLaunchPadA_Prefab_LaunchPadA">`
-   appends sub-objects/colliders to the stock pad — at **all 5** stock Earth sites at once
-   (they share the prefab, `Astronomicals.xml:1869-1888`). ICRP's "extend stock pad" mode.
-4. **`<Landmark>` schema** (`LocationReference.cs:15-22`, `LandmarkReference.cs:9-10`):
-   `Id`, `IsLaunchPad` (default false), `StaticObject` attr; `<Latitude|Longitude Degrees|Radians>`.
-   **No heading/rotation** — orientation is fixed up/east/north from lat/lon; rotate the
-   complex by rotating its placements about up.
-5. **`IsLaunchPad="true"` gates everything**: static rendering (`ShowGroundMarker`),
-   the pad collider, the spawn bump, clutter exclusion. But **the launch-site pickers do
-   NOT filter on it** — every `LandmarkReference` on a body is offered
-   (`VehicleLaunchMenu.cs:310-326`).
-6. **Terrain decal** (`DecalModifierReference.cs`): `<Modifier Type="Decal" Name Biomes>` with
-   Amplitude/Order/Radius (metres)/Rotation/`<Location>`(lat-lon; its Id is never looked up)/
-   `AltitudeOffset`/`SmoothFactor`/`HeightMap`. **`AltitudeOffset Km=` is consumed as METRES**
-   (`CelestialRenderData.cs:168-170`, `PrepareModifiers.comp:165`) — the site's local terrain
-   height. Core's `circle.dds` height map is reusable by `Id="Circle"`. Builder:
-   `apps/icrp/src/ksa/landmarkXml.ts`.
-7. **Spawn** (`Vehicle.GetInitialKinematicStateForLocation`, `Vehicle.cs:4130`, pad height `:4188-4212` @5482): altitude = mean radius + max terrain height under the
-   4 bottom bbox corners (CPU terrain evaluation **includes decals**) + half-height +
-   `GroundOffset + SurfaceHeight`; body frame X=up/Y=east/Z=north; co-rotating, Landed.
-8. **Texture references in a cloned body — IN-GAME VERIFIED (2026-08-24)**: a
-   `Documents/mods` install can NOT reach Core textures by relative `Path`, and Id-only
-   references (stripped `Path`) **do not work in practice** ([V5a] FAILED) despite
-   `FileReference.cs:42-49` suggesting otherwise. The reliable form is an **absolute
-   `Path` into the game install** (`<install>/Content/Core/<path>`; .NET `Path.Combine`
-   keeps an absolute second argument — user-verified working). ICRP rewrites every
-   relative `Path=` under cloned/inline bodies (authored `Id=`s kept); `../Core/<path>`
-   remains as an option for `Content/<mod>/` installs. Never apply path rewrites to
-   ICRP's own asset XML.
-9. **A system-INLINE body's landmarks NEVER resolve their static objects — IN-GAME
-   VERIFIED (2026-08-24, the blank-pad bug)**: `StaticObject.ResolveAll`
-   (`StaticObject.cs:47-66`) calls `ResolveStaticObject()` only for bodies in
-   `ModLibrary.TemplateLookup` (+ their runtime `.Bodies`), and inline `<System>` bodies
-   live in the system-local lookup (`SystemTemplate.cs:43-48`) — landmark `_staticObject`
-   stays null: nothing renders, no collider, no spawn bump. Site-hosting bodies must
-   therefore ship as TOP-LEVEL bodies in an `<Assets>` file under a **mod-suffixed id**
-   (`Earth_<modId>` — a second "Earth" loses first-wins to Core) referenced from the
-   system via `<LoadFromLibrary>`; registration is gated on the selected scenario
-   requiring the id (`AssetBundle.cs:86-92`, `SystemInfo.Requires`). Starting-vehicle
-   rows bind their celestial via the ROW's `Parent=` (situations are pure orbits), so
-   the rename only touches `Parent` attributes.
-10. **Mod loading** (`Mod.cs:26-76`, `ModManifest.cs`): `manifest.toml` order = load order,
-    **new mods append disabled** (the export dialog says so); `mod.toml` lists `assets=[…]`
-    and `systems=[…]` explicitly (no directory scan); paths are mod-dir-relative;
-    `Category=` is a texture size cap. Emitter: `apps/icrp/src/ksa/modPlan.ts`.
-
-## Break-surface (re-check on a game update)
-
-`D/KSA/`: `LocationReference.cs`, `LandmarkReference.cs`, `CelestialTemplate.cs`,
-`AstronomicalTemplate.cs`, `SystemTemplate.cs`, `SystemInfo.cs`, `AstronomicalReference.cs`,
-`DecalModifierReference.cs`, `ModifierReference.cs`, `ProceduralModifiersReference.cs`,
-`Mod.cs`, `ModManifest.cs`, `ModLibrary.cs`, `FileReference.cs`, `VehicleLaunchMenu.cs`,
-`Vehicle.cs` (spawn), `Celestial.cs` (`GetTerrainHeightFromDirCcf`).
-`C/Core/`: `Astronomicals.xml` (the Earth block **hash** — ICRP stamps it per body override
-and re-clones on export; drift = re-export), `SolSystem.xml` (**mixed**: `LoadFromLibrary` rows AND ~45 inline bodies carrying 21 Id'd
-`Path=` attrs — the texture rules run over EVERY inline body in ICRP's output),
-`mod.toml`, `manifest.toml`, `Textures/Planets/_Decals/circle.dds`.
-
-## What changed in 5482
-
-**Verdict: INTACT.** `SystemTemplate`, `AssetBundle`, `ModLibrary`, `LocationReference`,
-`DecalModifierReference`, `SolSystem.xml` and `Astronomicals.xml` are unchanged. Two new save-side
-rules sit next to this surface without touching it: `CelestialSystemData.GroundClutter`
-(`ClutterEcotypeSaveData`) is `universe.xml` save state, not the asset `<System>`; and
-`GroundClutterRenderer.DeserializeSave` keys saved clutter by ecotype `Name`, so a system mod must
-keep a body's ecotype names unique and stable (ICRP's verbatim Earth clone does). Rev 5469
-corrected `GalacticPlane`'s basis math; ICRP copies the `<GalacticPlane>` element verbatim, so it
-gets the fix with Core. The spawn citation above was refreshed to 5482.
-
-## What changed in 5438
-
-**Authored contract INTACT.** `LocationReference`, `LandmarkReference`, `CelestialTemplate`,
-`AstronomicalTemplate`, `SystemTemplate`, `SystemInfo`, `AstronomicalReference`,
-`ProceduralModifiersReference`, and Core `Astronomicals.xml`/`SolSystem.xml` are byte-identical.
-The exact `<Landmark IsLaunchPad StaticObject>` and latitude/longitude forms, unique top-level
-body ids, `<LoadFromLibrary>` references, absolute texture-path workaround and spawn-height
-calculation are unchanged. Static-object and mod registration remain as previously documented.
-
-`decomp/KSA/DecalModifierReference.cs:Apply` adds an early return when the squared distance
-between the point and decal center exceeds `2.0001 × radius²`, before projecting UVs.
-This avoids applying the planar projection far from its intended surface patch. Its
-`<Modifier Type="Decal">`, `<Radius>`, `<AltitudeOffset>` and `<Location>` schema is unchanged.
-`TilingDetailModifierReference` now calls wrapped bilinear texture sampling directly and skips
-zero-weight tile samples; no authored fields changed. ICRP clones/emits this XML and does not
-port CPU terrain evaluation, so neither needs an application change.
-
-**5402 review correction:** caching all launch-pad poses does not enable all their colliders.
-`ConstraintSim.UpdateStaticObjectCollider` in both 5402 and 5438 selects only the nearest
-candidate within 300 m and installs one static collider. The older claim that two nearby pads
-both collide was unsupported; the historical note below is corrected. No persisted-schema
-change is needed.
-
-## What changed in 5402
-
-**Nothing in the schema.** `LandmarkReference`, `DecalModifierReference`, `SystemTemplate`,
-`Mod.cs`, `ModManifest` and `Astronomicals.xml` / `SolSystem.xml` are unchanged; `LocationReference`
-changed only by `IGameViewport` types and a cursor hit-test guard in its debug UI. One runtime
-refactor caches launch-pad candidates: `ResolveLaunchPads` builds a `LaunchPadPose` list of
-every `LandmarkReference { IsLaunchPad }` on the current celestial whose
-`GetStaticObject().CollisionShape.Exists`, posed by `ForwardCcf × (MeanRadius + terrain height)`
-and `LandmarkReference.GetAxesCcf(out up, out east, out north)`. `UpdateStaticObjectCollider`
-then selects the nearest candidate within 300 m, as before. The list is a cache, not a change
-from one active pad collider to many.
+The stock pad can be extended at all its sites by patching its `StaticObject`
+with array Extend operations. This update has source and unit-test verification,
+but has not been loaded in KSA 5801; recheck spawning and rendering in-game.

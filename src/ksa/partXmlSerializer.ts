@@ -34,7 +34,7 @@ import { colliderDimensions } from './colliderSize';
 import { seatAxesFromRotation } from './ivaSeatAxes';
 import { formatG6 } from './formatG6';
 import { animGlbPath, animModuleId, isAnimationExportable } from './animationNaming';
-import { MASS_SHAPE_DEFS, type MassDefinition } from './massDefinitions';
+import { MASS_SHAPE_DEFS, MASS_XML_TAGS, type MassDefinition } from './massDefinitions';
 
 /**
  * Serializes an EditingPart to KSA "Assets" Part XML, mirroring the rules in
@@ -140,21 +140,12 @@ export function serializePartsXml(
       partEl.setAttribute('CrashTolerance', formatG6(crashTolerancePa));
     }
 
-    // A `<Gimbal>` must be DECLARED here, on the geometry instance — `PartInstance.ApplyGameData`
-    // merges the GameData one with `Gimbal?.Apply(...)`, so without this the GameData block has
-    // nothing to apply to and the gimbal silently does not exist in game.
-    const gimballed = new Map(
-      part.gameData.gimbals.filter(gimbalIsExported).map((g) => [g.subPartInstanceId, g]),
-    );
     for (const placement of part.placements) {
-      partEl.appendChild(
-        buildSubPartElement(doc, placement, remap, gimballed.get(placement.instanceId)),
-      );
+      partEl.appendChild(buildSubPartElement(doc, placement, remap));
     }
-
-    for (const connector of part.connectors) {
+    for (const connector of part.connectors)
       partEl.appendChild(buildConnectorElement(doc, connector));
-    }
+    wrapItems(doc, partEl, { SubParts: ['SubPart'], Connectors: ['Connector'] });
 
     assets.appendChild(partEl);
   }
@@ -198,7 +189,7 @@ export function serializeGameDataXml(
   const emittedReactions = new Set<string>();
   for (const { part } of entries) {
     for (const reaction of part.customReactions) {
-      if (emittedReactions.has(reaction.id)) continue;
+      if (emittedReactions.has(reaction.id.toLowerCase())) continue;
       // A Category="Solid" reaction missing its burn-rate law / pressure limits makes
       // FixedReactionTemplate.Create() THROW, failing the whole mod load — never emit one.
       if (!isCustomReactionExportable(reaction)) {
@@ -210,7 +201,7 @@ export function serializeGameDataXml(
         );
         continue;
       }
-      emittedReactions.add(reaction.id);
+      emittedReactions.add(reaction.id.toLowerCase());
       assets.appendChild(buildFixedReactionElement(doc, reaction));
     }
   }
@@ -227,8 +218,9 @@ function appendPartGameData(
   base: string,
   templateRemap: TemplateRemap,
 ): void {
-  const gd = doc.createElement('PartGameData');
+  const gd = doc.createElement('Part');
   gd.setAttribute('Id', part.partId);
+  gd.setAttribute('Modify', 'Patch');
   const game: PartGameData = part.gameData;
   // Colliders are normalised into THIS document regardless of where they were authored:
   // a `<PartGameData>`/`<SubPartGameData>` component is merged onto the already-registered
@@ -245,7 +237,7 @@ function appendPartGameData(
   for (const tag of part.editorTags) {
     if (!tag.trim()) continue;
     const el = doc.createElement('EditorTag');
-    el.setAttribute('Value', tag);
+    el.setAttribute('Ref', tag);
     gd.appendChild(el);
   }
 
@@ -262,6 +254,10 @@ function appendPartGameData(
   for (const anim of part.animations) {
     if (!isAnimationExportable(anim)) continue;
     gd.appendChild(buildAnimationModuleElement(doc, anim, base));
+    const definition = doc.createElement('KeyframeAnimation');
+    definition.setAttribute('Id', animModuleId(base, anim));
+    definition.setAttribute('Path', animGlbPath(base, anim));
+    assets.appendChild(definition);
   }
 
   if (game.customMass != null && game.customMass > 0) {
@@ -274,28 +270,37 @@ function appendPartGameData(
   for (const mass of game.massDefinitions) gd.appendChild(buildMassDefinitionElement(doc, mass));
 
   // <Control/> — bare command-capability marker (ControlTemplate has no fields).
-  if (game.controllable) gd.appendChild(doc.createElement('Control'));
+  if (game.controllable) {
+    const control = doc.createElement('Control');
+    if (game.controlKey) control.setAttribute('Key', game.controlKey);
+    gd.appendChild(control);
+  }
 
   // Part-level <Tank>s — Core authors its prefab tank data here, and a part-level tank
   // id is what an engine's <FeedsFrom Container> addresses without a SubPart= scope.
   for (const tank of game.tanks) gd.appendChild(buildTankWrapperElement(doc, tank));
 
-  for (const b of game.batteries) {
+  for (const [index, b] of game.batteries.entries()) {
     const el = doc.createElement('Battery');
+    if (b.ksaId || index) el.setAttribute('Key', b.ksaId || `Battery${index + 1}`);
+    if (b.hasStatusLight) el.setAttribute('HasStatusLight', 'true');
     // Model holds Wh; KSA's MaximumCapacity is an EnergyReference in joules (1 Wh = 3600 J).
     el.appendChild(elWithAttr(doc, 'MaximumCapacity', 'J', formatG6(b.capacityWh * 3600)));
     gd.appendChild(el);
   }
-  for (const g of game.generators) {
+  for (const [index, g] of game.generators.entries()) {
     const el = doc.createElement('Generator');
+    if (g.ksaId || index) el.setAttribute('Key', g.ksaId || `Generator${index + 1}`);
     el.appendChild(elWithAttr(doc, 'Produced', 'W', formatG6(g.outputWatts)));
     gd.appendChild(el);
   }
-  for (const sp of game.solarPanels) gd.appendChild(buildSolarPanelElement(doc, sp));
+  for (const [index, sp] of game.solarPanels.entries())
+    gd.appendChild(buildSolarPanelElement(doc, sp, index));
   // One consumer per part (KSA's single Part.LightSwitch slot — see PowerConsumer docs).
   if (game.powerConsumer) {
     const pc = game.powerConsumer;
     const el = doc.createElement('PowerConsumer');
+    if (pc.ksaId) el.setAttribute('Key', pc.ksaId);
     el.appendChild(elWithAttr(doc, 'Consumed', 'W', formatG6(pc.consumedWatts)));
     // KSA defaults both flags to false, so emit each only when set (LightIsActive
     // is meaningless without LightSwitch, but round-tripped independently).
@@ -313,15 +318,16 @@ function appendPartGameData(
 
   for (const connector of part.connectors) {
     const el = doc.createElement('Connector');
-    el.setAttribute('Id', connector.id);
+    el.setAttribute('Key', connector.id);
+    el.setAttribute('Modify', 'Patch');
     appendConnectorTokens(doc, el, connector);
     gd.appendChild(el);
   }
 
   if (game.decoupler) {
     const el = doc.createElement('Decoupler');
-    if (game.decoupler.ksaId) el.setAttribute('Id', game.decoupler.ksaId);
-    el.setAttribute('ConnectorId', game.decoupler.connectorId);
+    if (game.decoupler.ksaId) el.setAttribute('Key', game.decoupler.ksaId);
+    el.appendChild(elWithAttr(doc, 'Connector', 'KeyRef', game.decoupler.connectorId));
     el.setAttribute('Force', formatG6(game.decoupler.force));
     gd.appendChild(el);
   }
@@ -329,7 +335,8 @@ function appendPartGameData(
     // KSA 4750+ child-element form: <ConnectorId Value/> (StringReference),
     // <LatchingKineticEnergy J/> (EnergyReference), <PushoffImpulse Ns/> (ImpulseReference).
     const el = doc.createElement('DockingPort');
-    el.appendChild(elWithAttr(doc, 'ConnectorId', 'Value', game.dockingPort.connectorId));
+    if (game.dockingPort.ksaId) el.setAttribute('Key', game.dockingPort.ksaId);
+    el.appendChild(elWithAttr(doc, 'Connector', 'KeyRef', game.dockingPort.connectorId));
     el.appendChild(
       elWithAttr(
         doc,
@@ -348,6 +355,7 @@ function appendPartGameData(
     // 5117 + 5168) — an EVA door is not connector-bound, so the element's presence IS the
     // hatch and `SeatId` is the only attribute there is to write.
     const el = doc.createElement('EVADoor');
+    if (game.evaDoor.ksaId) el.setAttribute('Key', game.evaDoor.ksaId);
     // `SeatId` only when authored: KSA's default is "" and `ResolveAlignedSeats` skips an
     // empty one, so an always-emitted `SeatId=""` would be noise Core does not write.
     if (game.ivaEnabled && game.evaDoor.seatId) el.setAttribute('SeatId', game.evaDoor.seatId);
@@ -394,6 +402,7 @@ function appendPartGameData(
     gd.appendChild(buildRawNode(doc, node));
   }
 
+  wrapGameData(doc, gd, game.unknownComponents, game.ivaEnabled);
   assets.appendChild(gd);
 
   // SubPart-owned colliders and lights travel with the template, so they are emitted INTO
@@ -412,15 +421,17 @@ function appendPartGameData(
     if (isSubPartGameDataEmpty(spd) && owned.length === 0 && ownedLights.length === 0) continue;
     if (owned.length > 0) emittedColliderOwners.add(spd.subPartTemplateId);
     if (ownedLights.length > 0) emittedLightOwners.add(spd.subPartTemplateId);
-    const spdEl = doc.createElement('SubPartGameData');
+    const spdEl = doc.createElement('SubPart');
     // Remap to the export variant id so GameData keyed on a built-in template lands on the
     // fresh variant SubPart instead of REDEFINING the shared built-in (KSA merges by id).
     spdEl.setAttribute('Id', templateRemap.get(spd.subPartTemplateId) ?? spd.subPartTemplateId);
+    spdEl.setAttribute('Modify', 'Patch');
     applyUnknownAttrs(spdEl, spd.unknownAttrs);
     for (const mass of spd.massDefinitions)
       spdEl.appendChild(buildMassDefinitionElement(doc, mass));
     for (const tank of spd.tanks) spdEl.appendChild(buildTankWrapperElement(doc, tank));
-    for (const sp of spd.solarPanels) spdEl.appendChild(buildSolarPanelElement(doc, sp));
+    for (const [index, sp] of spd.solarPanels.entries())
+      spdEl.appendChild(buildSolarPanelElement(doc, sp, index));
     for (const light of ownedLights) spdEl.appendChild(buildLightElement(doc, light));
     // Reusable thrust-chamber / solid-motor modules that travel with this mesh.
     for (const controller of spd.rocketControllers)
@@ -440,6 +451,7 @@ function appendPartGameData(
       if (!game.ivaEnabled && (node.tag === 'AttachedInternal' || node.tag === 'IVASeat')) continue;
       spdEl.appendChild(buildRawNode(doc, node));
     }
+    wrapGameData(doc, spdEl, spd.unknownComponents, game.ivaEnabled);
     assets.appendChild(spdEl);
   }
 
@@ -454,15 +466,99 @@ function appendPartGameData(
     if (templateId !== null && !emittedLightOwners.has(templateId)) orphanOwners.add(templateId);
   }
   for (const templateId of orphanOwners) {
-    const spdEl = doc.createElement('SubPartGameData');
+    const spdEl = doc.createElement('SubPart');
     spdEl.setAttribute('Id', templateRemap.get(templateId) ?? templateId);
+    spdEl.setAttribute('Modify', 'Patch');
     for (const light of lightGroups.get(templateId) ?? []) {
       spdEl.appendChild(buildLightElement(doc, light));
     }
     const owned = colliderGroups.get(templateId) ?? [];
     if (owned.length > 0) spdEl.appendChild(buildColliderElement(doc, owned));
+    wrapGameData(doc, spdEl, [], game.ivaEnabled);
     assets.appendChild(spdEl);
   }
+}
+
+/** Place authored items in their declared arrays. Patch arrays extend the geometry row. */
+function wrapItems(
+  doc: XmlDocument,
+  parent: XmlElement,
+  groups: Record<string, readonly string[]>,
+  patch = false,
+): void {
+  for (const [name, tags] of Object.entries(groups)) {
+    const items = Array.from(parent.childNodes).filter(
+      (node) => node.nodeType === 1 && tags.includes((node as XmlElement).tagName),
+    );
+    if (!items.length) continue;
+    const wrapper = doc.createElement(name);
+    if (patch) wrapper.setAttribute('Modify', 'Extend');
+    for (const item of items) wrapper.appendChild(item);
+    parent.appendChild(wrapper);
+  }
+}
+
+function wrapGameData(
+  doc: XmlDocument,
+  row: XmlElement,
+  unknown: readonly RawXmlNode[],
+  ivaEnabled: boolean,
+): void {
+  const components = doc.createElement('Components');
+  for (const node of unknown) {
+    if (!ivaEnabled && (node.tag === 'AttachedInternal' || node.tag === 'IVASeat')) continue;
+    components.appendChild(buildRawNode(doc, node));
+  }
+  wrapItems(
+    doc,
+    row,
+    {
+      EditorTags: ['EditorTag'],
+      Diameters: ['Diameter'],
+      InertMasses: [...MASS_XML_TAGS],
+      Connectors: ['Connector'],
+      Gimbals: ['Gimbal'],
+      Rockets: ['Rocket'],
+      RocketCores: ['Combustor', 'ThermalCore', 'AntimatterRamCore', 'SolidMotor'],
+      RocketNozzles: ['DeLavalNozzle', 'MagneticNozzle', 'SolidMotorNozzle'],
+      RocketEngineControllers: ['RocketEngineController'],
+      RocketThrusterControllers: ['RocketThrusterController'],
+      ConsumerFeedWirings: ['ConsumerFeedWiring'],
+    },
+    true,
+  );
+  const tags = [
+    'Control',
+    'Tank',
+    'Battery',
+    'Generator',
+    'SolarPanel',
+    'PowerConsumer',
+    'Light',
+    'Decoupler',
+    'DockingPort',
+    'EVADoor',
+    'SolidGrainSegment',
+    'MagneticScoop',
+    'Collider',
+    'IVASeat',
+    'KeyframeAnimationModule',
+  ];
+  for (const item of Array.from(row.childNodes))
+    if (item.nodeType === 1 && tags.includes((item as XmlElement).tagName))
+      components.appendChild(item);
+  if (components.childNodes.length) {
+    components.setAttribute('Modify', 'Extend');
+    row.appendChild(components);
+  }
+}
+
+function phaseElement(doc: XmlDocument, tag: string, phaseId: string): XmlElement {
+  const match = /^(.*)\(([slgp])\)$/.exec(phaseId);
+  const phases: Record<string, string> = { s: 'Solid', l: 'Liquid', g: 'Gas', p: 'Plasma' };
+  const el = elWithAttr(doc, tag, 'Ref', match ? match[1] : phaseId);
+  el.setAttribute('Phase', match ? phases[match[2]] : 'Solid');
+  return el;
 }
 
 /**
@@ -496,15 +592,16 @@ export function buildColliderElement(
   componentId: string = COLLIDER_COMPONENT_ID,
 ): XmlElement {
   const component = doc.createElement('Collider');
-  component.setAttribute('Id', componentId);
+  component.setAttribute('Key', componentId);
+  const shapes = doc.createElement('Colliders');
   for (const c of colliders) {
     const el = doc.createElement(c.shape);
-    el.setAttribute('Id', c.id);
+    el.setAttribute('Key', c.id);
     el.appendChild(buildVec3Attrs(doc, 'LocationAsmb', c.position));
     el.appendChild(buildVec3Attrs(doc, 'Collider2Asmb', c.rotation));
     if (c.shape === 'ConvexHull') {
       const mesh = doc.createElement('Mesh');
-      mesh.setAttribute('Id', c.meshId ?? '');
+      mesh.setAttribute('Ref', c.meshId ?? '');
       el.appendChild(mesh);
       el.appendChild(buildVec3Attrs(doc, 'Scale', c.scale));
     }
@@ -513,8 +610,9 @@ export function buildColliderElement(
     if (dims.lengthYM != null) el.appendChild(buildDistanceElement(doc, 'LengthY', dims.lengthYM));
     if (dims.lengthZM != null) el.appendChild(buildDistanceElement(doc, 'LengthZ', dims.lengthZM));
     if (dims.radiusM != null) el.appendChild(buildDistanceElement(doc, 'Radius', dims.radiusM));
-    component.appendChild(el);
+    shapes.appendChild(el);
   }
+  component.appendChild(shapes);
   return component;
 }
 
@@ -552,7 +650,7 @@ function buildVec3Attrs(doc: XmlDocument, name: string, v: Vec3): XmlElement {
  */
 function buildIvaSeatElement(doc: XmlDocument, seat: IvaSeat): XmlElement {
   const el = doc.createElement('IVASeat');
-  if (seat.ksaId) el.setAttribute('Id', seat.ksaId);
+  if (seat.ksaId) el.setAttribute('Key', seat.ksaId);
   const { forward, up } = seatAxesFromRotation(seat.rotation);
   el.appendChild(buildVec3Attrs(doc, 'Position', seat.position));
   el.appendChild(buildVec3Attrs(doc, 'ForwardAxis', forward));
@@ -606,7 +704,7 @@ export function buildMassDefinitionElement(doc: XmlDocument, mass: MassDefinitio
   if (mass.massKg != null) el.appendChild(elWithAttr(doc, 'Mass', 'Kg', formatG6(mass.massKg)));
   if (mass.densityKgM3 != null)
     el.appendChild(elWithAttr(doc, 'Density', 'KgPerM3', formatG6(mass.densityKgM3)));
-  if (mass.materialId != null) el.appendChild(elWithAttr(doc, 'Material', 'Id', mass.materialId));
+  if (mass.materialId != null) el.appendChild(phaseElement(doc, 'Material', mass.materialId));
   for (const field of MASS_SHAPE_DEFS[mass.shape].dimensions) {
     const value = mass.dimensions[field.key];
     if (value != null) el.appendChild(elWithAttr(doc, field.xmlTag, 'M', formatG6(value)));
@@ -647,8 +745,9 @@ function applyUnknownAttrs(el: XmlElement, attrs: Record<string, string>): void 
 }
 
 /** <SolarPanel><Produced W/><Transform/></SolarPanel> (Transform omitted when identity). */
-function buildSolarPanelElement(doc: XmlDocument, sp: SolarPanel): XmlElement {
+function buildSolarPanelElement(doc: XmlDocument, sp: SolarPanel, index: number): XmlElement {
   const el = doc.createElement('SolarPanel');
+  if (sp.ksaId || index) el.setAttribute('Key', sp.ksaId || `SolarPanel${index + 1}`);
   el.appendChild(elWithAttr(doc, 'Produced', 'W', formatG6(sp.outputWatts)));
   const transform = buildTransformElement(doc, sp.transform);
   if (transform) el.appendChild(transform);
@@ -662,7 +761,7 @@ function buildSolarPanelElement(doc: XmlDocument, sp: SolarPanel): XmlElement {
  */
 function buildTankWrapperElement(doc: XmlDocument, tank: Tank): XmlElement {
   const wrapper = doc.createElement('Tank');
-  if (tank.id.trim()) wrapper.setAttribute('Id', tank.id);
+  if (tank.id.trim()) wrapper.setAttribute('Key', tank.id);
   wrapper.appendChild(buildTankShapeElement(doc, tank));
   if (tank.magneticTrap) wrapper.appendChild(elWithAttr(doc, 'MagneticTrap', 'Value', 'true'));
   return wrapper;
@@ -675,7 +774,7 @@ function buildTankWrapperElement(doc: XmlDocument, tank: Tank): XmlElement {
 function buildTankShapeElement(doc: XmlDocument, tank: Tank): XmlElement {
   const el = doc.createElement(`${tank.shape}Tank`);
   if (tank.wallMaterialId.trim()) {
-    el.appendChild(elWithAttr(doc, 'Material', 'Id', tank.wallMaterialId));
+    el.appendChild(phaseElement(doc, 'Material', tank.wallMaterialId));
   }
   if (tank.shape !== 'Spherical') {
     el.appendChild(elWithAttr(doc, 'Length', 'M', formatG6(tank.lengthM)));
@@ -713,7 +812,7 @@ function buildTankShapeElement(doc: XmlDocument, tank: Tank): XmlElement {
  */
 function buildLightElement(doc: XmlDocument, light: PartLight): XmlElement {
   const el = doc.createElement('Light');
-  el.setAttribute('Id', light.ksaId ?? light.id);
+  el.setAttribute('Key', light.ksaId ?? light.id);
   const type = doc.createElement('Type');
   type.appendChild(doc.createTextNode(light.type));
   el.appendChild(type);
@@ -757,8 +856,8 @@ function buildLightElement(doc: XmlDocument, light: PartLight): XmlElement {
 
 /** Sets a SubPartIdReference's Id (+ SubPartId only when scoped to a specific instance). */
 function setRefAttrs(el: XmlElement, ref: SubPartIdRef): void {
-  el.setAttribute('Id', ref.id);
-  if (ref.subPartInstanceId) el.setAttribute('SubPartId', ref.subPartInstanceId);
+  el.setAttribute('KeyRef', ref.id);
+  if (ref.subPartInstanceId) el.setAttribute('SubPart', ref.subPartInstanceId);
 }
 
 /** A distance element emitted as `Cm` under 1 m (matching Core's small-nozzle style), else `M`. */
@@ -794,13 +893,13 @@ function buildFeedElements(doc: XmlDocument, feeds: readonly FeedSource[]): XmlE
     if (!isFeedSourceValid(f)) continue;
     const el = doc.createElement('FeedsFrom');
     if (f.kind === 'container') {
-      // Core authors SubPart before Container; attribute order is irrelevant to XmlSerializer.
-      if (f.subPartInstanceId) el.setAttribute('SubPart', f.subPartInstanceId);
-      el.setAttribute('Container', f.containerId);
+      const ref = elWithAttr(doc, 'Container', 'KeyRef', f.containerId);
+      if (f.subPartInstanceId) ref.setAttribute('SubPart', f.subPartInstanceId);
+      el.appendChild(ref);
     } else if (f.kind === 'connector') {
-      el.setAttribute('Connector', f.connectorId);
+      el.appendChild(elWithAttr(doc, 'Connector', 'KeyRef', f.connectorId));
     } else {
-      el.setAttribute('Parent', 'true');
+      el.setAttribute('FromParent', 'true');
     }
     out.push(el);
   }
@@ -818,23 +917,24 @@ function appendAdvancedEngines(
 ): void {
   for (const c of modules.thermalCores) {
     const el = doc.createElement('ThermalCore');
-    el.setAttribute('Id', c.id);
+    el.setAttribute('Key', c.id);
     for (const f of buildFeedElements(doc, c.feeds)) el.appendChild(f);
     if (c.plumbing === 'Service') {
       const pl = doc.createElement('Plumbing');
       pl.appendChild(doc.createTextNode('Service'));
       el.appendChild(pl);
     }
-    el.appendChild(elWithAttr(doc, 'Reaction', 'Id', c.reactionId));
+    el.appendChild(elWithAttr(doc, 'Reaction', 'Ref', c.reactionId));
     el.appendChild(elWithAttr(doc, 'CoreTemperature', 'K', formatG6(c.coreTemperatureK)));
     el.appendChild(elWithAttr(doc, 'MaxPressure', 'Bar', formatG6(c.maxPressurePa / 1e5)));
     el.appendChild(elWithAttr(doc, 'ThermalEfficiency', 'Value', formatG6(c.thermalEfficiency)));
     appendCoreTiming(doc, el, c);
+    wrapItems(doc, el, { FeedsFroms: ['FeedsFrom'] });
     owner.appendChild(el);
   }
   for (const c of modules.antimatterRamCores) {
     const el = doc.createElement('AntimatterRamCore');
-    el.setAttribute('Id', c.id);
+    el.setAttribute('Key', c.id);
     for (const f of buildFeedElements(doc, c.feeds)) el.appendChild(f);
     el.appendChild(elWithAttr(doc, 'JetPower', 'W', formatG6(c.jetPowerW)));
     el.appendChild(
@@ -848,9 +948,10 @@ function appendAdvancedEngines(
         formatG6(c.carriedExhaustFractionOfLight),
       ),
     );
-    el.appendChild(elWithAttr(doc, 'Antimatter', 'Id', c.antimatterId));
-    el.appendChild(elWithAttr(doc, 'ReactionMass', 'Id', c.reactionMassId));
+    el.appendChild(phaseElement(doc, 'Antimatter', c.antimatterId));
+    el.appendChild(phaseElement(doc, 'ReactionMass', c.reactionMassId));
     appendCoreTiming(doc, el, c);
+    wrapItems(doc, el, { FeedsFroms: ['FeedsFrom'] });
     owner.appendChild(el);
   }
   for (const n of modules.magneticNozzles)
@@ -864,9 +965,10 @@ function appendAdvancedEngines(
     );
   for (const scoop of modules.magneticScoops) {
     const el = doc.createElement('MagneticScoop');
-    el.setAttribute('Id', scoop.id);
+    el.setAttribute('Key', scoop.id);
     el.appendChild(buildDistanceElement(doc, 'CaptureRadius', scoop.captureRadiusM));
-    el.appendChild(elWithAttr(doc, 'Collects', 'Id', scoop.collectsId));
+    el.appendChild(phaseElement(doc, 'Collects', scoop.collectsId));
+    wrapItems(doc, el, { FeedsFroms: ['FeedsFrom'] });
     owner.appendChild(el);
   }
 }
@@ -883,7 +985,7 @@ function appendCoreTiming(
 
 function buildCombustorElement(doc: XmlDocument, c: Combustor): XmlElement {
   const el = doc.createElement('Combustor');
-  el.setAttribute('Id', c.id);
+  el.setAttribute('Key', c.id);
   // <FeedsFrom> then <Plumbing> then <Reaction>, matching Core's authoring order.
   // Without any feed point KSA logs "declares no FeedsFrom feed points; it will reach
   // no propellant" and the chamber never fires.
@@ -897,7 +999,7 @@ function buildCombustorElement(doc: XmlDocument, c: Combustor): XmlElement {
   // <Reaction Id> with the O/F ratio as a text child — REQUIRED by KSA for
   // MixtureReactions (CombustorTemplate.ResolveReaction throws without it),
   // omitted for FixedReactions (custom propellants, monoprops, solids).
-  const reaction = elWithAttr(doc, 'Reaction', 'Id', c.reactionId);
+  const reaction = elWithAttr(doc, 'Reaction', 'Ref', c.reactionId);
   if (c.mixtureRatio != null) {
     const ratio = doc.createElement('MixtureRatio');
     ratio.appendChild(doc.createTextNode(formatG6(c.mixtureRatio)));
@@ -915,6 +1017,7 @@ function buildCombustorElement(doc: XmlDocument, c: Combustor): XmlElement {
   if (c.minimumPulseTimeS != null) {
     el.appendChild(elWithAttr(doc, 'MinimumPulseTime', 'Seconds', formatG6(c.minimumPulseTimeS)));
   }
+  wrapItems(doc, el, { FeedsFroms: ['FeedsFrom'] });
   return el;
 }
 
@@ -950,7 +1053,7 @@ function buildRocketNozzleElement(
   afterExitDiameter?: (el: XmlElement) => void,
 ): XmlElement {
   const el = doc.createElement(tag);
-  el.setAttribute('Id', n.id);
+  el.setAttribute('Key', n.id);
   if (tag !== 'MagneticNozzle')
     el.appendChild(buildDistanceElement(doc, 'ExitDiameter', n.exitDiameterM));
   if (n.fxExitDiameterM != null) {
@@ -990,24 +1093,25 @@ function buildRocketNozzleElement(
   // omitted when false (ReactionPlumeReference.Default is a plain bool, default false).
   for (const p of n.reactionPlumes) {
     const plume = doc.createElement('ReactionPlume');
-    if (p.reactionId) plume.setAttribute('Reaction', p.reactionId);
+    if (p.reactionId) plume.appendChild(elWithAttr(doc, 'Reaction', 'Ref', p.reactionId));
     if (p.isDefault) plume.setAttribute('Default', 'true');
     if (p.volumetricExhaustId) {
-      plume.appendChild(elWithAttr(doc, 'VolumetricExhaust', 'Id', p.volumetricExhaustId));
+      plume.appendChild(elWithAttr(doc, 'VolumetricExhaust', 'Ref', p.volumetricExhaustId));
     }
     if (p.plumeTrailId) {
-      plume.appendChild(elWithAttr(doc, 'PlumeTrail', 'Id', p.plumeTrailId));
+      plume.appendChild(elWithAttr(doc, 'PlumeTrail', 'Ref', p.plumeTrailId));
     }
     el.appendChild(plume);
   }
   if (n.sound) {
     const sound = doc.createElement('SoundEvent');
     sound.setAttribute('Action', n.sound.action);
-    sound.setAttribute('SoundId', n.sound.soundId);
+    sound.setAttribute('Ref', n.sound.soundId);
     el.appendChild(sound);
   }
   // ExhaustLight defaults true — only emit the override when disabled.
   if (!n.exhaustLight) el.appendChild(elWithAttr(doc, 'ExhaustLight', 'Value', 'false'));
+  wrapItems(doc, el, { ReactionPlumes: ['ReactionPlume'] });
   return el;
 }
 
@@ -1018,16 +1122,17 @@ function buildRocketNozzleElement(
  */
 function buildSolidMotorElement(doc: XmlDocument, m: SolidMotor): XmlElement {
   const el = doc.createElement('SolidMotor');
-  el.setAttribute('Id', m.id);
-  el.appendChild(elWithAttr(doc, 'Reaction', 'Id', m.reactionId));
+  el.setAttribute('Key', m.id);
+  el.appendChild(elWithAttr(doc, 'Reaction', 'Ref', m.reactionId));
   if (Math.abs(m.thermalEfficiency - 1) > EPSILON) {
     el.appendChild(elWithAttr(doc, 'ThermalEfficiency', 'Value', formatG6(m.thermalEfficiency)));
   }
   // Stored SI Pa, emitted as Bar to match Core's authoring style.
   el.appendChild(elWithAttr(doc, 'DefaultPressure', 'Bar', formatG6(m.defaultPressurePa / 1e5)));
   // Blank ⇒ omit, so KSA takes GrainGeometryLibrary.Default.
-  if (m.grainGeometryId.trim()) el.appendChild(elWithAttr(doc, 'Grain', 'Id', m.grainGeometryId));
+  if (m.grainGeometryId.trim()) el.appendChild(elWithAttr(doc, 'Grain', 'Ref', m.grainGeometryId));
   for (const f of buildFeedElements(doc, m.feeds)) el.appendChild(f);
+  wrapItems(doc, el, { FeedsFroms: ['FeedsFrom'] });
   return el;
 }
 
@@ -1038,10 +1143,10 @@ function buildSolidMotorElement(doc: XmlDocument, m: SolidMotor): XmlElement {
  */
 function buildSolidGrainSegmentElement(doc: XmlDocument, s: SolidGrainSegment): XmlElement {
   const el = doc.createElement('SolidGrainSegment');
-  el.setAttribute('Id', s.id);
+  el.setAttribute('Key', s.id);
   const grain = doc.createElement('Grain');
   if (s.wallMaterialId.trim()) {
-    grain.appendChild(elWithAttr(doc, 'Material', 'Id', s.wallMaterialId));
+    grain.appendChild(phaseElement(doc, 'Material', s.wallMaterialId));
   }
   if (s.massKg != null) grain.appendChild(elWithAttr(doc, 'Mass', 'Kg', formatG6(s.massKg)));
   if (s.densityKgM3 != null)
@@ -1074,16 +1179,17 @@ function buildConsumerFeedWiringElement(
   );
   if (feeds.length === 0) return null;
   const el = doc.createElement('ConsumerFeedWiring');
-  el.setAttribute('Id', w.consumerId);
-  if (w.subPartInstanceId) el.setAttribute('SubPartId', w.subPartInstanceId);
+  el.setAttribute('KeyRef', w.consumerId);
+  if (w.subPartInstanceId) el.setAttribute('SubPart', w.subPartInstanceId);
   for (const f of feeds) el.appendChild(f);
+  wrapItems(doc, el, { FeedsFroms: ['FeedsFrom'] });
   return el;
 }
 
 /** <Rocket Id><Core Id [SubPartId]/><Nozzle Id [SubPartId] [AreaRatioMultiplier]/>…</Rocket>. */
 function buildRocketElement(doc: XmlDocument, r: Rocket): XmlElement {
   const el = doc.createElement('Rocket');
-  el.setAttribute('Id', r.id);
+  el.setAttribute('Key', r.id);
   const core = doc.createElement('Core');
   setRefAttrs(core, r.core);
   el.appendChild(core);
@@ -1097,6 +1203,7 @@ function buildRocketElement(doc: XmlDocument, r: Rocket): XmlElement {
     }
     el.appendChild(nz);
   }
+  wrapItems(doc, el, { Nozzles: ['Nozzle'] });
   return el;
 }
 
@@ -1105,15 +1212,16 @@ function buildControllerElement(doc: XmlDocument, c: RocketController): XmlEleme
   const el = doc.createElement(
     c.kind === 'thruster' ? 'RocketThrusterController' : 'RocketEngineController',
   );
-  el.setAttribute('Id', c.id);
+  el.setAttribute('Key', c.id);
   for (const ref of c.rocketRefs) {
-    const r = doc.createElement('RocketReference');
+    const r = doc.createElement('Rocket');
     setRefAttrs(r, ref);
     el.appendChild(r);
   }
   if (c.kind === 'thruster' && c.controlMapFlags !== null) {
     el.appendChild(elWithAttr(doc, 'ControlMap', 'CSV', c.controlMapFlags.join(',')));
   }
+  wrapItems(doc, el, { Rockets: ['Rocket'] });
   return el;
 }
 
@@ -1122,27 +1230,19 @@ function buildControllerElement(doc: XmlDocument, c: RocketController): XmlEleme
  * no-op in KSA and is dropped. The geometry DECLARATION and the GameData overlay must agree on
  * this, or one half ships without the other and the pair stops meaning anything.
  */
-function gimbalIsExported(g: Gimbal): boolean {
-  return (
-    Math.abs(g.maxAngleYDeg) > EPSILON || Math.abs(g.maxAngleZDeg) > EPSILON || !g.constrainToCircle
-  );
-}
-
 /** <SubPart Id="instanceId"><Gimbal>…</Gimbal></SubPart>, or null for a fixed (0/0) gimbal. */
 function buildGimbalSubPartElement(doc: XmlDocument, g: Gimbal): XmlElement | null {
-  if (!gimbalIsExported(g)) return null;
-  const hasY = Math.abs(g.maxAngleYDeg) > EPSILON;
-  const hasZ = Math.abs(g.maxAngleZDeg) > EPSILON;
-  const sub = doc.createElement('SubPart');
-  sub.setAttribute('Id', g.subPartInstanceId);
-  const gimbal = doc.createElement('Gimbal');
-  if (hasY) gimbal.appendChild(elWithAttr(doc, 'MaxAngleY', 'Degrees', formatG6(g.maxAngleYDeg)));
-  if (hasZ) gimbal.appendChild(elWithAttr(doc, 'MaxAngleZ', 'Degrees', formatG6(g.maxAngleZDeg)));
-  // ConstrainToCircle defaults true — only emit the override when disabled.
-  if (!g.constrainToCircle)
-    gimbal.appendChild(elWithAttr(doc, 'ConstrainToCircle', 'Value', 'false'));
-  sub.appendChild(gimbal);
-  return sub;
+  const el = doc.createElement('Gimbal');
+  el.setAttribute('Key', g.key ?? g.subPartInstanceId);
+  el.appendChild(elWithAttr(doc, 'SubPart', 'KeyRef', g.subPartInstanceId));
+  const transform = buildTransformElement(doc, g.transform);
+  if (transform) el.appendChild(transform);
+  if (Math.abs(g.maxAngleYDeg) > EPSILON)
+    el.appendChild(elWithAttr(doc, 'MaxAngleY', 'Degrees', formatG6(g.maxAngleYDeg)));
+  if (Math.abs(g.maxAngleZDeg) > EPSILON)
+    el.appendChild(elWithAttr(doc, 'MaxAngleZ', 'Degrees', formatG6(g.maxAngleZDeg)));
+  if (!g.constrainToCircle) el.appendChild(elWithAttr(doc, 'ConstrainToCircle', 'Value', 'false'));
+  return el;
 }
 
 /** <FixedReaction Id Category><Name/><Reactant…/><PressureCondition>…</FixedReaction> (custom propellant). */
@@ -1158,7 +1258,9 @@ function buildFixedReactionElement(doc: XmlDocument, reaction: CustomReaction): 
     el.appendChild(elWithAttr(doc, 'Description', 'Value', reaction.description));
   for (const r of reaction.reactants) {
     const re = doc.createElement('Reactant');
-    re.setAttribute('Id', r.phaseId);
+    const phase = phaseElement(doc, 'Reactant', r.phaseId);
+    re.setAttribute('Ref', phase.getAttribute('Ref') ?? '');
+    re.setAttribute('Phase', phase.getAttribute('Phase') ?? '');
     re.setAttribute('MassShare', formatG6(r.massShare));
     el.appendChild(re);
   }
@@ -1199,6 +1301,7 @@ function buildFixedReactionElement(doc: XmlDocument, reaction: CustomReaction): 
     cond.appendChild(elWithAttr(doc, 'MolarMass', 'GPerMol', formatG6(row.molarMassGPerMol)));
     el.appendChild(cond);
   }
+  wrapItems(doc, el, { Reactants: ['Reactant'], PressureConditions: ['PressureCondition'] });
   return el;
 }
 
@@ -1215,25 +1318,25 @@ function buildAnimationModuleElement(
 ): XmlElement {
   const moduleId = animModuleId(base, anim);
   const mod = doc.createElement('KeyframeAnimationModule');
-  mod.setAttribute('Id', moduleId);
+  mod.setAttribute('Key', moduleId);
   if (anim.mode === 'deployRetract') mod.setAttribute('ShowDeployRetract', 'true');
 
   const ref = doc.createElement('KeyframeAnimation');
-  ref.setAttribute('Path', animGlbPath(base, anim));
-  ref.setAttribute('Id', moduleId);
+  ref.setAttribute('Ref', moduleId);
   mod.appendChild(ref);
 
   const st = anim.solarTracking;
   if (st && st.subPartInstanceId.trim()) {
     const stEl = doc.createElement('SolarTracking');
     stEl.setAttribute('DegreesPerSecond', formatG6(st.degreesPerSecond));
-    stEl.setAttribute('SubPart', st.subPartInstanceId);
+    stEl.appendChild(elWithAttr(doc, 'Tracked', 'KeyRef', st.subPartInstanceId));
     for (const ex of st.excludeInstanceIds) {
       if (!ex.trim()) continue;
       const exEl = doc.createElement('ExcludeSubPart');
-      exEl.appendChild(doc.createTextNode(ex));
+      exEl.setAttribute('KeyRef', ex);
       stEl.appendChild(exEl);
     }
+    wrapItems(doc, stEl, { ExcludeSubParts: ['ExcludeSubPart'] });
     mod.appendChild(stEl);
   }
   return mod;
@@ -1253,35 +1356,29 @@ function buildSubPartElement(
   doc: XmlDocument,
   placement: SubPartPlacement,
   templateRemap: TemplateRemap,
-  gimbal: Gimbal | undefined,
 ): XmlElement {
   const el = doc.createElement('SubPart');
-  el.setAttribute('Id', placement.instanceId);
+  el.setAttribute('Key', placement.instanceId);
   el.setAttribute(
-    'InstanceOf',
+    'Ref',
     templateRemap.get(placement.subPartTemplateId) ?? placement.subPartTemplateId,
   );
   const transform = buildTransformElement(doc, placement);
   if (transform) el.appendChild(transform);
-  if (gimbal) {
-    const declaration = doc.createElement('Gimbal');
-    const pivot = buildTransformElement(doc, gimbal.transform);
-    if (pivot) declaration.appendChild(pivot);
-    el.appendChild(declaration);
-  }
   return el;
 }
 
 function buildConnectorElement(doc: XmlDocument, connector: Connector): XmlElement {
   const el = doc.createElement('Connector');
-  el.setAttribute('Id', connector.id);
+  el.setAttribute('Key', connector.id);
   const transform = buildTransformElement(doc, connector);
   if (transform) el.appendChild(transform);
   appendConnectorTokens(doc, el, connector);
   // <Sibling Id/> — attach-node grouping preserved from import (KSA 2026.7 multi-mount prefabs).
   for (const siblingId of connector.siblingIds) {
-    el.appendChild(elWithAttr(doc, 'Sibling', 'Id', siblingId));
+    el.appendChild(elWithAttr(doc, 'Sibling', 'KeyRef', siblingId));
   }
+  wrapItems(doc, el, { Siblings: ['Sibling'] });
   return el;
 }
 

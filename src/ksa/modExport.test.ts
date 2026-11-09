@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { DOMParser as XmlDOMParser } from '@xmldom/xmldom';
 import {
   DEFAULT_LAYER_ID,
   createEmptyPart,
@@ -93,8 +94,11 @@ import { serializeAssets } from './assetsXmlSerializer';
 import type { CatalogSubPart } from './catalog';
 import { animGlbPath } from './animationNaming';
 import { readVendoredAsset } from './ksaTestAssets';
-import { indexCatalog, parseAssetsFile } from './catalog';
-import { mergeGameData, parseGameDataFile, parsePartsFile, type CatalogPart } from './partCatalog';
+import { catalogFromContent, indexCatalog } from './catalog';
+import { catalogPartsFromContent } from './partCatalog';
+import { resolveContent } from './contentXml';
+import { CORE_CONTENT_FILES } from './coreFiles';
+import type { RawXmlNode } from './types';
 import { $part } from '../state/editorStore';
 import { importBuiltInPart } from '../state/partImport';
 
@@ -179,28 +183,25 @@ describe('vendored stock engines export complete isolated SubPart variants', () 
     );
   for (const pack of ['CorePropulsionA', 'CorePropulsionB', 'CorePropulsionC']) {
     it(`${pack}: preserves hardware, feeds, effects and gimbal pivots through the complete XML bundle`, async () => {
-      const parser = new DOMParser();
-      const assets = parser.parseFromString(
-        readVendoredAsset(`${pack}Assets.xml`),
-        'application/xml',
-      );
-      const gameData = parser.parseFromString(
-        readVendoredAsset(`${pack}GameData.xml`),
-        'application/xml',
-      );
-      const parts: CatalogPart[] = [];
-      const subParts: CatalogSubPart[] = [];
-      parsePartsFile(assets, `${pack}Assets.xml`, parts);
-      parseAssetsFile(assets, `${pack}Assets.xml`, subParts, gameData);
-      const data = {
-        parts: new Map(),
-        subParts: new Map(),
-        subPartColliders: new Map(),
-        subPartLights: new Map(),
-      };
-      parseGameDataFile(gameData, data);
-      mergeGameData(parts, data);
-      const catalog = indexCatalog(subParts);
+      const parser = new XmlDOMParser();
+      const parse = (xml: string) =>
+        parser.parseFromString(xml, 'application/xml') as unknown as Document;
+      const files = CORE_CONTENT_FILES.map((file) => ({
+        file,
+        doc: parse(readVendoredAsset(file)),
+      }));
+      const core = resolveContent(files);
+      // Mesh URL lookup is irrelevant to XML round-tripping; populate the index from
+      // resolved model references while retaining the full, ordered native corpus.
+      const meshIndex: Record<string, string> = {};
+      for (const tag of ['PartModel', 'PartModelDynamic', 'PartModelGlass']) {
+        for (const model of Array.from(core.doc.getElementsByTagName(tag))) {
+          const id = model.getElementsByTagName('Mesh')[0]?.getAttribute('Ref');
+          if (id) meshIndex[id.toLowerCase()] = 'Meshes/Fixture.glb';
+        }
+      }
+      const parts = catalogPartsFromContent(core).filter((p) => p.sourceFile.startsWith(pack));
+      const catalog = indexCatalog(catalogFromContent(core, meshIndex));
       const engines = parts.filter(
         (p) => p.rockets.length || p.subPartGameData.some((s) => s.rockets.length),
       );
@@ -214,7 +215,7 @@ describe('vendored stock engines export complete isolated SubPart variants', () 
         const bundle = await buildMultiCustomBundle(content);
         expect(bundle.assetsXml, engine.id).not.toBeNull();
         expect(bundle.binaries, engine.id).toEqual([]);
-        const declarations = parser.parseFromString(bundle.assetsXml!, 'application/xml');
+        const declarations = parse(bundle.assetsXml!);
         const variantIds = new Set(
           Array.from(declarations.getElementsByTagName('SubPart')).map((s) => s.getAttribute('Id')),
         );
@@ -222,24 +223,13 @@ describe('vendored stock engines export complete isolated SubPart variants', () 
           expect(variantIds.has(variant.variantId), engine.id).toBe(true);
           expect(variantIds.has(variant.originalId), engine.id).toBe(false);
         }
-        const exported: CatalogPart[] = [];
-        parsePartsFile(
-          parser.parseFromString(content.partXml, 'application/xml'),
-          content.partFile,
-          exported,
-        );
-        const exportedData = {
-          parts: new Map(),
-          subParts: new Map(),
-          subPartColliders: new Map(),
-          subPartLights: new Map(),
-        };
-        parseGameDataFile(
-          parser.parseFromString(content.gameDataXml, 'application/xml'),
-          exportedData,
-        );
-        mergeGameData(exported, exportedData);
-        const result = exported[0];
+        const resolved = resolveContent([
+          { file: content.partFile, doc: parse(content.partXml) },
+          ...(bundle.assetsXml ? [{ file: bundle.assetsFile!, doc: declarations }] : []),
+          { file: content.gameDataFile, doc: parse(content.gameDataXml) },
+        ]);
+        const result = catalogPartsFromContent(resolved).find((p) => p.id === imported.partId)!;
+        expect(result).toBeDefined();
         expect(result.gimbals, engine.id).toEqual(imported.gameData.gimbals);
         for (const key of [
           'rockets',
@@ -256,7 +246,9 @@ describe('vendored stock engines export complete isolated SubPart variants', () 
         for (const source of imported.subPartGameData) {
           const variant = content.variants.get(source.subPartTemplateId);
           expect(variant, `${engine.id}/${source.subPartTemplateId}`).toBeDefined();
-          expect(exportedData.subParts.has(source.subPartTemplateId), engine.id).toBe(false);
+          expect(content.gameDataXml).not.toContain(
+            `<SubPart Id="${source.subPartTemplateId}" Modify="Patch"`,
+          );
           const roundTripped = result.subPartGameData.find(
             (s) => s.subPartTemplateId === variant!.variantId,
           );
@@ -272,15 +264,20 @@ describe('vendored stock engines export complete isolated SubPart variants', () 
           );
         }
         if (engine.id.endsWith('_LESA') || engine.id.endsWith('_LESSegmentThrustAssemblyA')) {
-          const emitted = parser.parseFromString(content.gameDataXml, 'application/xml');
+          const emitted = parse(content.gameDataXml);
           const decouplers = Array.from(emitted.getElementsByTagName('Decoupler'));
-          expect(
-            decouplers.map((d) => d.getAttribute('Id')),
-            engine.id,
-          ).toEqual(['NoseconeMount', 'SkirtMount']);
+          expect(decouplers.map((d) => d.getAttribute('Key')).sort(), engine.id).toEqual([
+            'NoseconeMount',
+            'SkirtMount',
+          ]);
           const connectors = new Set(imported.connectors.map((c) => c.id));
           for (const decoupler of decouplers)
-            expect(connectors.has(decoupler.getAttribute('ConnectorId')!), engine.id).toBe(true);
+            expect(
+              connectors.has(
+                decoupler.getElementsByTagName('Connector')[0].getAttribute('KeyRef')!,
+              ),
+              engine.id,
+            ).toBe(true);
         }
       }
       $part.set(createEmptyPart());
@@ -327,7 +324,7 @@ describe('buildModContent', () => {
     expect(c.partFile).toBe('MyPartPart.xml');
     expect(c.gameDataFile).toBe('MyPartGameData.xml');
     expect(c.partXml).toContain('<Part');
-    expect(c.gameDataXml).toContain('<PartGameData');
+    expect(c.gameDataXml).toContain('<Part Id="fixme_part_id" Modify="Patch"');
   });
 });
 
@@ -404,8 +401,8 @@ describe('animation export', () => {
     const xml = serializeGameData(part, 'MyPart');
     expect(xml).toContain('<SolarTracking');
     expect(xml).toContain('DegreesPerSecond="5"');
-    expect(xml).toContain('SubPart="panel_1"');
-    expect(xml).toContain('<ExcludeSubPart>base_1</ExcludeSubPart>');
+    expect(xml).toContain('<Tracked KeyRef="panel_1"');
+    expect(xml).toContain('<ExcludeSubPart KeyRef="base_1"');
   });
 
   it('skips a degenerate animation (no joints / single keyframe)', async () => {
@@ -449,20 +446,36 @@ function partWithKittenMeshes(): EditingPart {
   return part;
 }
 
+/** Resolve a material slot through the native top-level Texture asset. */
+function materialSlotPath(xml: string, materialId: string, slot: string): string | null {
+  const doc = new XmlDOMParser().parseFromString(xml, 'application/xml');
+  const material = Array.from(doc.getElementsByTagName('PbrMaterial')).find(
+    (m) => m.getAttribute('Id') === materialId,
+  );
+  const ref = material?.getElementsByTagName(slot)[0]?.getAttribute('Ref');
+  expect(ref, `${materialId}/${slot}`).toBeTruthy();
+  const texture = Array.from(doc.getElementsByTagName('Texture')).find(
+    (t) => t.getAttribute('Id') === ref,
+  );
+  expect(texture, `${materialId}/${slot}: ${ref}`).toBeDefined();
+  return texture!.getAttribute('Path');
+}
+
 describe('buildMultiCustomBundle — part-ified kitten textures', () => {
   it('reference mode emits absolute <Diffuse>/<Normal>/<AoRoughMetal> and copies no kitten textures', async () => {
     const bundle = await bundleOnePart(partWithKittenMeshes(), 'KittenMod', {
       mode: 'reference',
       contentCorePath: 'C:\\KSA\\Content\\Core',
     });
-    expect(bundle.assetsXml).toContain(
-      '<Diffuse Path="C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_A.ktx2"',
+    const xml = bundle.assetsXml!;
+    expect(materialSlotPath(xml, 'flexo_hunter_suit_a_Material', 'Diffuse')).toBe(
+      'C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_A.ktx2',
     );
-    expect(bundle.assetsXml).toContain(
-      '<Normal Path="C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_N.ktx2"',
+    expect(materialSlotPath(xml, 'flexo_hunter_suit_a_Material', 'Normal')).toBe(
+      'C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_N.ktx2',
     );
-    expect(bundle.assetsXml).toContain(
-      '<AoRoughMetal Path="C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_ORM.ktx2"',
+    expect(materialSlotPath(xml, 'flexo_hunter_suit_a_Material', 'AoRoughMetal')).toBe(
+      'C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_ORM.ktx2',
     );
     // Eyes (diffuse only) fall back to the shared synthetic normal/ORM.
     expect(bundle.assetsXml).toContain('_FlatNormal.ktx2');
@@ -488,7 +501,9 @@ describe('buildMultiCustomBundle — part-ified kitten textures', () => {
       expect(paths).toContain('Textures/Kitten_EMU_N.ktx2');
       expect(paths).toContain('Textures/Kitten_EMU_ORM.ktx2');
       expect(paths).toContain('Textures/Kitten_Eye_Green2_A.ktx2');
-      expect(bundle.assetsXml).toContain('<Diffuse Path="Textures/Kitten_EMU_A.ktx2"');
+      expect(materialSlotPath(bundle.assetsXml!, 'flexo_hunter_suit_a_Material', 'Diffuse')).toBe(
+        'Textures/Kitten_EMU_A.ktx2',
+      );
       // 4 unique subpaths → exactly 4 fetches (no duplicate copies).
       expect(fetchMock).toHaveBeenCalledTimes(4);
     } finally {
@@ -501,9 +516,9 @@ describe('SubPart light GameData export', () => {
   const REF_TEX = { mode: 'reference', contentCorePath: 'C:\\KSA\\Content\\Core' } as const;
 
   // A custom light SubPart's <Light> must reach the GameData XML keyed by the SAME id that
-  // the Part tree references (InstanceOf) and the Assets XML declares (<SubPart Id>), or KSA's
+  // the Part tree references (Ref) and the Assets XML declares (<SubPart Id>), or KSA's
   // merge-by-id won't attach the light. See analysis/HOW_LIGHT_PARTS_WORK.md §1.1.
-  it('emits <SubPartGameData><Light> with an id aligned across Part / GameData / Assets XML', async () => {
+  it('emits a SubPart patch with a Light aligned across Part / GameData / Assets XML', async () => {
     const part = partWithKittenMeshes();
     const lampId = 'flexo_hunter_suit_a'; // a placed custom SubPart
     part.lights.push(createPartLight(lampId, '_light1'));
@@ -513,11 +528,11 @@ describe('SubPart light GameData export', () => {
     const bundle = await bundleOnePart(part, 'KittenMod', REF_TEX);
 
     // GameData carries the light, keyed by the SubPart template id.
-    expect(gameDataXml).toContain(`<SubPartGameData Id="${lampId}"`);
-    expect(gameDataXml).toContain('<Light Id="_light1">');
+    expect(gameDataXml).toContain(`<SubPart Id="${lampId}" Modify="Patch"`);
+    expect(gameDataXml).toContain('<Light Key="_light1">');
     expect(gameDataXml).toContain('<Type>Spot</Type>');
     // The Part tree instantiates that template, and the Assets XML declares it — same id everywhere.
-    expect(partXml).toContain(`InstanceOf="${lampId}"`);
+    expect(partXml).toContain(`Ref="${lampId}"`);
     expect(bundle.assetsXml).toContain(`<SubPart Id="${lampId}"`);
   });
 
@@ -531,11 +546,49 @@ describe('SubPart light GameData export', () => {
   });
 });
 
+/** Minimal native 5801 rows for the isolated-variant unit fixtures. */
+function nativeCatalog(entries: Array<[string, CatalogSubPart]>): Map<string, CatalogSubPart> {
+  const node = (
+    tag: string,
+    attrs: Record<string, string> = {},
+    children: RawXmlNode[] = [],
+    text?: string,
+  ): RawXmlNode => ({ tag, attrs, children, ...(text === undefined ? {} : { text }) });
+  return new Map(
+    entries.map(([id, entry]) => {
+      const modelChildren = [
+        node('Mesh', { Ref: entry.meshNodeName! }),
+        node('Material', { Ref: entry.materialId! }),
+      ];
+      if (entry.internal) modelChildren.unshift(node('Internal', {}, [], 'true'));
+      if (entry.rayTracing) modelChildren.push(node('RayTracing', {}, [], entry.rayTracing));
+      if (entry.shadowCaster !== undefined)
+        modelChildren.push(node('ShadowCaster', {}, [], String(entry.shadowCaster)));
+      const components = [
+        node('PartModel', { Key: `${id}_Model` }, modelChildren),
+        node('MeshView', {}, [node('Mesh', { Ref: id })]),
+      ];
+      return [
+        id,
+        { ...entry, raw: node('SubPart', { Id: id }, [node('Components', {}, components)]) },
+      ];
+    }),
+  );
+}
+function descendant(row: RawXmlNode, tag: string): RawXmlNode | undefined {
+  if (row.tag === tag) return row;
+  for (const child of row.children) {
+    const found = descendant(child, tag);
+    if (found) return found;
+  }
+  return undefined;
+}
+
 const SPOTLIGHT = 'CoreElectricalA_Subpart_SpotlightA';
 
 /** A catalog with one non-IVA built-in light SubPart (mesh + material), like CoreElectricalA. */
 function lightCatalog(): Map<string, CatalogSubPart> {
-  return new Map<string, CatalogSubPart>([
+  return nativeCatalog([
     [
       SPOTLIGHT,
       {
@@ -575,13 +628,13 @@ describe('built-in SubPart GameData export variants (never redefine the built-in
     const part = partWithBuiltinLight();
     part.lights = [];
     const spd = createSubPartGameData(SPOTLIGHT);
-    spd.unknownChildren.push({ tag: 'IVASeat', attrs: { Id: 'pilot' }, children: [] });
+    spd.unknownComponents.push({ tag: 'IVASeat', attrs: { Key: 'pilot' }, children: [] });
     part.subPartGameData.push(spd);
     part.gameData.ivaEnabled = false;
 
     const content = buildModContent(part, 'MyLight', lightCatalog());
-    expect(content.partXml).toContain(`InstanceOf="${VID}"`);
-    expect(content.partXml).not.toContain(`InstanceOf="${SPOTLIGHT}"`);
+    expect(content.partXml).toContain(`Ref="${VID}"`);
+    expect(content.partXml).not.toContain(`Ref="${SPOTLIGHT}"`);
     expect(content.gameDataXml).not.toContain('<IVASeat');
     const bundle = await bundleOnePart(part, content.base, undefined, content.variants);
     expect(bundle.assetsXml).toContain(`<SubPart Id="${VID}"`);
@@ -589,7 +642,7 @@ describe('built-in SubPart GameData export variants (never redefine the built-in
 
     part.gameData.ivaEnabled = true;
     expect(buildModContent(part, 'MyLight', lightCatalog()).gameDataXml).toContain(
-      '<IVASeat Id="pilot"/>',
+      '<IVASeat Key="pilot"/>',
     );
   });
 
@@ -601,8 +654,8 @@ describe('built-in SubPart GameData export variants (never redefine the built-in
       LIGHT_NS,
     ).get(SPOTLIGHT)!;
     expect(v.variantId).toBe(VID); // one naming rule for every variant
-    expect(v.meshId).toBe(SPOTLIGHT);
-    expect(v.materialId).toBe('CoreElectricalA_Material');
+    expect(descendant(v.row, 'Mesh')?.attrs.Ref).toBe(SPOTLIGHT);
+    expect(descendant(v.row, 'Material')?.attrs.Ref).toBe('CoreElectricalA_Material');
   });
 
   it('makes NO variant for a placed built-in SubPart with no GameData (plain mesh reuse)', () => {
@@ -620,14 +673,14 @@ describe('built-in SubPart GameData export variants (never redefine the built-in
 
   it('Part + GameData XML reference the variant id, never the built-in id', () => {
     const content = buildModContent(partWithBuiltinLight(), 'MyLight', lightCatalog());
-    // The <Light> moves onto a fresh variant SubPartGameData…
-    expect(content.gameDataXml).toContain(`<SubPartGameData Id="${VID}"`);
-    expect(content.gameDataXml).toContain('<Light Id="_light1">');
+    // The <Light> moves onto a fresh variant SubPart patch…
+    expect(content.gameDataXml).toContain(`<SubPart Id="${VID}" Modify="Patch"`);
+    expect(content.gameDataXml).toContain('<Light Key="_light1">');
     // …and the built-in SubPart is NEVER redefined (the reported bug).
-    expect(content.gameDataXml).not.toContain(`<SubPartGameData Id="${SPOTLIGHT}"`);
+    expect(content.gameDataXml).not.toContain(`<SubPart Id="${SPOTLIGHT}" Modify="Patch"`);
     // The placement instantiates the variant, not the built-in.
-    expect(content.partXml).toContain(`InstanceOf="${VID}"`);
-    expect(content.partXml).not.toContain(`InstanceOf="${SPOTLIGHT}"`);
+    expect(content.partXml).toContain(`Ref="${VID}"`);
+    expect(content.partXml).not.toContain(`Ref="${SPOTLIGHT}"`);
   });
 
   it('Assets XML declares the variant reusing the built-in Mesh + Material (ships no binaries)', async () => {
@@ -640,18 +693,18 @@ describe('built-in SubPart GameData export variants (never redefine the built-in
     );
     expect(bundle.assetsFile).toBe('MyLightAssets.xml');
     expect(bundle.assetsXml).toContain(`<SubPart Id="${VID}"`);
-    expect(bundle.assetsXml).toContain(`<PartModel Id="${VID}_Model"`);
-    expect(bundle.assetsXml).toContain(`<Mesh Id="${SPOTLIGHT}"`); // reuse built-in geometry
-    expect(bundle.assetsXml).toContain('<Material Id="CoreElectricalA_Material"');
+    expect(bundle.assetsXml).toContain(`<PartModel Key="${SPOTLIGHT}_Model"`);
+    expect(bundle.assetsXml).toContain(`<Mesh Ref="${SPOTLIGHT}"`); // reuse built-in geometry
+    expect(bundle.assetsXml).toContain('<Material Ref="CoreElectricalA_Material"');
     expect(bundle.assetsXml).not.toContain('MeshAtlas'); // no custom geometry generated
     expect(bundle.binaries).toHaveLength(0); // reuses built-in art — nothing to ship
   });
 
-  it('end-to-end zip never emits a <SubPartGameData> for the built-in id', async () => {
+  it('end-to-end zip never emits a SubPart patch for the built-in id', async () => {
     const blob = await zipOnePart(partWithBuiltinLight(), 'MyLight', lightCatalog());
     const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
-    expect(text).toContain(`<SubPartGameData Id="${VID}"`);
-    expect(text).not.toContain(`<SubPartGameData Id="${SPOTLIGHT}"`);
+    expect(text).toContain(`<SubPart Id="${VID}" Modify="Patch"`);
+    expect(text).not.toContain(`<SubPart Id="${SPOTLIGHT}" Modify="Patch"`);
   });
 });
 
@@ -745,10 +798,10 @@ describe('custom-mesh SubParts never get an export variant', () => {
   it('the Part places the custom SubPart id and its GameData hangs off the SAME id', () => {
     const part = partWithCustomMeshGameData();
     const content = buildModContent(part, 'Rod', mergedCatalogWithCustomRod());
-    expect(content.partXml).toContain(`InstanceOf="${CUSTOM_ROD}"`);
-    expect(content.partXml).not.toContain('InstanceOf="flexo_Rod_');
-    expect(content.gameDataXml).toContain(`<SubPartGameData Id="${CUSTOM_ROD}"`);
-    expect(content.gameDataXml).toContain('<Light Id="_light1">');
+    expect(content.partXml).toContain(`Ref="${CUSTOM_ROD}"`);
+    expect(content.partXml).not.toContain('Ref="flexo_Rod_');
+    expect(content.gameDataXml).toContain(`<SubPart Id="${CUSTOM_ROD}" Modify="Patch"`);
+    expect(content.gameDataXml).toContain('<Light Key="_light1">');
   });
 
   it('the Assets XML declares the SubPart exactly ONCE, with a <Material> and the _VM view mesh', async () => {
@@ -758,9 +811,9 @@ describe('custom-mesh SubParts never get an export variant', () => {
     const xml = bundle.assetsXml!;
     expect(xml.match(/<SubPart Id=/g)).toHaveLength(1);
     expect(xml).toContain(`<SubPart Id="${CUSTOM_ROD}"`);
-    expect(xml).toContain(`<Material Id="${CUSTOM_ROD}_Material"`);
+    expect(xml).toContain(`<Material Ref="${CUSTOM_ROD}_Material"`);
     // The variant used to point <MeshView> at the render mesh, orphaning the decimated _VM.
-    expect(xml).toContain(`<Mesh Id="${CUSTOM_ROD}_VM"`);
+    expect(xml).toContain(`<Mesh Ref="${CUSTOM_ROD}_VM"`);
   });
 });
 
@@ -787,11 +840,11 @@ describe('every exported <PartModel> carries a <Material>', () => {
 function expectEveryPartModelHasMaterial(xml: string): void {
   const models = xml.match(/<PartModel(?:Glass)?\b[\s\S]*?<\/PartModel(?:Glass)?>/g) ?? [];
   expect(models.length).toBeGreaterThan(0);
-  for (const m of models) expect(m).toMatch(/<Material Id="/);
+  for (const m of models) expect(m).toMatch(/<Material Ref="/);
 }
 
 function ivaCatalog(): Map<string, CatalogSubPart> {
-  return new Map<string, CatalogSubPart>([
+  return nativeCatalog([
     [
       'CoreIVAPropA_Subpart_ChairA',
       {
@@ -875,7 +928,7 @@ describe('<Internal> (interior-only) export variants', () => {
     expect(
       buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId)).size,
     ).toBe(0);
-    expect(serializePart(part, new Map())).toContain(`InstanceOf="${CHAIR}"`);
+    expect(serializePart(part, new Map())).toContain(`Ref="${CHAIR}"`);
   });
 
   it('flagging an interior prop exterior mints a variant with no <Internal>', () => {
@@ -885,10 +938,10 @@ describe('<Internal> (interior-only) export variants', () => {
     expect(variants.size).toBe(1); // the plain structural SubPart is untouched
     const v = variants.get(CHAIR)!;
     expect(v.variantId).toBe(CHAIR_VARIANT); // one naming rule for every variant
-    expect(v.meshId).toBe(CHAIR);
-    expect(v.materialId).toBe('CoreIVAPropA_Material');
-    expect(v.internal).toBe(false);
-    expect(v.rayTracing).toBeNull();
+    expect(descendant(v.row, 'Mesh')?.attrs.Ref).toBe(CHAIR);
+    expect(descendant(v.row, 'Material')?.attrs.Ref).toBe('CoreIVAPropA_Material');
+    expect(descendant(v.row, 'Internal')).toBeUndefined();
+    expect(descendant(v.row, 'RayTracing')).toBeUndefined();
   });
 
   it('a redundant flag matching the built-in collapses to no variant at all', () => {
@@ -907,7 +960,7 @@ describe('<Internal> (interior-only) export variants', () => {
       'CoreStructuralA_Subpart_X',
     )!;
     expect(v.variantId).toBe('flexo_MyShip_MyShip_CoreStructuralA_Subpart_X');
-    expect(v.internal).toBe(true);
+    expect(descendant(v.row, 'Internal')?.text).toBe('true');
   });
 
   it('a variant minted for GameData reasons keeps the built-in’s own <Internal>', async () => {
@@ -916,7 +969,7 @@ describe('<Internal> (interior-only) export variants', () => {
     const part = partWithIvaAndCore();
     part.lights.push(createPartLight(CHAIR, '_light1'));
     const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
-    expect(variants.get(CHAIR)!.internal).toBe(true);
+    expect(descendant(variants.get(CHAIR)!.row, 'Internal')?.text).toBe('true');
     const bundle = await bundleOnePart(part, 'MyShip', undefined, variants);
     expect(bundle.assetsXml).toContain('<Internal>true</Internal>');
   });
@@ -952,9 +1005,9 @@ describe('<Internal> (interior-only) export variants', () => {
     const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
     const remap = new Map([...variants.values()].map((v) => [v.originalId, v.variantId]));
     const xml = serializePart(part, remap);
-    expect(xml).toContain(`InstanceOf="${CHAIR_VARIANT}"`);
-    expect(xml).toContain('InstanceOf="CoreStructuralA_Subpart_X"');
-    expect(xml).not.toContain(`InstanceOf="${CHAIR}"`); // the closing quote disambiguates from the variant
+    expect(xml).toContain(`Ref="${CHAIR_VARIANT}"`);
+    expect(xml).toContain('Ref="CoreStructuralA_Subpart_X"');
+    expect(xml).not.toContain(`Ref="${CHAIR}"`); // the closing quote disambiguates from the variant
   });
 
   it('Assets XML declares the exterior-override variant (no Internal) even with no custom meshes', async () => {
@@ -964,9 +1017,9 @@ describe('<Internal> (interior-only) export variants', () => {
     const bundle = await bundleOnePart(part, 'MyShip', undefined, variants);
     expect(bundle.assetsFile).toBe('MyShipAssets.xml');
     expect(bundle.assetsXml).toContain(`<SubPart Id="${CHAIR_VARIANT}"`);
-    expect(bundle.assetsXml).toContain(`<PartModel Id="${CHAIR_VARIANT}_Model"`);
-    expect(bundle.assetsXml).toContain(`<Mesh Id="${CHAIR}"`);
-    expect(bundle.assetsXml).toContain('<Material Id="CoreIVAPropA_Material"');
+    expect(bundle.assetsXml).toContain(`<PartModel Key="${CHAIR}_Model"`);
+    expect(bundle.assetsXml).toContain(`<Mesh Ref="${CHAIR}"`);
+    expect(bundle.assetsXml).toContain('<Material Ref="CoreIVAPropA_Material"');
     expect(bundle.assetsXml).not.toContain('<Internal>');
     expect(bundle.assetsXml).not.toContain('RayTracing'); // the built-in authors none
     expect(bundle.assetsXml).not.toContain('MeshAtlas'); // variants only → no custom geometry
@@ -984,7 +1037,7 @@ describe('<Internal> (interior-only) export variants', () => {
     });
     part.internalFlags[RAY_BLOCKER] = false; // any reason to redeclare will do
     const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
-    expect(variants.get(RAY_BLOCKER)!.rayTracing).toBe('ShadowProxy');
+    expect(descendant(variants.get(RAY_BLOCKER)!.row, 'RayTracing')?.text).toBe('ShadowProxy');
     const bundle = await bundleOnePart(part, 'MyShip', undefined, variants);
     expect(bundle.assetsXml).toContain('<RayTracing>ShadowProxy</RayTracing>');
   });
@@ -1000,7 +1053,7 @@ describe('<Internal> (interior-only) export variants', () => {
     });
     part.internalFlags[WINDOW] = true; // any reason to redeclare will do
     const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
-    expect(variants.get(WINDOW)!.shadowCaster).toBe(false);
+    expect(descendant(variants.get(WINDOW)!.row, 'ShadowCaster')?.text).toBe('false');
     const bundle = await bundleOnePart(part, 'MyShip', undefined, variants);
     // Dropping it would default the field back to KSA's `true` and start casting shadows.
     expect(bundle.assetsXml).toContain('<ShadowCaster>false</ShadowCaster>');
@@ -1010,7 +1063,7 @@ describe('<Internal> (interior-only) export variants', () => {
     const part = partWithIvaAndCore();
     part.internalFlags[CHAIR] = false;
     const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
-    expect(variants.get(CHAIR)!.shadowCaster).toBeNull();
+    expect(descendant(variants.get(CHAIR)!.row, 'ShadowCaster')).toBeUndefined();
     const bundle = await bundleOnePart(part, 'MyShip', undefined, variants);
     expect(bundle.assetsXml).not.toContain('ShadowCaster');
   });
@@ -1037,7 +1090,7 @@ describe('<Internal> (interior-only) export variants', () => {
     const blob = await zipOnePart(part, 'MyShip', ivaCatalog());
     const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
     expect(text).toContain('flexo-parts/MyShipAssets.xml');
-    expect(text).toContain(`InstanceOf="${CHAIR_VARIANT}"`);
+    expect(text).toContain(`Ref="${CHAIR_VARIANT}"`);
     expect(text).toContain(`<SubPart Id="${CHAIR_VARIANT}"`);
   });
 });
@@ -1116,11 +1169,13 @@ describe('buildMultiCustomBundle — uniform-channel CustomMaterial (red metalli
     // ONE shared <PbrMaterial> for the two material-carrying meshes, named from the material…
     const xml = bundle.assetsXml!;
     expect(xml).toContain('<PbrMaterial Id="flexo_RedMetal_red1_Material"');
-    expect(xml.match(/<Material Id="flexo_RedMetal_red1_Material"/g)?.length).toBe(2);
-    expect(xml).toContain(
-      '<Diffuse Path="Textures/ButtonMod_flexo_button_a_BaseColor_ff0000.ktx2"',
+    expect(xml.match(/<Material Ref="flexo_RedMetal_red1_Material"/g)?.length).toBe(2);
+    expect(materialSlotPath(xml, 'flexo_RedMetal_red1_Material', 'Diffuse')).toBe(
+      'Textures/ButtonMod_flexo_button_a_BaseColor_ff0000.ktx2',
     );
-    expect(xml).toContain('<AoRoughMetal Path="Textures/ButtonMod_flexo_button_a_ORM_ff26ff.ktx2"');
+    expect(materialSlotPath(xml, 'flexo_RedMetal_red1_Material', 'AoRoughMetal')).toBe(
+      'Textures/ButtonMod_flexo_button_a_ORM_ff26ff.ktx2',
+    );
 
     // …plus ONE neutral material for the bare mesh. KSA has no untextured <PartModel>:
     // ThumbnailRenderResources.AddDraw derefs Material.DiffuseReference unguarded, so omitting
@@ -1129,8 +1184,8 @@ describe('buildMultiCustomBundle — uniform-channel CustomMaterial (red metalli
     expect(xml).toContain('<PbrMaterial Id="ButtonMod_flexo_button_a_NeutralMaterial"');
     expect(xml).toContain('<SubPart Id="flexo_bare_c"');
     const bare = xml.slice(xml.indexOf('<SubPart Id="flexo_bare_c"'));
-    expect(bare).toContain('<Material Id="ButtonMod_flexo_button_a_NeutralMaterial"/>');
-    expect(bare).toContain('<Mesh Id="flexo_bare_c_VM"');
+    expect(bare).toContain('<Material Ref="ButtonMod_flexo_button_a_NeutralMaterial"/>');
+    expect(bare).toContain('<Mesh Ref="flexo_bare_c_VM"');
   });
 
   it('a glowing mesh keeps its material scalars in the ORM and bakes the base color under the glow', async () => {
@@ -1149,14 +1204,17 @@ describe('buildMultiCustomBundle — uniform-channel CustomMaterial (red metalli
     // bitmap + coverage/strength/ramp), so what forks the material is the glow, never the SubPart
     // id. See the shared-glowing-material suite below.
     expect(xml).toContain('<PbrMaterial Id="flexo_button_a_Material"');
-    const emissive = xml.match(/<Emissive Path="([^"]+)"/)![1];
+    const emissive = xml.match(/Path="([^"]+_Emissive\.ktx2)"/)![1];
     expect(emissive).toMatch(
       /^Textures\/ButtonMod_flexo_button_a_RedMetal_[0-9a-f]{8}_Emissive\.ktx2$/,
     );
     expect(bundle.binaries.filter((b) => b.path === emissive)).toHaveLength(1);
     // …still carrying the material's metallic ORM solid.
     const glowMat = xml.slice(xml.indexOf('<PbrMaterial Id="flexo_button_a_Material"'));
-    expect(glowMat.slice(0, glowMat.indexOf('</PbrMaterial>'))).toContain('_ORM_ff26ff.ktx2');
+    const ormRef = glowMat
+      .slice(0, glowMat.indexOf('</PbrMaterial>'))
+      .match(/<AoRoughMetal Ref="([^"]+)"/)![1];
+    expect(xml).toMatch(new RegExp(`<Texture Id="${ormRef}" Path="[^"]*_ORM_ff26ff\\.ktx2"`));
     // The non-glowing sibling still shares the plain material entry.
     expect(xml).toContain('<PbrMaterial Id="flexo_RedMetal_red1_Material"');
   });
@@ -1177,9 +1235,9 @@ function partWithSharedGlowingMaterial(): EditingPart {
   return part;
 }
 
-/** The `<Material Id>` one `<SubPart Id="…">` references. */
+/** The `<Material Ref>` one `<SubPart Id="…">` references. */
 function subPartMaterialId(xml: string, subPartId: string): string {
-  return xml.slice(xml.indexOf(`<SubPart Id="${subPartId}"`)).match(/<Material Id="([^"]+)"/)![1];
+  return xml.slice(xml.indexOf(`<SubPart Id="${subPartId}"`)).match(/<Material Ref="([^"]+)"/)![1];
 }
 
 // The composited glow diffuse+mask are named from a hash of what went INTO the composite (base
@@ -1275,8 +1333,12 @@ describe('buildMultiCustomBundle — image-backed material channels', () => {
 
     const bundle = await bundleOnePart(part, 'ButtonMod');
     const xml = bundle.assetsXml!;
-    expect(xml).toContain('<Normal Path="Textures/Bumps_texn1_Normal.ktx2"');
-    expect(xml).toContain('<AoRoughMetal Path="Textures/Packed_texorm1_AoRoughMetal.ktx2"');
+    expect(materialSlotPath(xml, 'flexo_RedMetal_red1_Material', 'Normal')).toBe(
+      'Textures/Bumps_texn1_Normal.ktx2',
+    );
+    expect(materialSlotPath(xml, 'flexo_RedMetal_red1_Material', 'AoRoughMetal')).toBe(
+      'Textures/Packed_texorm1_AoRoughMetal.ktx2',
+    );
     const paths = bundle.binaries.map((b) => b.path);
     expect(paths).toContain('Textures/Bumps_texn1_Normal.ktx2');
     expect(paths).toContain('Textures/Packed_texorm1_AoRoughMetal.ktx2');
@@ -1286,7 +1348,7 @@ describe('buildMultiCustomBundle — image-backed material channels', () => {
     // The shared material still interns once for both meshes; the third (bare) mesh adds the
     // neutral fallback and nothing else.
     expect(xml.match(/<PbrMaterial /g)?.length).toBe(2);
-    expect(xml.match(/<Material Id="flexo_RedMetal_red1_Material"/g)?.length).toBe(2);
+    expect(xml.match(/<Material Ref="flexo_RedMetal_red1_Material"/g)?.length).toBe(2);
   });
 });
 
@@ -1508,24 +1570,30 @@ describe('buildMultiCustomBundle — imported glTF SubParts', () => {
     const xml = bundle.assetsXml!;
     // The material carries all three channels KSA dereferences with no null check.
     expect(xml).toContain('<PbrMaterial Id="flexo_PaintedMetal_paint_Material"');
-    expect(xml).toContain('<Diffuse Path="Textures/PodMod_imp0_BaseColor_2850c8.ktx2"');
-    expect(xml).toContain('<Normal Path="Textures/PodMod_imp0_FlatNormal.ktx2"');
-    expect(xml).toContain('<AoRoughMetal Path="Textures/PodMod_imp0_ORM_ff59e6.ktx2"');
+    expect(materialSlotPath(xml, 'flexo_PaintedMetal_paint_Material', 'Diffuse')).toBe(
+      'Textures/PodMod_imp0_BaseColor_2850c8.ktx2',
+    );
+    expect(materialSlotPath(xml, 'flexo_PaintedMetal_paint_Material', 'Normal')).toBe(
+      'Textures/PodMod_imp0_FlatNormal.ktx2',
+    );
+    expect(materialSlotPath(xml, 'flexo_PaintedMetal_paint_Material', 'AoRoughMetal')).toBe(
+      'Textures/PodMod_imp0_ORM_ff59e6.ktx2',
+    );
     expect(xml).not.toContain('<Emissive');
     // Opaque render path + the picking wiring.
     const sub = xml.slice(xml.indexOf('<SubPart Id="flexo_RcsPod_Part0_ab12cd"'));
-    expect(sub).toContain('<PartModel Id="flexo_RcsPod_Part0_ab12cd_Model"');
-    expect(sub).toContain('<Mesh Id="flexo_RcsPod_Part0_ab12cd"');
-    expect(sub).toContain('<Material Id="flexo_PaintedMetal_paint_Material"');
+    expect(sub).toContain('<PartModel Key="flexo_RcsPod_Part0_ab12cd_Model"');
+    expect(sub).toContain('<Mesh Ref="flexo_RcsPod_Part0_ab12cd"');
+    expect(sub).toContain('<Material Ref="flexo_PaintedMetal_paint_Material"');
     expect(sub).toContain('<MeshView>');
-    expect(sub).toContain('<Mesh Id="flexo_RcsPod_Part0_ab12cd_VM"');
+    expect(sub).toContain('<Mesh Ref="flexo_RcsPod_Part0_ab12cd_VM"');
   });
 
   it('interns ONE <PbrMaterial> for two imported meshes sharing a CustomMaterial', async () => {
     const bundle = await bundleOnePart(partWithImportedMeshes([{}, {}]), 'PodMod');
     const xml = bundle.assetsXml!;
     expect(xml.match(/<PbrMaterial /g)).toHaveLength(1);
-    expect(xml.match(/<Material Id="flexo_PaintedMetal_paint_Material"/g)).toHaveLength(2);
+    expect(xml.match(/<Material Ref="flexo_PaintedMetal_paint_Material"/g)).toHaveLength(2);
     // Both meshes are in the atlas, each with its own view mesh.
     const atlas = bundle.binaries.find((b) => b.path.endsWith('_MeshAtlas.glb'))!;
     expect(atlasMeshNames(atlas.data)).toHaveLength(4);
@@ -1542,9 +1610,14 @@ describe('buildMultiCustomBundle — imported glTF SubParts', () => {
     // A glowing mesh gets its own material (the diffuse has the glow baked in), and both halves
     // of the composite ship under one content-addressed name.
     expect(xml).toContain('<PbrMaterial Id="flexo_RcsPod_Part0_ab12cd_Material"');
-    const stem = xml.match(/<Emissive Path="Textures\/(.+)_Emissive\.ktx2"/)![1];
+    const stem = xml.match(/Path="Textures\/(.+)_Emissive\.ktx2"/)![1];
     expect(stem).toMatch(/^PodMod_imp0_PaintedMetal_[0-9a-f]{8}$/);
-    expect(xml).toContain(`<Diffuse Path="Textures/${stem}_Diffuse.ktx2"`);
+    expect(materialSlotPath(xml, 'flexo_RcsPod_Part0_ab12cd_Material', 'Diffuse')).toBe(
+      `Textures/${stem}_Diffuse.ktx2`,
+    );
+    expect(materialSlotPath(xml, 'flexo_RcsPod_Part0_ab12cd_Material', 'Emissive')).toBe(
+      `Textures/${stem}_Emissive.ktx2`,
+    );
     const paths = bundle.binaries.map((b) => b.path);
     expect(paths).toContain(`Textures/${stem}_Diffuse.ktx2`);
     expect(paths).toContain(`Textures/${stem}_Emissive.ktx2`);
@@ -1561,13 +1634,13 @@ describe('buildMultiCustomBundle — imported glTF SubParts', () => {
     part.customMeshes[0].imported!.transparent = true;
     const bundle = await bundleOnePart(part, 'PodMod');
     const xml = bundle.assetsXml!;
-    expect(xml).toContain('<PartModelGlass Id="flexo_RcsPod_Part0_ab12cd_Model"');
+    expect(xml).toContain('<PartModelGlass Key="flexo_RcsPod_Part0_ab12cd_Model"');
     expect(xml).not.toContain('<PartModel ');
     expect(xml).not.toContain('<Emissive');
     expect(bundle.binaries.some((b) => b.path.endsWith('_Emissive.ktx2'))).toBe(false);
     // Still fully declared + pickable.
-    expect(xml).toContain('<Material Id="flexo_PaintedMetal_paint_Material"');
-    expect(xml).toContain('<Mesh Id="flexo_RcsPod_Part0_ab12cd_VM"');
+    expect(xml).toContain('<Material Ref="flexo_PaintedMetal_paint_Material"');
+    expect(xml).toContain('<Mesh Ref="flexo_RcsPod_Part0_ab12cd_VM"');
   });
 
   it('skips an imported SubPart whose geometry is gone, without failing the export', async () => {
@@ -1578,7 +1651,7 @@ describe('buildMultiCustomBundle — imported glTF SubParts', () => {
     warn.mockRestore();
     const xml = bundle.assetsXml!;
     // The survivor is fully exported; the dead one appears nowhere (a <SubPart> pointing at a
-    // <Mesh Id> that isn't in the atlas is a dangling reference in-game).
+    // <Mesh Ref> that isn't in the atlas is a dangling reference in-game).
     expect(xml).toContain('<SubPart Id="flexo_RcsPod_Part0_ab12cd"');
     expect(xml).not.toContain('flexo_RcsPod_Part1_ab12cd');
     const atlas = bundle.binaries.find((b) => b.path.endsWith('_MeshAtlas.glb'))!;
@@ -1601,29 +1674,41 @@ describe('export variants carry the built-in template’s own colliders forward'
       scale: { x: 2, y: 3, z: 4 },
     };
     const catalog = lightCatalog();
-    catalog.set(SPOTLIGHT, { ...catalog.get(SPOTLIGHT)!, colliders: [hull] });
+    const source = catalog.get(SPOTLIGHT)!;
+    const collider: RawXmlNode = {
+      tag: 'Collider',
+      attrs: { Key: 'stockCollider' },
+      children: [
+        {
+          tag: 'Colliders',
+          attrs: {},
+          children: [
+            {
+              tag: 'ConvexHull',
+              attrs: { Key: hull.id },
+              children: [
+                { tag: 'Mesh', attrs: { Ref: hull.meshId! }, children: [] },
+                {
+                  tag: 'Transform',
+                  attrs: {},
+                  children: [{ tag: 'Scale', attrs: { X: '2', Y: '3', Z: '4' }, children: [] }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    descendant(source.raw!, 'Components')!.children.push(collider);
     const variant = buildExportVariantMap(partWithBuiltinLight(), catalog, 'MyLight', LIGHT_NS).get(
       SPOTLIGHT,
     )!;
-    expect(variant.colliders).toEqual([hull]);
+    expect(descendant(variant.row, 'ConvexHull')).toEqual(collider.children[0].children[0]);
     const xml = serializeAssets([
-      {
-        subParts: [],
-        referenceSubParts: [
-          {
-            subPartId: variant.variantId,
-            meshId: SPOTLIGHT,
-            materialId: `${SPOTLIGHT}_Material`,
-            colliders: variant.colliders,
-            internal: false,
-            rayTracing: null,
-            shadowCaster: null,
-          },
-        ],
-      },
+      { subParts: [], referenceSubParts: [{ subPartId: variant.variantId, row: variant.row }] },
     ]);
-    expect(xml).toContain('<ConvexHull Id="ConvexHullCollider1">');
-    expect(xml).toContain('<Mesh Id="_ColMesh_CoreFairingA_Prefab_NoseconeA_1"');
+    expect(xml).toContain('<ConvexHull Key="ConvexHullCollider1">');
+    expect(xml).toContain('<Mesh Ref="_ColMesh_CoreFairingA_Prefab_NoseconeA_1"');
     expect(xml).toContain('<Scale X="2" Y="3" Z="4"');
   });
   const BUILT_IN_BOX: PartCollider = {
@@ -1639,7 +1724,23 @@ describe('export variants carry the built-in template’s own colliders forward'
   /** The light catalog, but the built-in template also declares its own geometry collider. */
   function catalogWithCollider(): Map<string, CatalogSubPart> {
     const c = lightCatalog();
-    c.set(SPOTLIGHT, { ...c.get(SPOTLIGHT)!, colliders: [BUILT_IN_BOX] });
+    descendant(c.get(SPOTLIGHT)!.raw!, 'Components')!.children.push({
+      tag: 'Collider',
+      attrs: { Key: 'stockCollider' },
+      children: [
+        {
+          tag: 'Colliders',
+          attrs: {},
+          children: [
+            {
+              tag: 'Box',
+              attrs: { Key: BUILT_IN_BOX.id },
+              children: [{ tag: 'LengthX', attrs: { Cm: '79.467' }, children: [] }],
+            },
+          ],
+        },
+      ],
+    });
     return c;
   }
 
@@ -1675,28 +1776,19 @@ describe('export variants carry the built-in template’s own colliders forward'
       'MyLight',
       LIGHT_NS,
     ).get(SPOTLIGHT)!;
-    expect(v.colliders).toEqual([BUILT_IN_BOX]);
+    expect(descendant(v.row, 'Box')?.attrs.Key).toBe(BUILT_IN_BOX.id);
   });
 
   it('declares them on the variant <SubPart> in the Assets XML, under a distinct component id', () => {
+    const part = partWithBuiltinLight();
+    const variant = buildExportVariantMap(part, catalogWithCollider(), 'X', LIGHT_NS).get(
+      SPOTLIGHT,
+    )!;
     const xml = serializeAssets([
-      {
-        subParts: [],
-        referenceSubParts: [
-          {
-            subPartId: 'flexo_X_Variant',
-            meshId: SPOTLIGHT,
-            materialId: `${SPOTLIGHT}_Material`,
-            colliders: [BUILT_IN_BOX],
-            internal: false,
-            rayTracing: null,
-            shadowCaster: null,
-          },
-        ],
-      },
+      { subParts: [], referenceSubParts: [{ subPartId: variant.variantId, row: variant.row }] },
     ]);
-    expect(xml).toContain('<Collider Id="flexoInheritedColliders">');
-    expect(xml).toContain('<Box Id="BoxCollider1">');
+    expect(xml).toContain('<Collider Key="stockCollider">');
+    expect(xml).toContain('<Box Key="BoxCollider1">');
     expect(xml).toContain('<LengthX Cm="79.467"/>'); // sub-metre distances emit as Cm
   });
 });
@@ -1724,7 +1816,7 @@ function subPartBody(xml: string, subPartId: string): string {
 }
 
 describe('multi-part export — one built-in template, one variant PER part', () => {
-  // KSA registers a <SubPartGameData Id> ONCE globally, so two parts that both redeclare the
+  // KSA identifies each SubPart globally, so two parts that both redeclare the
   // same built-in must land on DIFFERENT ids or part A's data merges onto part B's SubPart.
   // The `ns` segment (`flexo_<base>_<ns>_<templateId>`) is what guarantees that.
   const VARIANT_A = `flexo_Fleet_ShipA_${CHAIR}`;
@@ -1748,18 +1840,18 @@ describe('multi-part export — one built-in template, one variant PER part', ()
     expect(b.variants.get(CHAIR)!.variantId).toBe(VARIANT_B);
     expect(a.variants.get(CHAIR)!.variantId).not.toBe(b.variants.get(CHAIR)!.variantId);
     // Same template, opposite interior-only values — resolved per part, never shared.
-    expect(a.variants.get(CHAIR)!.internal).toBe(false);
-    expect(b.variants.get(CHAIR)!.internal).toBe(true);
+    expect(descendant(a.variants.get(CHAIR)!.row, 'Internal')).toBeUndefined();
+    expect(descendant(b.variants.get(CHAIR)!.row, 'Internal')?.text).toBe('true');
   });
 
   it('points each part’s placement + GameData at ITS OWN variant, never the built-in', () => {
     const content = buildMultiModContent(namedParts(...fleet()), 'Fleet', ivaCatalog());
-    expect(content.partXml).toContain(`InstanceOf="${VARIANT_A}"`);
-    expect(content.partXml).toContain(`InstanceOf="${VARIANT_B}"`);
-    expect(content.partXml).not.toContain(`InstanceOf="${CHAIR}"`); // the quote disambiguates
-    expect(content.gameDataXml).toContain(`<SubPartGameData Id="${VARIANT_B}"`);
-    expect(content.gameDataXml).toContain('<Light Id="_light1">');
-    expect(content.gameDataXml).not.toContain(`<SubPartGameData Id="${CHAIR}"`);
+    expect(content.partXml).toContain(`Ref="${VARIANT_A}"`);
+    expect(content.partXml).toContain(`Ref="${VARIANT_B}"`);
+    expect(content.partXml).not.toContain(`Ref="${CHAIR}"`); // the quote disambiguates
+    expect(content.gameDataXml).toContain(`<SubPart Id="${VARIANT_B}" Modify="Patch"`);
+    expect(content.gameDataXml).toContain('<Light Key="_light1">');
+    expect(content.gameDataXml).not.toContain(`<SubPart Id="${CHAIR}" Modify="Patch"`);
   });
 
   it('declares both variants in ONE Assets document, each carrying its own <Internal>', async () => {
@@ -1772,8 +1864,8 @@ describe('multi-part export — one built-in template, one variant PER part', ()
     expect(subPartBody(xml, VARIANT_B)).toContain('<Internal>true</Internal>');
     expect(subPartBody(xml, VARIANT_A)).not.toContain('<Internal>');
     // Both reuse the SAME built-in mesh + material — a variant duplicates no art.
-    expect(subPartBody(xml, VARIANT_A)).toContain(`<Mesh Id="${CHAIR}"`);
-    expect(subPartBody(xml, VARIANT_B)).toContain(`<Mesh Id="${CHAIR}"`);
+    expect(subPartBody(xml, VARIANT_A)).toContain(`<Mesh Ref="${CHAIR}"`);
+    expect(subPartBody(xml, VARIANT_B)).toContain(`<Mesh Ref="${CHAIR}"`);
   });
 });
 
@@ -1818,7 +1910,7 @@ describe('buildModZip — two parts in one mod', () => {
     for (const name of ['mod.toml', 'FleetPart.xml', 'FleetGameData.xml', 'FleetAssets.xml']) {
       expect(hasEntry(name)).toBe(true);
     }
-    expect(text).toContain('assets = [ "FleetPart.xml", "FleetGameData.xml", "FleetAssets.xml"]');
+    expect(text).toContain('assets = [ "FleetPart.xml", "FleetAssets.xml", "FleetGameData.xml"]');
     expect(text).toContain('<Part Id="ButtonMod"');
     expect(text).toContain('<Part Id="PodMod"');
 
@@ -1892,9 +1984,11 @@ describe('buildMultiCustomBundle — a kitten texture two parts both bundle', ()
       // Both parts' SubParts still reference it.
       expect(bundle.assetsXml).toContain('<SubPart Id="flexo_a_suit"');
       expect(bundle.assetsXml).toContain('<SubPart Id="flexo_b_suit"');
-      expect(bundle.assetsXml!.match(/<Diffuse Path="Textures\/Kitten_EMU_A\.ktx2"/g)).toHaveLength(
-        2,
-      );
+      expect(bundle.assetsXml!.match(/Path="Textures\/Kitten_EMU_A\.ktx2"/g)).toHaveLength(1);
+      const textureId = bundle.assetsXml!.match(
+        /<Texture Id="([^"]+)" Path="Textures\/Kitten_EMU_A\.ktx2"/,
+      )![1];
+      expect(bundle.assetsXml!.split(`<Diffuse Ref="${textureId}"`).length - 1).toBe(2);
     } finally {
       vi.unstubAllGlobals();
     }

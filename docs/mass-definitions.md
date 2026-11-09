@@ -5,7 +5,7 @@ template. Definitions add together. Editing a template affects every placement o
 that template in the current Part; other project Parts keep their own data.
 
 The initial shape set covers every shape currently authored by Core:
-custom mass, solid cuboid, solid sphere, solid cylinder, open hollow cylinder,
+custom mass, solid cuboid, solid sphere, hollow sphere, solid cylinder, open hollow cylinder,
 open hollow truncated cone, open hollow semi-ellipsoid, and open hollow ogive.
 Each card exposes its mass source, dimensions, assembly-frame location and
 orientation. Revolved shapes also expose sweep. Custom mass exposes the three
@@ -29,9 +29,7 @@ remain usable; material-based contributions are reported as unresolved.
 
 ## Import and export
 
-Mass definitions are read from geometry `<Part>` / `<SubPart>` and from
-`<PartGameData>` / `<SubPartGameData>`. Geometry and GameData contributions append,
-including repeated entries. Fresh imports put the supported shapes into editable
+Mass definitions are read from flattened `<Part>` / `<SubPart>` rows after the current content prepass merges their geometry and gameplay contributions, including repeated entries. Fresh imports put the supported shapes into editable
 cards. Unsupported shapes and additional unknown XML remain preserved.
 
 The serializer emits normalized current KSA units: kilograms, kilograms per cubic

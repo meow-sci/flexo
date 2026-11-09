@@ -339,11 +339,12 @@ export function buildModPlan(
   const files: ModFile[] = [
     {
       path: 'mod.toml',
-      data: serializeIcrpModToml(
-        project.modName,
-        bodiesName ? [assetsName, gameDataName, bodiesName] : [assetsName, gameDataName],
-        systemPath ? [systemPath] : [],
-      ),
+      data: serializeIcrpModToml(project.modName, [
+        assetsName,
+        gameDataName,
+        ...(bodiesName ? [bodiesName] : []),
+        ...(systemPath ? [systemPath] : []),
+      ]),
     },
     {
       path: assetsName,
@@ -437,14 +438,9 @@ function objectPlansToStockGameData(
  * mod.toml — only the keys KSA reads (`Mod.cs`): name + the explicit file lists
  * (no directory scan). `systems` joins in P7.
  */
-export function serializeIcrpModToml(
-  name: string,
-  assets: string[],
-  systems: string[] = [],
-): string {
+export function serializeIcrpModToml(name: string, assets: string[]): string {
   const list = (xs: string[]) =>
     xs.length === 0 ? '[]' : `[ ${xs.map((a) => `"${a}"`).join(', ')} ]`;
-  let out = `name = "${name}"\nassets = ${list(assets)}\n`;
-  if (systems.length > 0) out += `systems = ${list(systems)}\n`;
+  const out = `name = "${name}"\nassets = ${list(assets)}\n`;
   return out;
 }

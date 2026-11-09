@@ -167,41 +167,40 @@ builders. Excluded parts are invisible to preflight, XML and binaries alike.
 flexo-parts/
 ├── mod.toml
 ├── <Base>Part.xml        ← N × <Part Id=…> siblings, one per included part
-├── <Base>GameData.xml    ← N × <PartGameData> + each part's <SubPartGameData> variants
+├── <Base>GameData.xml    ← N × <Part Modify="Patch"> + <SubPart Modify="Patch"> rows
 │                            + the deduped <FixedReaction>s, all siblings under <Assets>
-├── <Base>Assets.xml      ← N × <MeshAtlas> + each part's <PbrMaterial>/<SubPart> entries
+├── <Base>Assets.xml      ← N × <MeshAtlas> + <Texture>/<PbrMaterial>/<SubPart> definitions
 ├── Meshes/…              one atlas GLB per part that has custom meshes
 ├── Textures/…            id-/token-namespaced — collision-free under I4
 └── Animations/…          anim-id-suffixed — collision-free
 ```
 
 `<Base>` is still `sanitizeBaseName(projectName)`, and the file names are unchanged: what grew
-is their contents. This is legal because an Assets XML file is a flat polymorphic list
-(`KSA/AssetBundle.cs` — `[XmlRoot("Assets")]` over `List<SerializedId>`), so sibling
-`<Part>` / `<PartGameData>` / `<SubPartGameData>` / `<MeshAtlas>` / `<FixedReaction>` elements
+is their contents. The current content prepass reads ordered top-level Assets rows
+and `GameContentTags` binds their native types, so sibling
+`<Part>` / `<SubPart>` / `<MeshAtlas>` / `<Texture>` / `<FixedReaction>` elements
 are first-class. `buildMultiModContent` plans the whole export (per part: `expandGlassGlow`, the
 export-variant map, the remap) and serializes the Part + GameData documents;
 `buildMultiCustomBundle` walks those plans **sequentially** and produces the one Assets XML plus
 the union of the binaries.
 
-Because KSA's registries are global and first-wins, a collision does not error at load — it
-silently ships the wrong asset. Every registered id therefore has a named guarantor:
+KSA identities are global, case-insensitive within a registry, and duplicate rows are errors. Every registered id therefore has a named guarantor:
 
 | Registered id | Guarantor |
 | --- | --- |
-| `<Part Id>` / `<PartGameData Id>` | de-collided at add time (below), with a preflight blocker as the backstop |
+| `<Part Id>` | de-collided at add time (below), with a preflight blocker as the backstop |
 | Export-variant `<SubPart Id>` = `flexo_<base>_<ns>_<templateId>` | the per-part `ns` token (`partExportNs(partId)` = `sanitizeBaseName`), preflight-checked for collisions |
 | Custom-mesh `<SubPart Id>` · GLB mesh names · `_VM` names | I4 (project-unique `subPartId`, enforced by the clone re-mint) |
-| `<PartModel Id>` = `<subPartId>_Model` / `<variantId>_Model` | follows the two rows above |
+| `<PartModel Key>` = `<subPartId>_Model` for custom geometry | follows the two rows above |
 | `<PbrMaterial Id>` | mat-id- or bundle-token-suffixed per part; `assetsXmlSerializer.claimId` throws across plans |
 | `<FixedReaction Id>` | cross-part dedupe of identical payloads; divergent duplicates are a preflight blocker |
-| `<KeyframeAnimationModule Id>` / animation GLB paths | the random per-clip anim-id suffix in `animationNaming.ts` |
+| `<KeyframeAnimation Id>` / animation GLB paths | the random per-clip anim-id suffix in `animationNaming.ts` |
 | Texture file names | texture-id / bundle-token suffixes — unique under I4 |
 
-The variant namespace exists because KSA registers `<SubPartGameData Id="T">` **once globally**
-per template id: two parts that both place the same built-in template with different SubPart
-GameData would otherwise merge onto one entry. Namespacing every variant per part avoids the
-collision structurally.
+Each changed built-in SubPart gets a fresh per-part ID and an independent copy of its
+resolved native row. Its complete render components and non-overridden metadata stay intact;
+the part's gameplay patch targets only that copy. Explicitly empty editor data preserves
+the deletion of inherited gameplay. The manifest lists definitions before strict patches.
 
 **Preflight** is `collectProjectExportIssues(parts, coreReactions, catalog)`
 (`src/ksa/exportIssues.ts`, pure). It runs each part's existing per-part pass — against **that
@@ -214,7 +213,7 @@ before setting the mode, since no mode can focus an entity that is not hydrated.
 
 A `<Part Id>` is the EXPORT namespace, not the editor one: unlike entity ids (I3, unique only
 within a part) it must be unique project-wide, because an export writes N `<Part>` /
-`<PartGameData>` siblings into one file and KSA takes the first of a duplicated id. So every path
+`<Part Modify="Patch">` rows into one file and duplicate definitions are invalid. So every path
 that adds a part suffixes its id until it is free, via `uniquePartId(base, taken)` in
 `partsStore.ts` — `base`, then `base_2`, `base_3`, …:
 

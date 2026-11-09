@@ -1,154 +1,32 @@
-# Static objects (`apps/icrp` — launch pads / surface complexes)
+# Static objects (ICRP)
 
-The KSA **static-object** contract ICRP builds on (introduced 2026.8.22.5348, revs
-5328–5336). Consumer: `apps/icrp/` (the ICRP mini app), NOT the flexo vessel editor.
-Full evidence with decomp citations: [analysis/icrp/KSA_STATIC_OBJECTS.md](../analysis/icrp/KSA_STATIC_OBJECTS.md)
-and [analysis/icrp/STATIC_ASSET_INVENTORY.md](../analysis/icrp/STATIC_ASSET_INVENTORY.md);
-plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (facts F1–F14).
+ICRP reads and writes the KSA build 5801 static-object contract. The game-side
+sources are `StaticObjectTemplate.cs`, `StaticSubObjectTemplate.cs`,
+`StaticSubObjectInstance.cs`, `PartModelModule.cs`, `ColliderModule.cs`,
+`PbrMaterialReference.cs`, and `ContentPrePass.cs`; representative data is in
+`CoreLaunchPad{A,B,C}Assets.xml` and `CoreLaunchPadAGameData.xml`.
 
-**Baseline:** re-verified against KSA build **2026.10.10.5554** — static schema and nearest-pad
-selection intact; imported vessel hulls serialize correctly. See
-[What changed in 5554](#what-changed-in-5554). The earlier BRDF observation in fact 12
-still requires in-game re-verification.
+A `StaticSubObject` defines `PartModels/PartModel Key` and optionally
+`Colliders/Collider Key/Colliders` with keyed shapes. Model mesh and material and
+convex-hull mesh use `Ref`. A `StaticObject` places pieces through
+`SubObjects/SubObject Key Ref`, with optional `Transform`, and may also own
+colliders, `GroundOffset`, `SurfaceHeight`, and `FootprintRadius`. Ref names a
+`StaticSubObject`, not a vessel `SubPart` or another `StaticObject`.
 
-## What changed in 5554
+Game data is a same-tag `<StaticObject Id="…" Modify="Patch">`; appending to
+stock arrays requires `SubObjects` or `Colliders` with `Modify="Extend"`.
+New models can refer to globally registered Core meshes and materials. Custom
+textures are top-level `Texture Id Path Category` rows; PBR slots use `Ref`.
+Mesh atlases also require an `Id`. `staticCatalog.ts` consumes flattened Core
+content and the shared GLB mesh index; `staticXmlSerializer.ts` emits this
+schema, and `modPlan.ts` builds the stock-pad patch or new objects.
 
-**ICRP schema — intact, imported vessel hulls preserved.** StaticObject/SubObject
-template classes, `LocationReference`, `ConstraintSim`, and the shipped launch-pad XML
-are unchanged against 5482. `StaticObjectRenderer.cs`/`StaticObject.frag` move global
-texture bindings and pipeline caches without new render buckets. The game's
-planet Hapke phase-angle/normalization changes also affect terrain shading; they do not
-change static XML or vessel PBR channel conventions. The upstream
-`StaticObjectAssetBundler.cs` now shares `GlbCollisionAtlas` with the Part/clutter importer;
-stock static XML authors no `<ConvexHull>`. ICRP's vessel-derived pieces can nevertheless
-import the new Command/Fairing/Structural hulls, so its serializer now emits their
-`<ConvexHull><Mesh Id>` and optional `<Scale>` correctly through the shared collider model.
-Primitive authoring and collider dimension semantics remain unchanged.
-
-## Contract facts ICRP bakes in
-
-1. **Schema** (`AssetBundle.cs:32-34`): `<StaticObject>` = `StaticObjectTemplate`
-   (`<SubObject>`\* + `<PartModel>`\* + `<Collider>`\* + `GroundOffset`/`SurfaceHeight`/
-   `FootprintRadius` DistanceReferences, all-NaN = unset); `<StaticSubObject>` =
-   `<PartModel>`\* + `<Collider>`\* only; `<StaticObjectGameData>` merges via
-   `ApplyGameData` (**lists append, distances override only when set**,
-   `StaticObjectTemplate.cs:73-90`). Parser/serializer:
-   `apps/icrp/src/ksa/staticCatalog.ts`, `staticXmlSerializer.ts`.
-2. **`InstanceOf` resolves ONLY to `<StaticSubObject>`** (`ModLibrary.Get<StaticSubObjectTemplate>`,
-   `ModLibrary.cs:1284`) — never a Part/SubPart/StaticObject. Two levels, no nesting.
-3. **Transform** = the vessel `TransformReference` (Position metres, Rotation XYZ radians
-   via `CreateFromXyzRadians` ⇒ three `'ZYX'`, `S·R·T`). **`Scale` applies to visuals but
-   NOT colliders** (`StaticObject.cs:195-196, 234`). `<Scale>` must always carry X/Y/Z
-   (Vector3Reference missing-attr = 0) — inherited from flexo's serializer.
-4. **Assembly frame: +X = up (surface normal), +Y = east, +Z = north**
-   (`LocationReference.cs:148-177`, `ConstraintSim.cs:550-647` @5482). The ONE mapping to three
-   lives in `apps/icrp/src/three/basis.ts`. Vessel parts stack along +X, so vessel meshes
-   stand upright unmodified.
-5. **`<PartModel>`/`<Collider>` are the vessel classes.** Static-only: `<Terrain>true</Terrain>`
-   (`PartModelModule.cs:43-44`) and `<PbrMaterial><Alpha>` (`PbrMaterialReference.cs:24-25`),
-   both consumed only by `StaticObjectModel.Bucket` (`:260`) — this closes flexo gaps
-   **T1**/**T2** for the static surface. Ignored for statics: RayTracing, ShadowCaster,
-   Internal, animation, lights, Emissive/ThinFilm (uploaded, never sampled), `<MeshView>`.
-6. **Render buckets** (`StaticObjectModel.cs:16-21,260`): Terrain → planet-ground sampling
-   (material textures ignored); Alpha → real blend (`alpha = alphaTex.r`, depth-test-no-write,
-   NOT a cutout); else opaque. ICRP mirrors: `apps/icrp/src/three/materials.ts` (incl. the
-   `.r`-not-`.g` alphaMap patch). Instancing unit = PartModel **Id** (duplicate ids collide
-   first-wins).
-7. **The three metres** — only consumers: `GroundOffset` lifts the whole frame
-   (`LocationReference.cs:175`); `SurfaceHeight` only feeds spawn height
-   (`Vehicle.GetLaunchPadHeightAtDirCcf`, `Vehicle.cs:4188-4212` @5482: `GroundOffset+SurfaceHeight` within
-   `FootprintRadius`); `FootprintRadius` also drives clutter exclusion `+50 m` for at most
-   **4** launch-pad landmarks per body (`GroundClutterPlacementData.cs:348-376` @5482).
-8. **Physics** (`StaticObject.cs:175-201`, `ConstraintSim.cs:545-647` @5482): one kinematic
-   compound per static; per vehicle only the **nearest** launch-pad landmark within
-   **300 m**; zero colliders ⇒ vessels fall through (ICRP preflight I4).
-9. **Bundler conventions** (`KSA.GlbImport/StaticObjectAssetBundler.cs`, `GlbColliders.cs`,
-   `GlbTransforms.cs`) — ICRP's export mirrors them byte-for-byte (golden tests): banner
-   comment, element order, `<Collider Id="Collider1">`, `M=`-only distances, empty
-   GroundOffset/SurfaceHeight/FootprintRadius on the asset, values in GameData.
-10. **Mesh/material registries are global by id, first-wins**
-    (`MeshAtlasFileReference.cs:25-49`), so a mod `<StaticSubObject>` may reference any
-    Core mesh/material by id with **no binaries** — ICRP's vessel-derived pieces
-    (`apps/icrp/src/ksa/modPlan.ts`) and the export-variant discipline both rest on this.
-    ⏳ pending in-game verification (**[V1]** in `apps/icrp/VERIFICATION.md`) —
-    2026-08-25 partial: a vessel truss piece as a static RENDERS in game (mesh + material
-    resolve, scale applies), see facts 11–12 for the look/shadow caveats.
-11. **Statics never CAST sun shadows** (engine limitation, verified in the 2026.8.22.5348
-    decomp): `StaticObjectModel.cs` has NO shadow-draw path — only `PartModel.cs` /
-    `PartModelDynamic.cs` (vessel renderers) feed `PartModelShadowCull` /
-    `BuildShadowDraws`, and `PartModelModule.Template.ShadowCaster` is a vessel-only
-    switch. Statics DO **receive** shadows (`StaticObject.frag` samples the terrain
-    shadow map, the vessel CSM, cloud shadows and celestial shadow). Core pads are flat
-    enough that this is invisible; a tall static (scaled truss) makes it obvious. No XML
-    can change it.
-12. **Metal-heavy vessel pieces read DARK as statics**: `StaticObject.frag` is full PBR —
-    a fully-metallic surface (trusses: PBR blue channel ≈ 1) has no diffuse response, so
-    its color is mostly environment/ambient reflection. In daylight the static ambient
-    path leaves such pieces near-black with a navy sky tint (user-verified screenshot,
-    2026-08-25); the same shading dynamics made ICRP's own thumbnails render metal black
-    until the RoomEnvironment IBL was added (`catalogThumbs.ts` v2). Whether KSA renders
-    the SAME piece brighter on a vessel in the same scene is an open in-game A/B ([V1b]).
-    Practical guidance: prefer low-metal pieces for statics, or expect dark steel.
-    ⚠️ **Observed before KSA 5482's rev 5472**, which fixed `Shaders/Common/Lighting.glsl`
-    sampling the BRDF lookup with `1 − roughness` instead of `roughness` in
-    `getPBREnvironmentLightingPresampled` — the ambient path `StaticObject.frag` uses. Re-run
-    [V1]/[V1b] before relying on this fact.
-
-## Break-surface (re-check on a game update)
-
-`D/KSA/`: `StaticObjectTemplate.cs`, `StaticSubObjectTemplate.cs`, `StaticSubObjectInstance.cs`,
-`StaticObjectGameDataReference.cs`, `StaticObject.cs`, `StaticObjectModel.cs`,
-`StaticObjectRenderer.cs`, `PartModelModule.cs`, `PbrMaterialReference.cs`,
-`TransformReference.cs`, `DistanceReference.cs`, `LocationReference.cs`,
-`Vehicle.cs` (`GetLaunchPadHeightAtDirCcf`), `ConstraintSim.cs` (`BeginStaticObjectPass` / `ResolveLaunchPads` / `UpdateStaticObjectCollider`),
-`GroundClutterPlacementData.cs`, `MeshAtlasFileReference.cs`, `ModLibrary.cs` (static
-registries + `AttachGameData`). `D/KSA.GlbImport/`: `StaticObjectAssetBundler.cs`,
-`GlbColliders.cs`, `GlbTransforms.cs`, `PartInputSet.cs`, `ToolXml.cs`.
-`C/Core/`: `CoreLaunchPad{A,B,C}Assets.xml`, `CoreLaunchPadAGameData.xml` (vendored
-byte-identical in `src/ksa/__fixtures__/`, drift-tested), `Shaders/Mesh/StaticObject.{vert,frag}`,
-`DefaultAssets.xml` (the static-object shader rows, since 5402 including `StaticObjectPrePassIndirectFrag`).
-
-## What changed in 5482
-
-**Verdict: INTACT; one in-game re-check.** Every static schema class (`StaticObjectTemplate`,
-`StaticSubObjectTemplate`, `StaticSubObjectInstance`, `StaticObjectGameDataReference`),
-`StaticObjectModel` (including `Bucket`), `StaticObjectRenderer`, `StaticObject.frag/.vert`,
-`GlbTransforms` and the Core launch-pad XML are byte-identical. `StaticObjectAssetBundler` only
-threads a `GltfLoader` through, and `GlbColliders` renames locals and calls the new
-`GlbHullValidation` (console warnings only), so the bundler output the golden tests mirror is
-unchanged. `ConstraintSim` pad selection (nearest within 300 m), `Vehicle.GetLaunchPadHeightAtDirCcf`
-and the at-most-four clutter exclusion zones (footprint + 50 m) are text-identical; rev 5465 only
-makes sleeping bodies skip the per-step terrain and pad refresh. Rev 5472's BRDF lookup fix in
-`Shaders/Common/Lighting.glsl` changes the ambient term statics use, so fact 12 needs the [V1]/[V1b]
-re-run. Line citations above were refreshed to 5482.
-
-## What changed in 5438
-
-**INTACT, with a correction to the previous review.** `StaticObjectTemplate`,
-`StaticSubObjectTemplate`, `StaticSubObjectInstance`, `StaticObjectGameDataReference`,
-`StaticObject`, `StaticObjectModel`, `StaticObjectRenderer`, and `LocationReference` are
-byte-identical to 5402. `<SubObject InstanceOf>`, `<PartModel>`, `<Collider>`, the three distance
-fields, transform basis, scale limits, terrain/alpha buckets and shadow limitations are unchanged.
-The Core launch-pad XML and static-object shaders are unchanged. `PbrMaterialReference` adds an
-optional `DisplayName` label, with no effect on static render buckets or material id resolution.
-
-The 5402 note below previously inferred that every cached launch pad collides simultaneously.
-That was incorrect: `ConstraintSim.ResolveLaunchPads` caches all **candidates**, but
-`UpdateStaticObjectCollider` still picks the nearest within squared distance `90000` (300 m)
-and installs exactly one `handles.StaticObjectCollider`. Both snapshots contain this selection.
-The ICRP 300 m collider-range ring is therefore valid. No app or persisted-schema change is needed.
-
-## What changed in 5402
-
-**Nothing in the contract.** `StaticObjectTemplate`, `StaticSubObjectTemplate`,
-`StaticSubObjectInstance`, `StaticObjectGameDataReference`, `KSA.GlbImport/StaticObjectAssetBundler`
-and `PbrMaterialReference` are byte-identical; `StaticObject` / `StaticObjectModel` /
-`LocationReference` changed only by the `Viewport` → `IViewport` refactor. Two renderer-side notes:
-`StaticObjectRenderer` now loads a dedicated pre-pass shader,
-`ModLibrary.Get<ShaderReference>("StaticObjectPrePassIndirectFrag")` → `DefaultAssets.xml`'s new
-`<Shader Id="StaticObjectPrePassIndirectFrag" Path="Shaders/Mesh/StaticObjectNormalIndirect.frag"/>`
-(was the shared `PrePassIndirectFrag`); and `ConstraintSim` introduced `BeginStaticObjectPass` / `ResolveLaunchPads`, a per-celestial
-cache of candidate `LaunchPadPose` entries (position + `LandmarkReference.GetAxesCcf`
-up/east/north). `UpdateStaticObjectCollider` still selects only the nearest within 300 m — see
-[launch-sites.md](launch-sites.md#what-changed-in-5402). The four vendored `CoreLaunchPad*` fixtures
-are byte-identical to 5402.
+Position is in metres and Euler rotation in radians. Scale changes visuals but
+not physics shapes; ICRP bakes scaled collider variants. The assembly basis is
++X up, +Y east, +Z north. Terrain models use planet-ground sampling, alpha
+materials use the alpha texture's red channel, and otherwise models are opaque.
+Static objects receive shadows; the historic limitation that they do not cast
+sun shadows remains an in-game verification concern. GroundOffset lifts the
+frame; SurfaceHeight and FootprintRadius contribute to spawn height and clutter
+exclusion. Recheck `StaticObject.cs`, `ConstraintSim.cs`, and `Vehicle.cs` on a
+game update. Current 5801 XML has not been exercised in the game by this change.

@@ -21,7 +21,7 @@ import { revealLayer } from '../../state/layerStore';
 import { PartPreview } from '../PartPreview';
 import { PreviewLoadProgress } from '../LoadProgress';
 import { BrowserLayout, BrowserPopup } from '../BrowserShell';
-import { fuzzyAny } from '../fuzzyMatch';
+import { exactCatalogId, partBrowserRowId, partBrowserRows } from './browserModels';
 import { toast } from '../toast';
 import { BrowserCommitRow, MAX_RESULTS, ResultCapRow } from './browserCommon';
 
@@ -85,7 +85,14 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
   const part = useStore($part);
   const [query, setQuery] = useState('');
   const [activeTags, setActiveTags] = useState<readonly string[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [storedSelectedId, setStoredSelectedId] = useState<string | null>(null);
+  const [selectionQuery, setSelectionQuery] = useState<string | null>(null);
+  const selectedId =
+    (selectionQuery !== query && exactCatalogId(catalog, query)) || storedSelectedId;
+  const setSelectedId = (id: string | null) => {
+    setStoredSelectedId(id);
+    setSelectionQuery(query);
+  };
   const [targetLayer, setTargetLayer] = useState<string>(NEW_LAYER);
   const isPhone = useIsPhone();
 
@@ -95,18 +102,21 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
 
   // Chips AND-compose with each other and with the search: "Fuel Tanks" + "Large" means a
   // part carrying BOTH tags, not either.
-  const matches = catalog.filter(
-    (p) =>
-      activeTags.every((tag) => p.editorTags.includes(tag)) &&
-      fuzzyAny(query, p.id, ...p.editorTags),
-  );
+  const matches = partBrowserRows(catalog, query, activeTags);
   const filtered = matches.slice(0, MAX_RESULTS);
 
   const selected = selectedId ? (catalog.find((p) => p.id === selectedId) ?? null) : null;
 
   const onSelection = (keys: Selection) => {
     if (keys === 'all') return;
-    setSelectedId(([...keys][0] as string) ?? null);
+    const row = matches.find((p) => partBrowserRowId(p) === [...keys][0]);
+    setSelectedId(
+      row
+        ? selected && partBrowserRowId(selected) === partBrowserRowId(row)
+          ? selected.id
+          : row.id
+        : null,
+    );
   };
 
   const resolveLayerId = () =>
@@ -147,6 +157,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
             <GridList
               aria-label="Parts"
               selectionMode="single"
+              disallowEmptySelection
               // "replace": arrow keys move the actual selection (so keyboard navigation
               // drives the preview) and — with `onAction` present — react-aria routes a
               // MOUSE action to double-click and Enter only. That pairing IS the
@@ -154,7 +165,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
               // `[Add & Close]`: a double-click that imported but left the popup sitting
               // over the workspace made you dismiss it by hand every time.
               selectionBehavior="replace"
-              selectedKeys={selectedId ? [selectedId] : []}
+              selectedKeys={selected ? [partBrowserRowId(selected)] : []}
               onSelectionChange={onSelection}
               // On touch react-aria performs the action on a single TAP, which would import
               // before the preview is ever seen. Phone taps only select; the footer's [Add]
@@ -163,7 +174,9 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
                 isPhone
                   ? undefined
                   : (key) => {
-                      const p = catalog.find((c) => c.id === String(key));
+                      const row = matches.find((c) => partBrowserRowId(c) === String(key));
+                      const p =
+                        selected && partBrowserRowId(selected) === String(key) ? selected : row;
                       if (p) importAndClose(p);
                     }
               }
@@ -171,7 +184,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
               dependencies={[query, activeTags]}
             >
               {(p) => (
-                <GridListItem id={p.id} textValue={p.id}>
+                <GridListItem id={partBrowserRowId(p)} textValue={p.id}>
                   <span className="flex w-full items-center justify-between gap-2">
                     <span className="truncate">{p.id}</span>
                     <span className="shrink-0 text-xs text-fg-subtle">{p.placements.length}</span>
@@ -221,7 +234,10 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
           size="sm"
           className="min-w-0 sm:flex-1"
           value={query}
-          onChange={setQuery}
+          onChange={(value) => {
+            setQuery(value);
+            setSelectionQuery(null);
+          }}
           placeholder="Search Parts and tags"
           aria-label="Search Parts"
           // Autofocus raises the soft keyboard, which covers the preview on a
@@ -265,6 +281,22 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
             </ToggleButton>
           ))}
         </div>
+      )}
+
+      {selected && selected.variantIds.length > 1 && (
+        <Select
+          size="sm"
+          label="Variant"
+          aria-label="Variant"
+          value={selected.id}
+          onChange={(key) => setSelectedId(String(key))}
+        >
+          {selected.variantIds.map((id, index) => (
+            <ListBoxItem key={id} id={id} textValue={`${String.fromCharCode(65 + index)} — ${id}`}>
+              {String.fromCharCode(65 + index)} — {id}
+            </ListBoxItem>
+          ))}
+        </Select>
       )}
 
       <BrowserLayout

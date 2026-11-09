@@ -528,8 +528,8 @@ describe('the built SRB serializes to the XML KSA expects', () => {
   it('emits the motor with its pressure, grain shape and grain feed', () => {
     expect(gameDataXml).toContain('<SolidMotor');
     expect(gameDataXml).toContain('<DefaultPressure Bar="45"');
-    expect(gameDataXml).toContain('<Grain Id="BoostSustain"');
-    expect(gameDataXml).toContain('<FeedsFrom Container="Grain"');
+    expect(gameDataXml).toContain('<Grain Ref="BoostSustain"');
+    expect(gameDataXml).toContain('<Container KeyRef="Grain"');
   });
 
   it('emits the grain segment and an AreaRatio-free solid nozzle', () => {
@@ -728,13 +728,13 @@ describe('the built RCS block serializes to the XML KSA expects', () => {
   it('emits a Service chamber with a minimum pulse time', () => {
     expect(gameDataXml).toContain('<Plumbing>Service');
     expect(gameDataXml).toContain('<MinimumPulseTime');
-    expect(gameDataXml).toContain('<Reaction Id="MMH_NTO"');
+    expect(gameDataXml).toContain('<Reaction Ref="MMH_NTO"');
   });
 
   it('emits four nozzles under a thruster controller, with the RCS plume and sound', () => {
     expect(gameDataXml).toContain('<RocketThrusterController');
     expect(gameDataXml.match(/<DeLavalNozzle/g)).toHaveLength(4);
-    expect(gameDataXml).toContain('<VolumetricExhaust Id="RCS"');
+    expect(gameDataXml).toContain('<VolumetricExhaust Ref="RCS"');
     expect(gameDataXml).toContain('DefaultRcsThruster');
   });
 });
@@ -745,26 +745,26 @@ describe('the built part serializes to the XML KSA expects', () => {
   const partsXml = serializePartsXml([{ part, remap }]);
   const gameDataXml = serializeGameDataXml([{ part, remap }], 'FlexoTest');
 
-  it('declares the gimbal in BOTH documents', () => {
-    expect(partsXml).toContain('<Gimbal');
-    expect(gameDataXml).toContain('<Gimbal');
+  it('declares the gimbal in the gameplay Patch document', () => {
+    expect(partsXml).not.toContain('<Gimbal');
+    expect(gameDataXml).toContain('<Gimbal Key=');
   });
 
   it('emits the combustor chemistry and chamber numbers', () => {
-    expect(gameDataXml).toContain('<Reaction Id="Hydrolox"');
+    expect(gameDataXml).toContain('<Reaction Ref="Hydrolox"');
     expect(gameDataXml).toContain('<MixtureRatio');
     expect(gameDataXml).toContain('<MaxPressure Bar="75"');
     expect(gameDataXml).toContain('<MinimumThrottle Value="0.4"');
   });
 
   it('wires the chamber to the tank', () => {
-    expect(gameDataXml).toContain('<ConsumerFeedWiring Id="ThrustChamber"');
-    expect(gameDataXml).toContain('<FeedsFrom Container="fuel_main"');
+    expect(gameDataXml).toContain('<ConsumerFeedWiring KeyRef="ThrustChamber"');
+    expect(gameDataXml).toContain('<Container KeyRef="fuel_main"');
   });
 
   it('emits the plume, the mass override and the collider', () => {
     expect(gameDataXml).toContain('<ReactionPlume');
-    expect(gameDataXml).toContain('<VolumetricExhaust Id="EngineAMed"');
+    expect(gameDataXml).toContain('<VolumetricExhaust Ref="EngineAMed"');
     expect(gameDataXml).toContain('<CustomMass');
     expect(gameDataXml).toContain('<Collider');
   });

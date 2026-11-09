@@ -1,0 +1,94 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<Assets>
+    <SubPart Id="CoreFuelTankA_Subpart_FuelPortA">
+        <Components>
+            <PartModelDynamic Key="CoreFuelTankA_Subpart_FuelPortA_Model">
+                <Mesh Ref="CoreFuelTankB_Subpart_FuelLineSocket" />
+                <Material Ref="CoreFuelTankB_Material" />
+            </PartModelDynamic>
+            <MeshView>
+                <Mesh Ref="CoreFuelTankB_Subpart_FuelLineSocket" />
+            </MeshView>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreFuelTankA_Subpart_FuelConnectorA">
+        <Components>
+            <PartModelDynamic Key="CoreFuelTankA_Subpart_FuelConnectorA_Model">
+                <Mesh Ref="CoreFuelTankB_Subpart_FuelLineConnector" />
+                <Material Ref="CoreFuelTankB_Material" />
+            </PartModelDynamic>
+            <MeshView>
+                <Mesh Ref="CoreFuelTankB_Subpart_FuelLineConnector" />
+            </MeshView>
+        </Components>
+    </SubPart>
+
+    <Part Id="CoreFuelTankA_Prefab_FuelPortA">
+        <EditorTags>
+            <EditorTag Ref="Fuel Tanks" />
+            <EditorTag Ref="Radial" />
+        </EditorTags>
+        <SubParts>
+            <SubPart Key="CoreFuelTankA_Subpart_FuelPortA" Ref="CoreFuelTankA_Subpart_FuelPortA">
+            </SubPart>
+
+            <SubPart Key="CoreFuelTankA_Subpart_FuelConnectorA" Ref="CoreFuelTankA_Subpart_FuelConnectorA">
+                <Transform>
+                    <Position Z="-0.179" />
+                </Transform>
+            </SubPart>
+        </SubParts>
+
+        <Connectors>
+            <!-- Surface contact point: the socket sinks into the tank up to here (back face is Z=0.0727). -->
+            <Connector Key="SurfaceMount">
+                <Transform>
+                    <Position Z="0.03" />
+                    <Rotation Y="-1.5708" />
+                </Transform>
+            </Connector>
+        </Connectors>
+    </Part>
+
+    <Part Id="CoreFuelTankA_Prefab_FuelPortA" Modify="Patch" DisplayName="Fuel Port">
+        <EditorTags Modify="Extend">
+            <EditorTag Ref="Fuel Tanks" />
+        </EditorTags>
+
+        <Connectors Modify="Extend">
+            <!-- BulkFluid lets a fuel line drain or fill the tank the port is mounted on. -->
+            <Connector Key="SurfaceMount" Modify="Patch">
+                <Flags>ToSurface</Flags>
+                <Capabilities>BulkFluid</Capabilities>
+            </Connector>
+        </Connectors>
+
+        <InertMasses Modify="Extend">
+            <CustomMass>
+                <Mass Kg="10" />
+                <!-- Solid sphere, r = 0.15 -->
+                <MassSpecificInertia Ixx="0.009" Iyy="0.009" Izz="0.009" />
+            </CustomMass>
+        </InertMasses>
+
+        <Components Modify="Extend">
+            <Collider Key="Collider1">
+              <Colliders>
+                <Sphere Key="SphereCollider1">
+                  <LocationAsmb X="0" Y="0" Z="0" />
+                  <Collider2Asmb X="0" Y="0" Z="0" />
+                  <Radius M="0.07" />
+                </Sphere>
+              </Colliders>
+            </Collider>
+
+            <FuelPort MaxLength="100" ConnectorMaxAngle="60">
+                <SubPart KeyRef="CoreFuelTankA_Subpart_FuelConnectorA" />
+                <AnchorAsmb X="0" Y="0" Z="0" />
+                <ConnectorPivot X="0" Y="0" Z="0.0588" />
+                <ConnectorTip X="0" Y="0" Z="-0.081" />
+            </FuelPort>
+        </Components>
+    </Part>
+</Assets>

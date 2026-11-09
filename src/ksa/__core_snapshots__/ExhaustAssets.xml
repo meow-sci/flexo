@@ -1,0 +1,1888 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Assets>
+    <VolumetricExhaustTemplate Id="RCS">
+        <LengthWeights>
+            <RadiusWeight Value="0.2"/>
+            <NozzlePressureWeight Value="25.0"/>
+            <JetExpansionWeight Value="150.0"/>
+            <ExitMachNumberWeight Value="1.0"/>
+        </LengthWeights>
+        <Absorption>
+            <Density Value="330000"/>
+            <FakeCleanBurnInAtmosphere Value="true"/>
+            <ScatteringBrightness Value="0.5"/>
+            <ScatteringPhaseEccentricity Value="0.2"/>
+            <RefractionIntensity Value="0.3"/>
+        </Absorption>
+        <Emission>
+            <Brightness Value="50.0"/>
+            <ColorGradient>
+                <Color0 R="0.75"    G="0.75"    B="0.75"   />
+                <Color1 R="0.6"  G="0.56" B="0.29"/>
+                <Color2 R="1.0"    G="0.5"  B="0.0"   />
+                <Color3 R="0.95" G="0.3"  B="0.0"   />
+            </ColorGradient>
+            <Flow>
+                <MachDiamonds>
+                    <Brightness Value="0.0"/>
+                </MachDiamonds>
+            </Flow>
+        </Emission>
+        <Noise>
+            <DensityNoise>
+                <Size Value="20" />
+                <Intensity Value="0.5" />
+            </DensityNoise>
+            <ShapeNoise>
+                <Size Value="10" />
+                <Intensity Value="0.05" />
+            </ShapeNoise>
+            <RadialShapeNoise>
+                <Size Value="0.1" />
+                <Speed Value="20" />
+                <Intensity Value="0.2" />
+            </RadialShapeNoise>
+        </Noise>
+        <Quality VolumetricVesselShadows="true" >
+            <SampleCount Value="13"/>
+            <SelfShadowSampleCount Value="0.0"/>
+        </Quality>
+        
+        <StartupTransient>
+            <Duration Seconds="0.15"/>
+
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.0012830346822738647" />
+                        <Value Value="1.9681389331817627" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.25481781363487244" />
+                        <Value Value="2.9904580116271973" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.3870968222618103" />
+                        <Value Value="0.4477672576904297" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.5" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+
+            <DensityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.0"/>
+                        <Value Value="0.0"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.1"/>
+                        <Value Value="1.5"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.4"/>
+                        <Value Value="1.5"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="-1.5"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1.0"/>
+                        <Value Value="1.0"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                </SplinePoints>
+            </DensityCurve>
+
+            <VelocityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.0"/>
+                        <Value Value="0.1"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.5"/>
+                        <Value Value="1.0"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1.0"/>
+                        <Value Value="1.0"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                </SplinePoints>
+            </VelocityCurve>
+
+            <EmissiveSizeCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.0"/>
+                        <Value Value="0.0"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.1"/>
+                        <Value Value="1.1"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="-1.5"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.5"/>
+                        <Value Value="1.0"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                </SplinePoints>
+            </EmissiveSizeCurve>
+        </StartupTransient>
+        
+        <ShutdownTransient>
+            <Duration Seconds="0.8"/>
+
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.0"/>
+                        <Value Value="1.0"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.1"/>
+                        <Value Value="3.0"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="-1.5"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.175"/>
+                        <Value Value="2.0"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.275"/>
+                        <Value Value="1.5"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.3"/>
+                        <Value Value="2.0"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="-1.5"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1.0"/>
+                        <Value Value="1.5"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+    
+            <DensityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.0"/>
+                        <Value Value="1.0"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.05"/>
+                        <Value Value="1.5"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.1"/>
+                        <Value Value="1.5"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="-3.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.175"/>
+                        <Value Value="0.75"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.2"/>
+                        <Value Value="1.25"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="-3.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.275"/>
+                        <Value Value="0.85"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.3"/>
+                        <Value Value="1.4"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="-3.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1.0"/>
+                        <Value Value="0.0"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                </SplinePoints>
+            </DensityCurve>
+    
+            <VelocityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.0"/>
+                        <Value Value="1.0"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="-1.5"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.1"/>
+                        <Value Value="0.15"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.2"/>
+                        <Value Value="0.2"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.3"/>
+                        <Value Value="0.2"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="-0.5"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1.0"/>
+                        <Value Value="0.1"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                </SplinePoints>
+            </VelocityCurve>
+    
+            <EmissiveSizeCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.0"/>
+                        <Value Value="1.0"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="-1.5"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.1"/>
+                        <Value Value="0.4"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="-1.5"/>
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.5"/>
+                        <Value Value="0.0"/>
+                        <InTangent Value="0.0"/>
+                        <OutTangent Value="0.0"/>
+                    </SplinePoint>
+                </SplinePoints>
+            </EmissiveSizeCurve>
+        </ShutdownTransient>
+    </VolumetricExhaustTemplate>
+    
+
+    <VolumetricExhaustTemplate Id="EngineALarge">
+        <LengthWeights>
+            <RadiusWeight Value="0.2"/>
+            <NozzlePressureWeight Value="25.0"/>
+            <JetExpansionWeight Value="150.0"/>
+            <ExitMachNumberWeight Value="1.0"/>
+        </LengthWeights>
+        <Absorption>
+            <Density Value="0.0" />
+            <ScatteringBrightness Value="0.25" />
+            <ScatteringPhaseEccentricity Value="0.2" />
+        </Absorption>
+        <Emission>
+            <Brightness Value="100" />
+            <ColorGradient>
+                <Color0 R="0.9976064" G="1" B="0.9039146" />
+                <Color1 R="0.9786477" G="0.9695381" B="0.4666861" />
+                <Color2 R="0.9822064" G="0.387989" B="0.387989" />
+                <Color3 R="0.23571129" G="0.2546575" B="0.7046263" />
+            </ColorGradient>
+            <Flow>
+                <MachDiamonds>
+                    <Brightness Value="5" />
+                    <Color R="1" G="1" B="1" />
+                    <LeadIn Value="0.15" />
+                    <LeadOut Value="0.5" />
+                    <MiddleRadius Value="1.0" />
+                    <IncidentShockHeight Value="0.45" />
+                    <IncidentShockCurve Value="1.0" />
+                </MachDiamonds>
+            </Flow>
+        </Emission>
+        <Noise>
+            <DensityNoise>
+                <Size Value="20" />
+                <Intensity Value="1.0" />
+            </DensityNoise>
+            <ShapeNoise>
+                <Size Value="10" />
+                <Intensity Value="0.2" />
+            </ShapeNoise>
+            <RadialShapeNoise>
+                <Size Value="0.1" />
+                <Speed Value="20" />
+                <Intensity Value="0.25" />
+            </RadialShapeNoise>
+        </Noise>
+        <Quality VolumetricVesselShadows="false" >
+            <SampleCount Value="26" />
+            <SelfShadowSampleCount Value="0" />
+        </Quality>
+        <StartupTransient>
+            <Duration Years="0" Months="0" Weeks="0" Days="0" Hours="0" Minutes="0" Seconds="0.15" />
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <DensityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </DensityCurve>
+            <VelocityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </VelocityCurve>
+            <EmissiveSizeCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </EmissiveSizeCurve>
+        </StartupTransient>
+        <ShutdownTransient>
+            <Duration Years="0" Months="0" Weeks="0" Days="0" Hours="0" Minutes="0" Seconds="0.15" />
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <DensityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </DensityCurve>
+            <VelocityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </VelocityCurve>
+            <EmissiveSizeCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </EmissiveSizeCurve>
+        </ShutdownTransient>
+        <PressureModifiers>
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="-2.756303548812866" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.9967250823974609" />
+                        <Value Value="0.04641341418027878" />
+                        <InTangent Value="0.02595527283847332" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <PlumeLengthCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="1.4736522436141968" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1.5" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PlumeLengthCurve>
+            <MachDiamondBrightnessCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.499804824590683" />
+                        <Value Value="-0.0076800137758255005" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.8744230270385742" />
+                        <Value Value="0.9913088083267212" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </MachDiamondBrightnessCurve>
+            <TroughAndRidgeVisibilityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.5026276111602783" />
+                        <Value Value="-0.003999978303909302" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.8796268105506897" />
+                        <Value Value="1.0040000677108765" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </TroughAndRidgeVisibilityCurve>
+            <PressureWaveDeformationCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.49920031428337097" />
+                        <Value Value="-0.0040000081062316895" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PressureWaveDeformationCurve>
+            <AbsorptionDensityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </AbsorptionDensityCurve>
+            <ConcavityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ConcavityCurve>
+        </PressureModifiers>
+        <ThrottleModifiers>
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.0" />
+                        <Value Value="0.5" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <PlumeLengthCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0.25" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PlumeLengthCurve>
+            <MachDiamondBrightnessCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.35" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.85" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </MachDiamondBrightnessCurve>
+            <TroughAndRidgeVisibilityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.35" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.85" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </TroughAndRidgeVisibilityCurve>
+            <PressureWaveDeformationCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.35" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.85" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PressureWaveDeformationCurve>
+        </ThrottleModifiers>
+    </VolumetricExhaustTemplate>
+
+    <VolumetricExhaustTemplate Id="EngineAMed">
+        <LengthWeights>
+            <RadiusWeight Value="0.2"/>
+            <NozzlePressureWeight Value="25.0"/>
+            <JetExpansionWeight Value="150.0"/>
+            <ExitMachNumberWeight Value="1.0"/>
+        </LengthWeights>
+        <Absorption>
+            <Density Value="0.0" />
+            <ScatteringBrightness Value="0.25" />
+            <ScatteringPhaseEccentricity Value="0.2" />
+        </Absorption>
+        <Emission>
+            <Brightness Value="100" />
+            <ColorGradient>
+                <Color0 R="0.9976064" G="1" B="0.9039146" />
+                <Color1 R="0.9786477" G="0.9695381" B="0.4666861" />
+                <Color2 R="0.9822064" G="0.387989" B="0.387989" />
+                <Color3 R="0.23571129" G="0.2546575" B="0.7046263" />
+            </ColorGradient>
+            <Flow>
+                <MachDiamonds>
+                    <Brightness Value="5" />
+                    <Color R="1" G="1" B="1" />
+                    <LeadIn Value="0.23" />
+                    <LeadOut Value="0.65" />
+                    <MiddleRadius Value="1.0" />
+                    <IncidentShockHeight Value="0.45" />
+                    <IncidentShockCurve Value="1.0" />
+                </MachDiamonds>
+            </Flow>
+        </Emission>
+        <Noise>
+            <DensityNoise>
+                <Size Value="20.0" />
+                <Intensity Value="0.5" />
+            </DensityNoise>
+            <ShapeNoise>
+                <Size Value="10" />
+                <Intensity Value="0.2" />
+            </ShapeNoise>
+            <RadialShapeNoise>
+                <Size Value="1.0" />
+                <Speed Value="20" />
+                <Intensity Value="0.2" />
+            </RadialShapeNoise>
+        </Noise>
+        <Quality VolumetricVesselShadows="false" >
+            <SampleCount Value="26" />
+            <SelfShadowSampleCount Value="0" />
+        </Quality>
+        <StartupTransient>
+            <Duration Years="0" Months="0" Weeks="0" Days="0" Hours="0" Minutes="0" Seconds="0.15" />
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <DensityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </DensityCurve>
+            <VelocityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </VelocityCurve>
+            <EmissiveSizeCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </EmissiveSizeCurve>
+        </StartupTransient>
+        <ShutdownTransient>
+            <Duration Years="0" Months="0" Weeks="0" Days="0" Hours="0" Minutes="0" Seconds="0.15" />
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <DensityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </DensityCurve>
+            <VelocityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </VelocityCurve>
+            <EmissiveSizeCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </EmissiveSizeCurve>
+        </ShutdownTransient>
+        <PressureModifiers>
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="-2.756303548812866" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.9967250823974609" />
+                        <Value Value="0.04641341418027878" />
+                        <InTangent Value="0.02595527283847332" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <PlumeLengthCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="1.4736522436141968" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1.5" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PlumeLengthCurve>
+            <MachDiamondBrightnessCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.499804824590683" />
+                        <Value Value="-0.0076800137758255005" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.8744230270385742" />
+                        <Value Value="0.9913088083267212" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </MachDiamondBrightnessCurve>
+            <TroughAndRidgeVisibilityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.5026276111602783" />
+                        <Value Value="-0.003999978303909302" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.8796268105506897" />
+                        <Value Value="1.0040000677108765" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </TroughAndRidgeVisibilityCurve>
+            <PressureWaveDeformationCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.49920031428337097" />
+                        <Value Value="-0.0040000081062316895" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PressureWaveDeformationCurve>
+            <AbsorptionDensityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </AbsorptionDensityCurve>
+            <ConcavityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ConcavityCurve>
+        </PressureModifiers>
+        <ThrottleModifiers>
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.0" />
+                        <Value Value="0.5" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <PlumeLengthCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0.25" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PlumeLengthCurve>
+            <MachDiamondBrightnessCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.35" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.85" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </MachDiamondBrightnessCurve>
+            <TroughAndRidgeVisibilityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.35" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.85" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </TroughAndRidgeVisibilityCurve>
+            <PressureWaveDeformationCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.35" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.85" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PressureWaveDeformationCurve>
+        </ThrottleModifiers>
+    </VolumetricExhaustTemplate>
+
+    <VolumetricExhaustTemplate Id="EngineACompact">
+        <LengthWeights>
+            <RadiusWeight Value="0.2"/>
+            <NozzlePressureWeight Value="25.0"/>
+            <JetExpansionWeight Value="150.0"/>
+            <ExitMachNumberWeight Value="1.0"/>
+        </LengthWeights>
+        <Absorption>
+            <Density Value="0" />
+            <ScatteringBrightness Value="0.25" />
+            <ScatteringPhaseEccentricity Value="0.2" />
+        </Absorption>
+        <Emission>
+            <Brightness Value="1000" />
+            <ColorGradient>
+                <Color0 R="0.9976064" G="1" B="0.9039146" />
+                <Color1 R="0.9786477" G="0.9695381" B="0.4666861" />
+                <Color2 R="0.9822064" G="0.387989" B="0.387989" />
+                <Color3 R="0.23571129" G="0.2546575" B="0.7046263" />
+            </ColorGradient>
+            <Flow>
+                <MachDiamonds>
+                    <Brightness Value="15" />
+                    <Color R="1" G="1" B="1" />
+                </MachDiamonds>
+            </Flow>
+        </Emission>
+        <Noise>
+            <DensityNoise>
+                <Size Value="20" />
+                <Intensity Value="0.5" />
+            </DensityNoise>
+            <ShapeNoise>
+                <Size Value="10" />
+                <Intensity Value="0.05" />
+            </ShapeNoise>
+            <RadialShapeNoise>
+                <Size Value="0.1" />
+                <Speed Value="20" />
+                <Intensity Value="0.2" />
+            </RadialShapeNoise>
+        </Noise>
+        <Quality VolumetricVesselShadows="false" >
+            <SampleCount Value="13" />
+            <SelfShadowSampleCount Value="0" />
+        </Quality>
+        <StartupTransient>
+            <Duration Years="0" Months="0" Weeks="0" Days="0" Hours="0" Minutes="0" Seconds="0.15" />
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <DensityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </DensityCurve>
+            <VelocityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </VelocityCurve>
+            <EmissiveSizeCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </EmissiveSizeCurve>
+        </StartupTransient>
+        <ShutdownTransient>
+            <Duration Years="0" Months="0" Weeks="0" Days="0" Hours="0" Minutes="0" Seconds="0.15" />
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <DensityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </DensityCurve>
+            <VelocityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </VelocityCurve>
+            <EmissiveSizeCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </EmissiveSizeCurve>
+        </ShutdownTransient>
+        <PressureModifiers>
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="-2.756303548812866" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.9967250823974609" />
+                        <Value Value="0.04641341418027878" />
+                        <InTangent Value="0.02595527283847332" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <PlumeLengthCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="1.4736522436141968" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1.5" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PlumeLengthCurve>
+            <MachDiamondBrightnessCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.499804824590683" />
+                        <Value Value="-0.0076800137758255005" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.8744230270385742" />
+                        <Value Value="0.9913088083267212" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </MachDiamondBrightnessCurve>
+            <TroughAndRidgeVisibilityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.5026276111602783" />
+                        <Value Value="-0.003999978303909302" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.8796268105506897" />
+                        <Value Value="1.0040000677108765" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </TroughAndRidgeVisibilityCurve>
+            <PressureWaveDeformationCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.49920031428337097" />
+                        <Value Value="-0.0040000081062316895" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PressureWaveDeformationCurve>
+            <AbsorptionDensityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </AbsorptionDensityCurve>
+            <ConcavityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ConcavityCurve>
+        </PressureModifiers>
+        <ThrottleModifiers>
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.0" />
+                        <Value Value="0.5" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <PlumeLengthCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0.25" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PlumeLengthCurve>
+            <MachDiamondBrightnessCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.35" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.85" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </MachDiamondBrightnessCurve>
+            <TroughAndRidgeVisibilityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.35" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.85" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </TroughAndRidgeVisibilityCurve>
+            <PressureWaveDeformationCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.35" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.85" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PressureWaveDeformationCurve>
+        </ThrottleModifiers>
+    </VolumetricExhaustTemplate>
+
+    <VolumetricExhaustTemplate Id="EngineAAuxiliary">
+        <LengthWeights>
+            <RadiusWeight Value="0.2"/>
+            <NozzlePressureWeight Value="25.0"/>
+            <JetExpansionWeight Value="150.0"/>
+            <ExitMachNumberWeight Value="1.0"/>
+        </LengthWeights>
+        <Absorption>
+            <Density Value="50" />
+            <ScatteringBrightness Value="0.02" />
+            <ScatteringPhaseEccentricity Value="0.2" />
+            <RefractionIntensity Value="0.2" />
+        </Absorption>
+        <Emission>
+            <Brightness Value="50" />
+            <ColorGradient>
+                <Color0 R="0.9976064" G="1" B="0.9039146" />
+                <Color1 R="0.9786477" G="0.9695381" B="0.4666861" />
+                <Color2 R="0.9822064" G="0.387989" B="0.387989" />
+                <Color3 R="0.23571129" G="0.2546575" B="0.7046263" />
+            </ColorGradient>
+            <Flow>
+                <MachDiamonds>
+                    <Brightness Value="15" />
+                    <Color R="1" G="1" B="1" />
+                </MachDiamonds>
+            </Flow>
+        </Emission>
+        <Noise>
+            <DensityNoise>
+                <Size Value="15" />
+                <Intensity Value="0.1" />
+            </DensityNoise>
+            <ShapeNoise>
+                <Size Value="7" />
+                <Intensity Value="0.25" />
+            </ShapeNoise>
+            <RadialShapeNoise>
+                <Size Value="0.1" />
+                <Speed Value="10" />
+                <Intensity Value="0.5" />
+            </RadialShapeNoise>
+        </Noise>
+        <Quality VolumetricVesselShadows="false" >
+            <SampleCount Value="13" />
+            <SelfShadowSampleCount Value="0" />
+        </Quality>
+        <StartupTransient>
+            <Duration Years="0" Months="0" Weeks="0" Days="0" Hours="0" Minutes="0" Seconds="0.15" />
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <DensityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </DensityCurve>
+            <VelocityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </VelocityCurve>
+            <EmissiveSizeCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </EmissiveSizeCurve>
+        </StartupTransient>
+        <ShutdownTransient>
+            <Duration Years="0" Months="0" Weeks="0" Days="0" Hours="0" Minutes="0" Seconds="0.15" />
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <DensityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </DensityCurve>
+            <VelocityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </VelocityCurve>
+            <EmissiveSizeCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </EmissiveSizeCurve>
+        </ShutdownTransient>
+        <PressureModifiers>
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="-2.756303548812866" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.9967250823974609" />
+                        <Value Value="0.04641341418027878" />
+                        <InTangent Value="0.02595527283847332" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <PlumeLengthCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="1.4736522436141968" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1.5" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PlumeLengthCurve>
+            <MachDiamondBrightnessCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.499804824590683" />
+                        <Value Value="-0.0076800137758255005" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.8744230270385742" />
+                        <Value Value="0.9913088083267212" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </MachDiamondBrightnessCurve>
+            <TroughAndRidgeVisibilityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.5026276111602783" />
+                        <Value Value="-0.003999978303909302" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.8796268105506897" />
+                        <Value Value="1.0040000677108765" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </TroughAndRidgeVisibilityCurve>
+            <PressureWaveDeformationCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.49920031428337097" />
+                        <Value Value="-0.0040000081062316895" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PressureWaveDeformationCurve>
+            <AbsorptionDensityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </AbsorptionDensityCurve>
+            <ConcavityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ConcavityCurve>
+        </PressureModifiers>
+        <ThrottleModifiers>
+            <ExpansionCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.0" />
+                        <Value Value="0.5" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </ExpansionCurve>
+            <PlumeLengthCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0" />
+                        <Value Value="0.25" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="1" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PlumeLengthCurve>
+            <MachDiamondBrightnessCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.35" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.85" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </MachDiamondBrightnessCurve>
+            <TroughAndRidgeVisibilityCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.35" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.85" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </TroughAndRidgeVisibilityCurve>
+            <PressureWaveDeformationCurve>
+                <SplinePoints>
+                    <SplinePoint>
+                        <Key Value="0.35" />
+                        <Value Value="0" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                    <SplinePoint>
+                        <Key Value="0.85" />
+                        <Value Value="1" />
+                        <InTangent Value="0" />
+                        <OutTangent Value="0" />
+                    </SplinePoint>
+                </SplinePoints>
+            </PressureWaveDeformationCurve>
+        </ThrottleModifiers>
+    </VolumetricExhaustTemplate>
+    
+    <VolumetricExhaustTemplate Id="MmuRcsVac">
+        <LengthWeights>
+            <RadiusWeight Value="0.2"/>
+            <NozzlePressureWeight Value="25.0"/>
+            <JetExpansionWeight Value="150.0"/>
+            <ExitMachNumberWeight Value="1.0"/>
+        </LengthWeights>
+        <Absorption>
+            <Density Value="6300000.00000"/>
+            <FakeCleanBurnInAtmosphere Value="true"/>
+            <ScatteringBrightness Value="0.55"/>
+            <ScatteringPhaseEccentricity Value="0.2"/>
+        </Absorption>
+        <Emission>
+            <Brightness Value="0.0"/>
+            <Flow>
+                <MachDiamonds>
+                    <Brightness Value="0.0"/>
+                </MachDiamonds>
+            </Flow>
+        </Emission>
+        <Noise>
+            <DensityNoise>
+                <Size Value="5.0"/>
+                <Intensity Value="0.6"/>
+            </DensityNoise>
+            <ShapeNoise>
+                <Size Value="2.0"/>
+                <Intensity Value="0.2"/>
+            </ShapeNoise>
+            <RadialShapeNoise>
+                <Size Value="0.1"/>
+                <Speed Value="4.0"/>
+                <Intensity Value="0.2"/>
+            </RadialShapeNoise>
+        </Noise>
+        <Quality VolumetricVesselShadows="true">
+            <SampleCount Value="8"/>
+            <SelfShadowSampleCount Value="0"/>
+        </Quality>
+    </VolumetricExhaustTemplate>
+    
+</Assets>

@@ -75,13 +75,18 @@ import {
   createTank,
   DEFAULT_LAYER_ID,
   ENTITY_ONLY_LAYER_IDS,
-  isSubPartGameDataEmpty,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
   type LayerableKind,
 } from '../ksa/types';
 import { normalizeColliderSize } from '../ksa/colliderSize';
 import { seatAxesFromRotation } from '../ksa/ivaSeatAxes';
+import { lookupLocalKey } from '../ksa/idRemap';
+import {
+  mergeImportedRawChildren,
+  nextPlacementKey,
+  remapImportedLocalKeys,
+} from '../ksa/localKeyImport';
 import { remapRawConnectorRefs } from '../ksa/partXmlParser';
 import { remapConsumerFeedWiring, remapConsumerFeeds } from '../ksa/idRemap';
 import { unwiredConsumersOf } from './feedTargets';
@@ -756,9 +761,7 @@ function lastSegmentLower(templateId: string): string {
 /** Adds a SubPart from the catalog at the origin and selects it. */
 export function addSubPart(templateId: string, data?: CatalogSubPart['data']): void {
   const current = $part.get();
-  const base = lastSegmentLower(templateId);
-  const count = current.placements.filter((p) => p.subPartTemplateId === templateId).length;
-  const instanceId = `${base}_${count + 1}`;
+  const instanceId = nextPlacementKey(current.placements, templateId);
   pushUndo('add part', instanceId);
   const part = clone(current);
   part.placements.push({
@@ -771,8 +774,14 @@ export function addSubPart(templateId: string, data?: CatalogSubPart['data']): v
   });
   // A template is shared by all its placements. Seed its authored metadata once;
   // later placements preserve the user's edits and do not duplicate hardware.
-  if (data?.gameData && !part.subPartGameData.some((s) => s.subPartTemplateId === templateId))
-    part.subPartGameData.push(structuredClone(data.gameData));
+  if (
+    data &&
+    (data.gameData || data.colliders.length || data.lights.length) &&
+    !part.subPartGameData.some((s) => s.subPartTemplateId === templateId)
+  )
+    part.subPartGameData.push(
+      data.gameData ? structuredClone(data.gameData) : createSubPartGameData(templateId),
+    );
   if (data && !current.placements.some((p) => p.subPartTemplateId === templateId)) {
     for (const collider of data.colliders)
       part.colliders.push({
@@ -804,6 +813,7 @@ export interface ImportedGameData {
   /** Geometry `<Part CrashTolerance>` (Pa) carried in on import; null ⇒ the game derives it. */
   crashTolerancePa: number | null;
   controllable: boolean;
+  controlKey?: string;
   /** Part-level `<CustomMass>` mass override (Kg) + its preserved unmodeled children (inertia). */
   customMass: number | null;
   customMassExtras: RawXmlNode[];
@@ -811,6 +821,7 @@ export interface ImportedGameData {
   /** Unmodeled `<PartGameData>` attrs + child elements, preserved verbatim on import. */
   unknownAttrs: Record<string, string>;
   unknownChildren: RawXmlNode[];
+  unknownComponents?: RawXmlNode[];
   /** Part-level power modules — appended to the project's part (a Part may carry several). */
   batteries: Battery[];
   generators: Generator[];
@@ -869,7 +880,7 @@ function remapSubPartRef(ref: SubPartIdRef, idMap: ReadonlyMap<string, string>):
   if (!ref.subPartInstanceId) return { id: ref.id, subPartInstanceId: ref.subPartInstanceId };
   return {
     id: ref.id,
-    subPartInstanceId: idMap.get(ref.subPartInstanceId) ?? ref.subPartInstanceId,
+    subPartInstanceId: lookupLocalKey(idMap, ref.subPartInstanceId) ?? ref.subPartInstanceId,
   };
 }
 
@@ -891,6 +902,7 @@ function remapSubPartGameData(
       id: randomId(),
     })),
     unknownChildren: remapRawConnectorRefs(spd.unknownChildren, connectorIdMap, idMap),
+    unknownComponents: remapRawConnectorRefs(spd.unknownComponents, connectorIdMap, idMap),
     rockets: spd.rockets.map((r) => remapRocket(r, idMap)),
     rocketControllers: spd.rocketControllers.map((c) => ({
       ...c,
@@ -937,7 +949,7 @@ function templatesAlreadyOwning(
   entities: readonly { readonly ownerTemplateId: string | null }[],
 ): ReadonlySet<string> {
   const out = new Set<string>();
-  for (const e of entities) if (e.ownerTemplateId != null) out.add(e.ownerTemplateId);
+  for (const e of entities) if (e.ownerTemplateId != null) out.add(e.ownerTemplateId.toLowerCase());
   return out;
 }
 
@@ -959,23 +971,25 @@ function applyImportedGameData(
   /** Layer the import's geometry landed on — colliders follow it (seats/lights are pinned). */
   layerId: string,
 ): void {
+  const remapped = remapImportedLocalKeys(target, src, src.ivaSeats, src.lights);
+  src = { ...remapped.game, ivaSeats: remapped.seats, lights: remapped.lights };
   const game = target.gameData;
   game.massDefinitions.push(
     ...src.massDefinitions.map((mass) => ({ ...structuredClone(mass), id: randomId() })),
   );
   if (game.decoupler == null && src.decoupler) {
-    const id = connectorIdMap.get(src.decoupler.connectorId);
+    const id = lookupLocalKey(connectorIdMap, src.decoupler.connectorId);
     if (id) game.decoupler = { ...src.decoupler, connectorId: id };
   }
   if (game.dockingPort == null && src.dockingPort) {
-    const id = connectorIdMap.get(src.dockingPort.connectorId);
+    const id = lookupLocalKey(connectorIdMap, src.dockingPort.connectorId);
     if (id) game.dockingPort = { ...src.dockingPort, connectorId: id };
   }
   if (game.evaDoor == null && src.evaDoor) {
     // No connector to remap (the hatch is not connector-bound). `seatId` names an
     // <IVASeat Id>, which is user-authored game data (NOT the regenerated `_seatN`), so it
     // carries across verbatim like every other authored id.
-    game.evaDoor = { seatId: src.evaDoor.seatId };
+    game.evaDoor = { ...src.evaDoor };
   }
   // Part diameter + command marker: filled only when not already set. The extra
   // adapter size classes ride along with the primary (they're meaningless without it).
@@ -983,7 +997,10 @@ function applyImportedGameData(
     game.diameterM = src.diameterM;
     game.extraDiametersM = src.extraDiametersM;
   }
-  if (!game.controllable && src.controllable) game.controllable = true;
+  if (!game.controllable && src.controllable) {
+    game.controllable = true;
+    game.controlKey = src.controlKey;
+  }
   // Crash tolerance: a whole-part scalar, so the first authored value wins.
   if (game.crashTolerancePa == null && src.crashTolerancePa != null) {
     game.crashTolerancePa = src.crashTolerancePa;
@@ -998,15 +1015,24 @@ function applyImportedGameData(
   // source's original id space — rewrite them onto the regenerated connector ids.
   if (Object.keys(game.unknownAttrs).length === 0 && Object.keys(src.unknownAttrs).length > 0)
     game.unknownAttrs = src.unknownAttrs;
-  if (game.unknownChildren.length === 0 && src.unknownChildren.length > 0)
-    game.unknownChildren = remapRawConnectorRefs(src.unknownChildren, connectorIdMap);
+  mergeImportedRawChildren(
+    game.unknownChildren,
+    remapRawConnectorRefs(src.unknownChildren, connectorIdMap, idMap),
+  );
+  game.unknownComponents.push(
+    ...remapRawConnectorRefs(src.unknownComponents ?? [], connectorIdMap, idMap),
+  );
   game.batteries.push(...src.batteries);
   game.generators.push(...src.generators);
   game.solarPanels.push(...src.solarPanels);
   // Single consumer per part: keep the target's, adopt the source's only when empty.
   if (!game.powerConsumer && src.powerConsumer) game.powerConsumer = src.powerConsumer;
   for (const spd of src.subPartGameData) {
-    if (!target.subPartGameData.some((s) => s.subPartTemplateId === spd.subPartTemplateId)) {
+    if (
+      !target.subPartGameData.some(
+        (s) => s.subPartTemplateId.toLowerCase() === spd.subPartTemplateId.toLowerCase(),
+      )
+    ) {
       // Per-subpart rockets + consumer feeds can reference sibling instances / the
       // placing part's connectors — remap those refs too.
       target.subPartGameData.push(remapSubPartGameData(spd, connectorIdMap, idMap));
@@ -1034,7 +1060,8 @@ function applyImportedGameData(
   game.gimbals.push(
     ...src.gimbals.map((gimbal) => ({
       ...gimbal,
-      subPartInstanceId: idMap.get(gimbal.subPartInstanceId) ?? gimbal.subPartInstanceId,
+      subPartInstanceId:
+        lookupLocalKey(idMap, gimbal.subPartInstanceId) ?? gimbal.subPartInstanceId,
     })),
   );
   // Plumbing topology: tanks are plain containers, but solid motors carry feed points
@@ -1054,7 +1081,7 @@ function applyImportedGameData(
   // are skipped when the template already has some — see {@link templatesAlreadyOwning}.
   const collidersOwned = templatesAlreadyOwning(target.colliders);
   for (const c of src.colliders) {
-    if (c.ownerTemplateId != null && collidersOwned.has(c.ownerTemplateId)) continue;
+    if (c.ownerTemplateId != null && collidersOwned.has(c.ownerTemplateId.toLowerCase())) continue;
     target.colliders.push({
       ...structuredClone(c),
       id: nextColliderId(target),
@@ -1079,7 +1106,7 @@ function applyImportedGameData(
   // already has some — see {@link templatesAlreadyOwning}.
   const lightsOwned = templatesAlreadyOwning(target.lights);
   for (const l of src.lights) {
-    if (l.ownerTemplateId != null && lightsOwned.has(l.ownerTemplateId)) continue;
+    if (l.ownerTemplateId != null && lightsOwned.has(l.ownerTemplateId.toLowerCase())) continue;
     target.lights.push({
       ...structuredClone(l),
       id: nextLightId(target),
@@ -1147,11 +1174,7 @@ export function addPart(
   // joint members / solar-tracking refs (which target SubParts by their original id).
   const idMap = new Map<string, string>();
   for (const src of placements) {
-    const base = lastSegmentLower(src.subPartTemplateId);
-    const count = part.placements.filter(
-      (p) => p.subPartTemplateId === src.subPartTemplateId,
-    ).length;
-    const instanceId = `${base}_${count + 1}`;
+    const instanceId = nextPlacementKey(part.placements, src.subPartTemplateId);
     idMap.set(src.instanceId, instanceId);
     part.placements.push({
       instanceId,
@@ -1186,7 +1209,7 @@ export function addPart(
   // regenerated ids, dropping any that point outside the imported set.
   for (let i = connectorStart; i < part.connectors.length; i++) {
     part.connectors[i].siblingIds = part.connectors[i].siblingIds
-      .map((s) => connectorIdMap.get(s))
+      .map((s) => lookupLocalKey(connectorIdMap, s))
       .filter((s): s is string => s != null);
   }
   const colliderStart = part.colliders.length;
@@ -1600,7 +1623,7 @@ function nextIvaSeatId(part: EditingPart): string {
 export function nextConnectorId(part: EditingPart): string {
   let max = 0;
   for (const c of part.connectors) {
-    const m = /^_connector(\d+)$/.exec(c.id);
+    const m = /^_connector(\d+)$/i.exec(c.id);
     if (m) max = Math.max(max, Number.parseInt(m[1], 10));
   }
   return `_connector${max + 1}`;
@@ -1836,11 +1859,7 @@ export function duplicateSelected(options?: { offset?: boolean }): void {
   for (const i of [...sub].sort((a, b) => a - b)) {
     const src = part.placements[i];
     if (!src) continue;
-    const base = lastSegmentLower(src.subPartTemplateId);
-    const count = part.placements.filter(
-      (p) => p.subPartTemplateId === src.subPartTemplateId,
-    ).length;
-    const instanceId = `${base}_${count + 1}`;
+    const instanceId = nextPlacementKey(part.placements, src.subPartTemplateId);
     part.placements.push({
       instanceId,
       subPartTemplateId: src.subPartTemplateId,
@@ -2865,7 +2884,6 @@ export function getOrCreateSubPartData(
 function mutateSubPartData(subPartTemplateId: string, mutate: (s: SubPartGameData) => void): void {
   const part = clone($part.get());
   mutate(getOrCreateSubPartData(part, subPartTemplateId));
-  part.subPartGameData = part.subPartGameData.filter((s) => !isSubPartGameDataEmpty(s));
   $part.set(part);
 }
 
@@ -2901,9 +2919,9 @@ export function removeAllTemplateData(subPartTemplateId: string): void {
 
   pushUndo('delete SubPart data', subPartTemplateId);
   const part = clone(current);
-  part.subPartGameData = part.subPartGameData.filter(
-    (s) => s.subPartTemplateId !== subPartTemplateId,
-  );
+  const index = part.subPartGameData.findIndex((s) => s.subPartTemplateId === subPartTemplateId);
+  if (index >= 0) part.subPartGameData[index] = createSubPartGameData(subPartTemplateId);
+  else part.subPartGameData.push(createSubPartGameData(subPartTemplateId));
   part.lights = part.lights.filter((l) => l.ownerTemplateId !== subPartTemplateId);
   $part.set(part);
   clampSelection();
@@ -4479,11 +4497,7 @@ export function duplicateLayer(id: string): string | null {
   const copies: SelectionRef[] = [];
   // Snapshot the source rows first: the loops push onto the very arrays they read.
   for (const src of part.placements.filter((p) => p.layerId === id)) {
-    const base = lastSegmentLower(src.subPartTemplateId);
-    const count = part.placements.filter(
-      (p) => p.subPartTemplateId === src.subPartTemplateId,
-    ).length;
-    const instanceId = `${base}_${count + 1}`;
+    const instanceId = nextPlacementKey(part.placements, src.subPartTemplateId);
     part.placements.push({
       instanceId,
       subPartTemplateId: src.subPartTemplateId,

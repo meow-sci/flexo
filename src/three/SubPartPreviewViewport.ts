@@ -1,3 +1,4 @@
+import { catalogRenderModels } from './catalogRenderModels';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { CatalogSubPart } from '../ksa/catalog';
@@ -31,7 +32,7 @@ export class SubPartPreviewViewport {
   private readonly lightingUnsub: () => void;
   private readonly loop = new RenderLoop(() => this.renderFrame());
 
-  private current: THREE.Mesh | null = null;
+  private current: THREE.Group | null = null;
   /** Bumped on each setSubPart so a superseded async load discards its result. */
   private loadToken = 0;
 
@@ -96,25 +97,32 @@ export class SubPartPreviewViewport {
     if (!entry) return;
 
     try {
-      const [geometry, material] = await Promise.all([
-        getSubPartGeometry(entry.atlasUrl, entry.meshNodeName),
-        getSharedMaterial(entry),
-      ]);
-      if (token !== this.loadToken) return; // a newer selection superseded this load
-      const mesh = new THREE.Mesh(geometry, material);
-      this.scene.add(mesh);
-      this.current = mesh;
-      this.frame(geometry);
+      const models = catalogRenderModels(entry);
+      if (!models.length) return;
+      const meshes = await Promise.all(
+        models.map(async (model) => {
+          const [geometry, material] = await Promise.all([
+            getSubPartGeometry(model.atlasUrl, model.meshNodeName),
+            getSharedMaterial(model),
+          ]);
+          return new THREE.Mesh(geometry, material);
+        }),
+      );
+      if (token !== this.loadToken) return;
+      const group = new THREE.Group();
+      group.add(...meshes);
+      this.scene.add(group);
+      this.current = group;
+      this.frame(group);
       this.loop.invalidate();
     } catch (err) {
       console.warn(`SubPartPreviewViewport: failed to load '${entry.id}'`, err);
     }
   }
 
-  /** Frames the camera to the geometry's bounding sphere from a 3/4 angle. */
-  private frame(geometry: THREE.BufferGeometry): void {
-    if (!geometry.boundingSphere) geometry.computeBoundingSphere();
-    const sphere = geometry.boundingSphere!;
+  /** Frames the camera to the combined bounds of all model components. */
+  private frame(group: THREE.Group): void {
+    const sphere = new THREE.Box3().setFromObject(group).getBoundingSphere(new THREE.Sphere());
     const radius = Math.max(sphere.radius, 0.001);
     const fov = (this.camera.fov * Math.PI) / 180;
     const distance = (radius / Math.sin(fov / 2)) * 1.3;

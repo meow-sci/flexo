@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { CatalogSubPart } from '../ksa/catalog';
+import type { CatalogRenderModel, CatalogSubPart } from '../ksa/catalog';
 import type { RgbColor, TextureWrap } from '../ksa/types';
 import type { ImageLevel } from '../ktx/decodeImage';
 import { loadTexture, loadWrappedTexture } from './TextureCache';
@@ -203,7 +203,9 @@ export function buildGlowingFaceMaterial(
 }
 
 /** Resolves the shared material for a catalog entry (cached by material id). */
-export function getSharedMaterial(entry: CatalogSubPart): Promise<THREE.MeshStandardMaterial> {
+export function getSharedMaterial(
+  entry: CatalogSubPart | CatalogRenderModel,
+): Promise<THREE.MeshStandardMaterial> {
   if (!entry.diffuseUrl) {
     return Promise.resolve(makeFlatMaterial());
   }
@@ -219,7 +221,9 @@ export function getSharedMaterial(entry: CatalogSubPart): Promise<THREE.MeshStan
   return pending;
 }
 
-async function buildTextured(entry: CatalogSubPart): Promise<THREE.MeshStandardMaterial> {
+async function buildTextured(
+  entry: CatalogSubPart | CatalogRenderModel,
+): Promise<THREE.MeshStandardMaterial> {
   const [map, pbr, normal, emissive] = await Promise.all([
     loadTexture(entry.diffuseUrl!, 'srgb'),
     entry.aoRoughMetalUrl ? loadTexture(entry.aoRoughMetalUrl, 'linear') : null,

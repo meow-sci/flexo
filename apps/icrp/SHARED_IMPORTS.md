@@ -14,7 +14,9 @@ extraction — everything listed here would become `packages/*`.
 | Module                           | Used for                                                                |
 | -------------------------------- | ----------------------------------------------------------------------- |
 | `src/assetBase.ts`               | shared-asset base URL (`VITE_ASSET_BASE`)                               |
-| `src/ksa/catalog.ts`             | `toUrl`, `fetchXmlFile`, `parseAssetsFile` (vessel SubParts as pieces)  |
+| `src/ksa/catalog.ts`             | `toUrl`, `fetchXmlFile`, and the resolved vessel catalog                |
+| `src/ksa/contentXml.ts`          | current content prepass and resolved row provenance                     |
+| `src/ksa/coreContent.ts`         | shared resolved Core content                                            |
 | `src/ksa/partXmlParser.ts`       | `collidersFromElement`, transform/vec readers, RawXmlNode capture       |
 | `src/ksa/partXmlSerializer.ts`   | `prettyXml`, transform/collider/distance element builders               |
 | `src/ksa/formatG6.ts`            | .NET G6 number formatting                                               |

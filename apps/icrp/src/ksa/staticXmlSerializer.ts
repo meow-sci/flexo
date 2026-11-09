@@ -40,9 +40,9 @@ export interface StaticMaterialPlan {
 /** One `<StaticSubObject>` to declare. */
 export interface StaticPiecePlan {
   id: string;
-  /** `<Mesh Id>` — a glTF mesh name (custom atlas node, or a Core mesh id, F12). */
+  /** `<Mesh Ref>` — a glTF mesh name (custom atlas node, or a Core mesh id, F12). */
   meshId: string;
-  /** `<Material Id>` — a declared or Core `<PbrMaterial>` id. */
+  /** `<Material Ref>` — a declared or Core `<PbrMaterial>` id. */
   materialId: string;
   /** `<Terrain>true</Terrain>` (F6). */
   terrain?: boolean;
@@ -65,7 +65,7 @@ export interface StaticObjectPlan {
 
 /**
  * The GameData for one object. Metres: null = omit (KSA reads unset).
- * `placements`/`colliders` APPEND onto the targeted object via ApplyGameData
+ * `placements`/`colliders` append onto the targeted object via array Extend
  * (fact F10) — the extend-stock-pad mode targets a Core prefab id with them.
  */
 export interface StaticGameDataPlan {
@@ -106,7 +106,7 @@ function vec3Attrs(doc: XmlDocument, name: string, v: Vec3): XmlElement {
 }
 
 /**
- * `<Collider Id="Collider1">` with one child element per shape — ICRP's own
+ * `<Collider Key="Collider1">` with one child element per shape — ICRP's own
  * builder (not flexo's `buildColliderElement`) so distances are always `M=` and
  * the component id is Core's. Every dimension element is emitted unconditionally:
  * `DistanceReference` defaults to NaN, so an omitted `<Radius>`/`<Length*>`
@@ -116,13 +116,15 @@ function buildStaticColliderElement(
   doc: XmlDocument,
   colliders: readonly PartCollider[],
 ): XmlElement {
-  const component = el(doc, 'Collider', { Id: STATIC_COLLIDER_COMPONENT_ID });
+  const component = el(doc, 'Collider', { Key: STATIC_COLLIDER_COMPONENT_ID });
+  const shapes = el(doc, 'Colliders');
+  component.appendChild(shapes);
   for (const c of colliders) {
-    const shape = el(doc, c.shape, { Id: c.id });
+    const shape = el(doc, c.shape, { Key: c.id });
     shape.appendChild(vec3Attrs(doc, 'LocationAsmb', c.position));
     shape.appendChild(vec3Attrs(doc, 'Collider2Asmb', c.rotation));
     if (c.shape === 'ConvexHull') {
-      shape.appendChild(el(doc, 'Mesh', { Id: c.meshId ?? '' }));
+      shape.appendChild(el(doc, 'Mesh', { Ref: c.meshId ?? '' }));
       shape.appendChild(vec3Attrs(doc, 'Scale', c.scale));
     }
     const dims = colliderDimensions(c.shape, c.scale);
@@ -130,52 +132,60 @@ function buildStaticColliderElement(
     if (dims.lengthYM != null) shape.appendChild(distanceEl(doc, 'LengthY', dims.lengthYM));
     if (dims.lengthZM != null) shape.appendChild(distanceEl(doc, 'LengthZ', dims.lengthZM));
     if (dims.radiusM != null) shape.appendChild(distanceEl(doc, 'Radius', dims.radiusM));
-    component.appendChild(shape);
+    shapes.appendChild(shape);
   }
   return component;
 }
 
-/** `<Diffuse Path Category="Vessel"/>`-style texture slot. */
-function textureSlot(doc: XmlDocument, name: string, path: string): XmlElement {
-  return el(doc, name, { Path: path, Category: 'Vessel' });
+/** `<Diffuse Ref="…"/>`-style texture slot. */
+function textureSlot(doc: XmlDocument, name: string, id: string): XmlElement {
+  return el(doc, name, { Ref: id });
 }
 
 function buildMaterial(doc: XmlDocument, m: StaticMaterialPlan): XmlElement {
   const mat = el(doc, 'PbrMaterial', { Id: m.id });
-  mat.appendChild(textureSlot(doc, 'Diffuse', m.diffusePath));
-  mat.appendChild(textureSlot(doc, 'Normal', m.normalPath));
-  mat.appendChild(textureSlot(doc, 'AoRoughMetal', m.aoRoughMetalPath));
-  if (m.alphaPath) mat.appendChild(textureSlot(doc, 'Alpha', m.alphaPath));
+  mat.appendChild(textureSlot(doc, 'Diffuse', `${m.id}_Diffuse`));
+  mat.appendChild(textureSlot(doc, 'Normal', `${m.id}_Normal`));
+  mat.appendChild(textureSlot(doc, 'AoRoughMetal', `${m.id}_AoRoughMetal`));
+  if (m.alphaPath) mat.appendChild(textureSlot(doc, 'Alpha', `${m.id}_Alpha`));
   return mat;
 }
 
 function buildPiece(doc: XmlDocument, p: StaticPiecePlan): XmlElement {
   const sub = el(doc, 'StaticSubObject', { Id: p.id });
-  const model = el(doc, 'PartModel', { Id: `${p.id}_Model` });
-  model.appendChild(el(doc, 'Mesh', { Id: p.meshId }));
-  model.appendChild(el(doc, 'Material', { Id: p.materialId }));
+  const model = el(doc, 'PartModel', { Key: `${p.id}_Model` });
+  model.appendChild(el(doc, 'Mesh', { Ref: p.meshId }));
+  model.appendChild(el(doc, 'Material', { Ref: p.materialId }));
   if (p.terrain) {
     const terrain = doc.createElement('Terrain');
     terrain.appendChild(doc.createTextNode('true'));
     model.appendChild(terrain);
   }
-  sub.appendChild(model);
+  const models = el(doc, 'PartModels');
+  models.appendChild(model);
+  sub.appendChild(models);
   if (p.colliders && p.colliders.length > 0) {
-    sub.appendChild(buildStaticColliderElement(doc, p.colliders));
+    const colliders = el(doc, 'Colliders');
+    colliders.appendChild(buildStaticColliderElement(doc, p.colliders));
+    sub.appendChild(colliders);
   }
   return sub;
 }
 
 function buildObject(doc: XmlDocument, o: StaticObjectPlan): XmlElement {
   const obj = el(doc, 'StaticObject', { Id: o.id });
+  const subObjects = el(doc, 'SubObjects');
   for (const p of o.placements) {
-    const sub = el(doc, 'SubObject', { Id: p.instanceId, InstanceOf: p.instanceOf });
+    const sub = el(doc, 'SubObject', { Key: p.instanceId, Ref: p.instanceOf });
     const transform = buildTransformElement(doc, p.transform);
     if (transform) sub.appendChild(transform);
-    obj.appendChild(sub);
+    subObjects.appendChild(sub);
   }
+  if (o.placements.length) obj.appendChild(subObjects);
   if (o.colliders && o.colliders.length > 0) {
-    obj.appendChild(buildStaticColliderElement(doc, o.colliders));
+    const colliders = el(doc, 'Colliders');
+    colliders.appendChild(buildStaticColliderElement(doc, o.colliders));
+    obj.appendChild(colliders);
   }
   // The bundler always emits the three distance elements EMPTY on the asset
   // (all-NaN = unset); the values live in GameData — the Core split (F10/F13).
@@ -190,8 +200,22 @@ export function serializeStaticAssetsXml(plan: StaticAssetsPlan): string {
   const doc = new DOMImplementation().createDocument(null, 'Assets', null);
   const root = doc.documentElement!;
   doc.insertBefore(doc.createComment(BUNDLER_BANNER), root);
-  if (plan.meshAtlasPath) root.appendChild(el(doc, 'MeshAtlas', { Path: plan.meshAtlasPath }));
-  for (const m of plan.materials) root.appendChild(buildMaterial(doc, m));
+  if (plan.meshAtlasPath)
+    root.appendChild(el(doc, 'MeshAtlas', { Id: 'Icrp_MeshAtlas', Path: plan.meshAtlasPath }));
+  for (const m of plan.materials) {
+    for (const [slot, path] of Object.entries({
+      Diffuse: m.diffusePath,
+      Normal: m.normalPath,
+      AoRoughMetal: m.aoRoughMetalPath,
+      Alpha: m.alphaPath,
+    })) {
+      if (path)
+        root.appendChild(
+          el(doc, 'Texture', { Id: `${m.id}_${slot}`, Path: path, Category: 'Vessel' }),
+        );
+    }
+    root.appendChild(buildMaterial(doc, m));
+  }
   for (const p of plan.pieces) root.appendChild(buildPiece(doc, p));
   for (const o of plan.objects) root.appendChild(buildObject(doc, o));
   const body = new XMLSerializer().serializeToString(doc);
@@ -203,15 +227,19 @@ export function serializeStaticGameDataXml(objects: readonly StaticGameDataPlan[
   const doc = new DOMImplementation().createDocument(null, 'Assets', null);
   const root = doc.documentElement!;
   for (const o of objects) {
-    const gd = el(doc, 'StaticObjectGameData', { Id: o.id });
+    const gd = el(doc, 'StaticObject', { Id: o.id, Modify: 'Patch' });
+    const subObjects = el(doc, 'SubObjects', { Modify: 'Extend' });
     for (const p of o.placements ?? []) {
-      const sub = el(doc, 'SubObject', { Id: p.instanceId, InstanceOf: p.instanceOf });
+      const sub = el(doc, 'SubObject', { Key: p.instanceId, Ref: p.instanceOf });
       const transform = buildTransformElement(doc, p.transform);
       if (transform) sub.appendChild(transform);
-      gd.appendChild(sub);
+      subObjects.appendChild(sub);
     }
+    if (o.placements?.length) gd.appendChild(subObjects);
     if (o.colliders && o.colliders.length > 0) {
-      gd.appendChild(buildStaticColliderElement(doc, o.colliders));
+      const colliders = el(doc, 'Colliders', { Modify: 'Extend' });
+      colliders.appendChild(buildStaticColliderElement(doc, o.colliders));
+      gd.appendChild(colliders);
     }
     if (o.groundOffsetM !== null) gd.appendChild(distanceEl(doc, 'GroundOffset', o.groundOffsetM));
     if (o.surfaceHeightM !== null) {

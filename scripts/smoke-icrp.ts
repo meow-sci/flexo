@@ -31,11 +31,15 @@
  * playwright devDependency.
  */
 import { spawn, type ChildProcess } from 'node:child_process'
+import { mkdir } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
+import { dirname } from 'node:path'
 import { chromium, type Page } from 'playwright'
 
 const BASE = process.env.SMOKE_BASE ?? 'http://localhost:5173/flexo/apps/icrp/'
 const HEADFUL = process.env.SMOKE_HEADFUL === '1'
+const CHROMIUM_EXECUTABLE_PATH = process.env.CHROMIUM_EXECUTABLE_PATH
+const ICRP_EXPORT_ZIP = process.env.ICRP_EXPORT_ZIP ?? '/tmp/flexo-5801-native/icrp.zip'
 const SERVER_TIMEOUT_MS = 90_000
 
 let failures = 0
@@ -456,6 +460,12 @@ async function run(page: Page): Promise<void> {
       (preview ?? '').includes('<StaticObject Id='),
       'Assets preview lacks a <StaticObject> element',
     )
+    await mkdir(dirname(ICRP_EXPORT_ZIP), { recursive: true })
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: /Download .*\.zip/ }).click()
+    const download = await downloadPromise
+    await download.saveAs(ICRP_EXPORT_ZIP)
+    console.log(`  exported archive: ${ICRP_EXPORT_ZIP}`)
     await page.keyboard.press('Escape')
   })
 }
@@ -467,11 +477,30 @@ if (!process.env.SMOKE_BASE) {
 
 try {
   await waitForServer(BASE)
-  const browser = await chromium.launch({ headless: !HEADFUL })
+  const browser = await chromium.launch({ headless: !HEADFUL, executablePath: CHROMIUM_EXECUTABLE_PATH })
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const page = await context.newPage()
+  const browserErrors: string[] = []
+  const badResponses: string[] = []
+  const requestFailures: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') browserErrors.push(message.text())
+  })
+  page.on('pageerror', (error) => browserErrors.push(`pageerror: ${error.message}`))
+  page.on('response', (response) => {
+    if (response.status() >= 400) badResponses.push(`${response.status()} ${response.url()}`)
+  })
+  page.on('requestfailed', (request) =>
+    requestFailures.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText ?? 'failed'}`),
+  )
   console.log(`icrp smoke @ ${BASE}`)
   await run(page)
+  console.log(
+    `browser errors: ${browserErrors.length}; bad responses: ${badResponses.length}; failed requests: ${requestFailures.length}`,
+  )
+  for (const error of browserErrors) console.log(`  browser error: ${error}`)
+  for (const response of badResponses) console.log(`  bad response: ${response}`)
+  for (const failure of requestFailures) console.log(`  request failure: ${failure}`)
   await browser.close()
 } finally {
   if (server?.pid) process.kill(-server.pid, 'SIGTERM')

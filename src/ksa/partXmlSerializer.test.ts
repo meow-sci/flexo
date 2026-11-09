@@ -3,6 +3,7 @@ import { DOMParser } from '@xmldom/xmldom';
 import type { Document as XmlDocument, Element as XmlElement } from '@xmldom/xmldom';
 import { serializeGameDataXml, serializePartsXml, type TemplateRemap } from './partXmlSerializer';
 import { gameDataFromAssets, parsePartPlacements } from './partXmlParser';
+import { resolveContent } from './contentXml';
 import { seatAxesFromRotation } from './ivaSeatAxes';
 import type { Connector, EditingPart, IvaSeat, SubPartPlacement } from './types';
 import {
@@ -74,12 +75,19 @@ function parse(xml: string): XmlDocument {
   return new DOMParser().parseFromString(xml, 'application/xml');
 }
 
+function resolvedPart(part: EditingPart): XmlDocument {
+  return resolveContent([
+    { file: 'part.xml', doc: parse(serializePart(part)) as unknown as Document },
+    { file: 'game.xml', doc: parse(serializeGameData(part)) as unknown as Document },
+  ]).doc as unknown as XmlDocument;
+}
+
 function tags(parent: XmlDocument | XmlElement, tag: string): XmlElement[] {
   return Array.from(parent.getElementsByTagName(tag));
 }
 
 function subPartById(doc: XmlDocument, id: string): XmlElement {
-  const el = tags(doc, 'SubPart').find((e) => e.getAttribute('Id') === id);
+  const el = tags(doc, 'SubPart').find((e) => e.getAttribute('Key') === id);
   if (!el) throw new Error(`SubPart not found: ${id}`);
   return el;
 }
@@ -146,7 +154,7 @@ describe('serializePart', () => {
 
   it('omits <Transform> for an identity placement', () => {
     const sp = subPartById(doc, 'identity_1');
-    expect(sp.getAttribute('InstanceOf')).toBe('CoreCouplingA_Subpart_InteriorTunnelA');
+    expect(sp.getAttribute('Ref')).toBe('CoreCouplingA_Subpart_InteriorTunnelA');
     expect(child(sp, 'Transform')).toBeNull();
   });
 
@@ -296,17 +304,17 @@ describe('serializePart connectors', () => {
   const doc = parse(serializePart(part));
 
   it('emits a <Connector> per connector with its Id', () => {
-    const ids = tags(doc, 'Connector').map((e) => e.getAttribute('Id'));
+    const ids = tags(doc, 'Connector').map((e) => e.getAttribute('Key'));
     expect(ids).toEqual(['_connector1', '_connector2']);
   });
 
   it('omits <Transform> for an identity connector', () => {
-    const c = tags(doc, 'Connector').find((e) => e.getAttribute('Id') === '_connector1')!;
+    const c = tags(doc, 'Connector').find((e) => e.getAttribute('Key') === '_connector1')!;
     expect(child(c, 'Transform')).toBeNull();
   });
 
   it('emits position/rotation/scale for a transformed connector', () => {
-    const c = tags(doc, 'Connector').find((e) => e.getAttribute('Id') === '_connector2')!;
+    const c = tags(doc, 'Connector').find((e) => e.getAttribute('Key') === '_connector2')!;
     expect(child(c, 'Position')!.getAttribute('X')).toBe('-1');
     expect(child(c, 'Rotation')!.getAttribute('X')).toBe('3.14159');
     const scale = child(c, 'Scale')!;
@@ -329,9 +337,9 @@ describe('serializePart connectors', () => {
   // — on WHITESPACE — and throws CreateUnknownConstantException on an unknown token, so
   // a comma-joined body ("Internal, ToSurface") yields "Internal," and fails KSA's load.
   it('emits a space-separated <Flags> body, never a comma', () => {
-    const c2 = tags(doc, 'Connector').find((e) => e.getAttribute('Id') === '_connector2')!;
+    const c2 = tags(doc, 'Connector').find((e) => e.getAttribute('Key') === '_connector2')!;
     expect(child(c2, 'Flags')!.textContent).toBe('Internal ToSurface');
-    const c1 = tags(doc, 'Connector').find((e) => e.getAttribute('Id') === '_connector1')!;
+    const c1 = tags(doc, 'Connector').find((e) => e.getAttribute('Key') === '_connector1')!;
     expect(child(c1, 'Flags')).toBeNull();
   });
 
@@ -418,18 +426,15 @@ describe('serializeGameData', () => {
     ],
   });
   const doc = parse(serializeGameData(part));
-  const gd = tags(doc, 'PartGameData')[0];
+  const gd = tags(doc, 'Part')[0];
 
-  it('roots a <PartGameData> with the part id and DisplayName', () => {
+  it('roots a <Part> with the part id and DisplayName', () => {
     expect(gd.getAttribute('Id')).toBe('P');
     expect(gd.getAttribute('DisplayName')).toBe('My Tank');
   });
 
   it('emits editor tags here (not on the Part)', () => {
-    expect(tags(doc, 'EditorTag').map((e) => e.getAttribute('Value'))).toEqual([
-      'Structural',
-      'RCS',
-    ]);
+    expect(tags(doc, 'EditorTag').map((e) => e.getAttribute('Ref'))).toEqual(['Structural', 'RCS']);
   });
 
   it('emits custom mass in kg', () => {
@@ -446,8 +451,8 @@ describe('serializeGameData', () => {
     expect(control.childNodes.length).toBe(0);
   });
 
-  it('emits tanks nested under <SubPartGameData><Tank><CylindricalTank/SphericalTank>', () => {
-    const spd = tags(doc, 'SubPartGameData')[0];
+  it('emits tanks nested under <SubPart><Tank><CylindricalTank/SphericalTank>', () => {
+    const spd = tags(doc, 'SubPart')[0];
     expect(spd.getAttribute('Id')).toBe(TANK_TMPL);
     const tankEls = tags(spd, 'Tank');
     expect(tankEls.length).toBe(2);
@@ -457,11 +462,12 @@ describe('serializeGameData', () => {
     expect(cyl.getElementsByTagName('WallThickness')[0].getAttribute('Mm')).toBe('2.5');
     const sph = tankEls[1].getElementsByTagName('SphericalTank')[0];
     expect(sph.getElementsByTagName('Length').length).toBe(0);
-    expect(sph.getElementsByTagName('Material')[0].getAttribute('Id')).toBe('Steel(s)');
+    expect(sph.getElementsByTagName('Material')[0].getAttribute('Ref')).toBe('Steel');
+    expect(sph.getElementsByTagName('Material')[0].getAttribute('Phase')).toBe('Solid');
   });
 
-  it('emits <Light> with Type/Transform/Range/Intensity/Color under <SubPartGameData>', () => {
-    const spd = tags(doc, 'SubPartGameData')[0];
+  it('emits <Light> with Type/Transform/Range/Intensity/Color under <SubPart>', () => {
+    const spd = tags(doc, 'SubPart')[0];
     const lightEls = tags(spd, 'Light');
     expect(lightEls.length).toBe(2);
     const spot = lightEls[0];
@@ -479,7 +485,7 @@ describe('serializeGameData', () => {
   });
 
   it('emits InnerAngle/OuterAngle + <RayTracing> only for the right lights', () => {
-    const spd = tags(doc, 'SubPartGameData')[0];
+    const spd = tags(doc, 'SubPart')[0];
     const [spot, point] = tags(spd, 'Light');
     // Spot keeps cone angles (radians) and the explicit ray-tracing flag.
     expect(child(spot, 'InnerAngle')!.getAttribute('Value')).toBe('0.392599');
@@ -496,7 +502,7 @@ describe('serializeGameData', () => {
     // Added in build 5261 (LightModule.TemplateData.DisableInIva). Core authors it on the
     // CoreIVASpaceA seat face-fill lights; before flexo modeled it, a round-trip dropped it
     // and those lights would start consuming EC and shining into the seated player's view.
-    const spd = tags(doc, 'SubPartGameData')[0];
+    const spd = tags(doc, 'SubPart')[0];
     const [spot, point] = tags(spd, 'Light');
     expect(child(spot, 'DisableInIva')).toBeNull();
     expect(child(point, 'DisableInIva')).toBeNull();
@@ -506,7 +512,7 @@ describe('serializeGameData', () => {
         editingPart({ lights: [{ ...createPartLight(null, '_light1'), disableInIva: true }] }),
       ),
     );
-    const emitted = tags(tags(withFlag, 'PartGameData')[0], 'Light')[0];
+    const emitted = tags(tags(withFlag, 'Part')[0], 'Light')[0];
     expect(child(emitted, 'DisableInIva')!.textContent).toBe('true');
   });
 
@@ -515,12 +521,12 @@ describe('serializeGameData', () => {
     const lightOnly = parse(
       serializeGameData(editingPart({ lights: [createPartLight(SP, '_light1')] })),
     );
-    const spd = tags(lightOnly, 'SubPartGameData').find((e) => e.getAttribute('Id') === SP)!;
+    const spd = tags(lightOnly, 'SubPart').find((e) => e.getAttribute('Id') === SP)!;
     expect(spd).toBeDefined();
     expect(tags(spd, 'Light').length).toBe(1);
   });
 
-  it('emits part-level lights (ownerTemplateId null) under <PartGameData>, never a SubPartGameData', () => {
+  it('emits part-level lights (ownerTemplateId null) under <Part>, never a SubPartGameData', () => {
     // CoreCommandA-style capsule headlight: a part-level <Light> in the assembly frame.
     const doc2 = parse(
       serializeGameData(
@@ -537,16 +543,16 @@ describe('serializeGameData', () => {
         }),
       ),
     );
-    const gd2 = tags(doc2, 'PartGameData')[0];
+    const gd2 = tags(doc2, 'Part')[0];
     const lights = tags(gd2, 'Light');
     expect(lights).toHaveLength(1);
     expect(child(lights[0], 'Range')!.getAttribute('Value')).toBe('2.5');
-    // The light is a DIRECT child of <PartGameData> — no <SubPartGameData> block exists.
-    expect(lights[0].parentNode).toBe(gd2);
-    expect(tags(doc2, 'SubPartGameData')).toHaveLength(0);
+    // The light is a DIRECT child of <Part> — no <SubPart> block exists.
+    expect((lights[0].parentNode as unknown as Element).tagName).toBe('Components');
+    expect(tags(doc2, 'SubPart')).toHaveLength(0);
     // Every emitted <Light> is named — the document id backs an unnamed light (5348's
     // duplicate-Components-id Error).
-    expect(lights[0].getAttribute('Id')).toBe('_light1');
+    expect(lights[0].getAttribute('Key')).toBe('_light1');
   });
 
   it('omits the <Transform> entirely for an identity-transform light', () => {
@@ -563,9 +569,9 @@ describe('serializeGameData', () => {
       '',
       remap,
     );
-    expect(xml).toContain(`<SubPartGameData Id="flexo_MyLight_${SP}">`);
-    expect(xml).not.toContain(`<SubPartGameData Id="${SP}">`);
-    expect(xml).toContain('<Light Id="_light1">');
+    expect(xml).toContain(`<SubPart Id="flexo_MyLight_${SP}" Modify="Patch">`);
+    expect(xml).not.toContain(`<SubPart Id="${SP}">`);
+    expect(xml).toContain('<Light Key="_light1">');
   });
 
   it('one orphan block carries BOTH an owned light and an owned collider', () => {
@@ -586,7 +592,7 @@ describe('serializeGameData', () => {
         }),
       ),
     );
-    const blocks = tags(doc2, 'SubPartGameData').filter((e) => e.getAttribute('Id') === SP);
+    const blocks = tags(doc2, 'SubPart').filter((e) => e.getAttribute('Id') === SP);
     expect(blocks).toHaveLength(1);
     expect(tags(blocks[0], 'Light')).toHaveLength(1);
     expect(tags(blocks[0], 'Collider')).toHaveLength(1);
@@ -626,22 +632,22 @@ describe('serializeGameData', () => {
   });
 
   it('emits part-level <SolarPanel> with Produced W + orientation Transform', () => {
-    const sp = tags(doc, 'SolarPanel').find((el) => el.parentNode === gd)!;
+    const sp = tags(doc, 'SolarPanel').find((el) => el.parentNode?.parentNode === gd)!;
     expect(child(sp, 'Produced')!.getAttribute('W')).toBe('200');
     const rot = child(child(sp, 'Transform')!, 'Rotation')!;
     expect(rot.getAttribute('Y')).toBe('1.5708');
   });
 
   it('emits SubPart-level <SolarPanel> alongside tanks', () => {
-    const spd = tags(doc, 'SubPartGameData')[0];
+    const spd = tags(doc, 'SubPart')[0];
     expect(child(spd, 'SolarPanel')!.getElementsByTagName('Produced')[0].getAttribute('W')).toBe(
       '50',
     );
   });
 
   it('emits every connector, with <Flags> only when set', () => {
-    const connectors = tags(doc, 'Connector');
-    expect(connectors.map((e) => e.getAttribute('Id'))).toEqual([
+    const connectors = tags(doc, 'Connector').filter((e) => e.hasAttribute('Key'));
+    expect(connectors.map((e) => e.getAttribute('Key'))).toEqual([
       '_connector1',
       '_connector2',
       '_connector3',
@@ -653,10 +659,10 @@ describe('serializeGameData', () => {
 
   it('emits decoupler / docking port / EVA door', () => {
     const dec = tags(doc, 'Decoupler')[0];
-    expect(dec.getAttribute('ConnectorId')).toBe('_connector2');
+    expect(child(dec, 'Connector')!.getAttribute('KeyRef')).toBe('_connector2');
     expect(dec.getAttribute('Force')).toBe('750');
     const dp = tags(doc, 'DockingPort')[0];
-    expect(child(dp, 'ConnectorId')!.getAttribute('Value')).toBe('_connector3');
+    expect(child(dp, 'Connector')!.getAttribute('KeyRef')).toBe('_connector3');
     expect(child(dp, 'LatchingKineticEnergy')!.getAttribute('J')).toBe('6000');
     expect(child(dp, 'PushoffImpulse')!.getAttribute('Ns')).toBe('7000');
     // `EVADoorTemplate` declares exactly ONE XmlAttribute, `SeatId`
@@ -685,10 +691,10 @@ describe('serializeGameData', () => {
 
   it('omits empty/default game data entirely', () => {
     const bare = parse(serializeGameData(editingPart({ connectors: [] })));
-    const bareGd = tags(bare, 'PartGameData')[0];
+    const bareGd = tags(bare, 'Part')[0];
     expect(bareGd.hasAttribute('DisplayName')).toBe(false);
     expect(tags(bare, 'CustomMass').length).toBe(0);
-    expect(tags(bare, 'SubPartGameData').length).toBe(0);
+    expect(tags(bare, 'SubPart').length).toBe(0);
     expect(tags(bare, 'Decoupler').length).toBe(0);
     expect(tags(bare, 'Diameter').length).toBe(0);
     expect(tags(bare, 'Control').length).toBe(0);
@@ -756,17 +762,17 @@ describe('serializeGameData', () => {
       ],
     });
     const sdoc = parse(serializeGameData(enginePart));
-    const spd = tags(sdoc, 'SubPartGameData').find((e) => e.getAttribute('Id') === TMPL)!;
+    const spd = tags(sdoc, 'SubPart').find((e) => e.getAttribute('Id') === TMPL)!;
 
     const rocket = child(spd, 'Rocket')!;
-    expect(rocket.getAttribute('Id')).toBe('Engine');
-    expect(child(rocket, 'Core')!.getAttribute('Id')).toBe('ThrustChamber');
-    expect(child(rocket, 'Core')!.hasAttribute('SubPartId')).toBe(false);
-    expect(child(rocket, 'Nozzle')!.getAttribute('Id')).toBe('Nozzle');
+    expect(rocket.getAttribute('Key')).toBe('Engine');
+    expect(child(rocket, 'Core')!.getAttribute('KeyRef')).toBe('ThrustChamber');
+    expect(child(rocket, 'Core')!.hasAttribute('SubPart')).toBe(false);
+    expect(child(rocket, 'Nozzle')!.getAttribute('KeyRef')).toBe('Nozzle');
 
     const comb = child(spd, 'Combustor')!;
     const reaction = child(comb, 'Reaction')!;
-    expect(reaction.getAttribute('Id')).toBe('Hydrolox');
+    expect(reaction.getAttribute('Ref')).toBe('Hydrolox');
     expect(child(reaction, 'MixtureRatio')!.textContent).toBe('5.5');
     expect(child(comb, 'MaxPressure')!.getAttribute('Bar')).toBe('49');
     expect(child(comb, 'ThermalEfficiency')).toBeNull(); // default 1 omitted
@@ -786,12 +792,12 @@ describe('serializeGameData', () => {
     expect(plumes.length).toBe(2);
     expect(plumes[0].getAttribute('Reaction')).toBeNull();
     expect(plumes[0].getAttribute('Default')).toBe('true');
-    expect(child(plumes[0], 'VolumetricExhaust')!.getAttribute('Id')).toBe('EngineALarge');
+    expect(child(plumes[0], 'VolumetricExhaust')!.getAttribute('Ref')).toBe('EngineALarge');
     expect(child(plumes[0], 'PlumeTrail')).toBeNull();
-    expect(plumes[1].getAttribute('Reaction')).toBe('DoubleBase');
+    expect(child(plumes[1], 'Reaction')!.getAttribute('Ref')).toBe('DoubleBase');
     expect(plumes[1].getAttribute('Default')).toBeNull();
-    expect(child(plumes[1], 'PlumeTrail')!.getAttribute('Id')).toBe('DefaultPlumeTrail');
-    expect(child(noz, 'SoundEvent')!.getAttribute('SoundId')).toBe('DefaultEngineSoundBehavior');
+    expect(child(plumes[1], 'PlumeTrail')!.getAttribute('Ref')).toBe('DefaultPlumeTrail');
+    expect(child(noz, 'SoundEvent')!.getAttribute('Ref')).toBe('DefaultEngineSoundBehavior');
     expect(child(noz, 'ExhaustLight')).toBeNull(); // default true omitted
   });
 
@@ -920,24 +926,29 @@ describe('serializeGameData', () => {
     const sdoc = parse(serializeGameData(enginePart));
 
     const ctrl = tags(sdoc, 'RocketEngineController')[0];
-    expect(ctrl.getAttribute('Id')).toBe('LR91-AJ-3');
-    const refs = tags(ctrl, 'RocketReference');
-    expect(refs[0].getAttribute('SubPartId')).toBe(
+    expect(ctrl.getAttribute('Key')).toBe('LR91-AJ-3');
+    const refs = tags(ctrl, 'Rocket');
+    expect(refs[0].getAttribute('SubPart')).toBe(
       'CorePropulsionA_Subpart_EngineALargeVacAssembly2',
     );
-    expect(refs[1].hasAttribute('SubPartId')).toBe(false); // root-part rocket ref
+    expect(refs[1].hasAttribute('SubPart')).toBe(false); // root-part rocket ref
 
     // Gas-generator nozzle ref carries its SubPart instance.
     const ggNozzle = child(tags(sdoc, 'Rocket')[0], 'Nozzle')!;
-    expect(ggNozzle.getAttribute('SubPartId')).toBe('turbo_2');
+    expect(ggNozzle.getAttribute('SubPart')).toBe('turbo_2');
 
     // Two gimbal overlays under <SubPart Id=instance>; the actuating-Y-only one omits Z.
-    const subPartOverlays = tags(sdoc, 'SubPart').filter((s) => child(s, 'Gimbal'));
-    expect(subPartOverlays.map((s) => s.getAttribute('Id'))).toEqual(['asm_2', 'turbo_2']);
-    const asmGimbal = child(subPartOverlays[0], 'Gimbal')!;
+    const subPartOverlays = tags(sdoc, 'Gimbal').filter(
+      (s) => s.getElementsByTagName('SubPart').length,
+    );
+    expect(subPartOverlays.map((s) => child(s, 'SubPart')!.getAttribute('KeyRef'))).toEqual([
+      'asm_2',
+      'turbo_2',
+    ]);
+    const asmGimbal = subPartOverlays[0];
     expect(child(asmGimbal, 'MaxAngleY')!.getAttribute('Degrees')).toBe('5');
     expect(child(asmGimbal, 'ConstrainToCircle')!.getAttribute('Value')).toBe('false');
-    const turboGimbal = child(subPartOverlays[1], 'Gimbal')!;
+    const turboGimbal = subPartOverlays[1];
     expect(child(turboGimbal, 'MaxAngleY')!.getAttribute('Degrees')).toBe('70');
     expect(child(turboGimbal, 'MaxAngleZ')).toBeNull(); // 0 → omitted
     expect(child(turboGimbal, 'ConstrainToCircle')).toBeNull(); // default true → omitted
@@ -962,22 +973,15 @@ describe('serializeGameData', () => {
         ],
       },
     });
-    const pdoc = parse(serializePart(gimballed));
-    const subs = tags(pdoc, 'SubPart');
-    const bell = subs.find((x) => x.getAttribute('Id') === 'bell_1')!;
-    const body = subs.find((x) => x.getAttribute('Id') === 'body_1')!;
-    // Bare declaration: the angles are the GameData overlay's job (Core ships the same pair).
-    expect(child(bell, 'Gimbal')).not.toBeNull();
-    expect(child(bell, 'Gimbal')!.childNodes.length).toBe(0);
-    expect(child(body, 'Gimbal')).toBeNull();
-    // …and the overlay still carries the angles.
-    const overlay = tags(parse(serializeGameData(gimballed)), 'SubPart').find((x) =>
-      child(x, 'Gimbal'),
-    )!;
-    expect(child(child(overlay, 'Gimbal')!, 'MaxAngleY')!.getAttribute('Degrees')).toBe('8');
+    const finalPart = tags(resolvedPart(gimballed), 'Part')[0];
+    const gimbals = tags(finalPart, 'Gimbal');
+    expect(gimbals.map((x) => child(x, 'SubPart')!.getAttribute('KeyRef'))).toEqual(['bell_1']);
+    expect(gimbals[0].getAttribute('Key')).toBe('bell_1');
+    expect(child(gimbals[0], 'Transform')).toBeNull();
+    expect(child(gimbals[0], 'MaxAngleY')!.getAttribute('Degrees')).toBe('8');
   });
 
-  it('omits the geometry declaration for a fixed (0/0) gimbal too, so the halves agree', () => {
+  it('retains an explicitly authored fixed gimbal in resolved Part data', () => {
     const fixed = editingPart({
       placements: [placement({ instanceId: 'bell_1' })],
       gameData: {
@@ -993,8 +997,10 @@ describe('serializeGameData', () => {
         ],
       },
     });
-    expect(tags(parse(serializePart(fixed)), 'Gimbal').length).toBe(0);
-    expect(tags(parse(serializeGameData(fixed)), 'Gimbal').length).toBe(0);
+    const fixedRows = tags(tags(resolvedPart(fixed), 'Part')[0], 'Gimbal');
+    expect(fixedRows).toHaveLength(1);
+    expect(child(fixedRows[0], 'MaxAngleY')).toBeNull();
+    expect(child(fixedRows[0], 'MaxAngleZ')).toBeNull();
   });
 
   it('preserves the authored gimbal pivot and axes on the geometry declaration', () => {
@@ -1017,18 +1023,16 @@ describe('serializeGameData', () => {
         ],
       },
     });
-    const declaration = tags(parse(serializePart(part)), 'Gimbal')[0];
+    const declaration = tags(tags(resolvedPart(part), 'Part')[0], 'Gimbal')[0];
     const pivot = child(declaration, 'Transform')!;
     expect(child(pivot, 'Position')!.getAttribute('X')).toBe('0.1156');
     expect(child(pivot, 'Position')!.getAttribute('Y')).toBe('-0.0001');
     expect(child(pivot, 'Position')!.getAttribute('Z')).toBe('0.0968');
     expect(child(pivot, 'Rotation')!.getAttribute('X')).toBe('-1.5708');
-    const overlay = tags(parse(serializeGameData(part)), 'Gimbal')[0];
-    expect(child(overlay, 'Transform')).toBeNull();
-    expect(child(overlay, 'MaxAngleY')!.getAttribute('Degrees')).toBe('70');
+    expect(child(declaration, 'MaxAngleY')!.getAttribute('Degrees')).toBe('70');
   });
 
-  it('does not emit a fixed (0/0) gimbal overlay', () => {
+  it('emits a keyed fixed (0/0) gimbal without angle children', () => {
     const part2 = editingPart({
       gameData: {
         ...createEmptyGameData(),
@@ -1043,8 +1047,10 @@ describe('serializeGameData', () => {
         ],
       },
     });
-    const sdoc = parse(serializeGameData(part2));
-    expect(tags(sdoc, 'Gimbal').length).toBe(0);
+    const gimbal = tags(tags(resolvedPart(part2), 'Part')[0], 'Gimbal')[0];
+    expect(gimbal.getAttribute('Key')).toBe('x');
+    expect(child(gimbal, 'MaxAngleY')).toBeNull();
+    expect(child(gimbal, 'MaxAngleZ')).toBeNull();
   });
 
   // Kittens are editor-only visual aides — they must never leak into export.
@@ -1123,7 +1129,7 @@ describe('serializeGameData IVA seats', () => {
     const xml = serializeGameData(
       editingPart({ ivaSeats: [seat({ ksaId: 'CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA' })] }),
     );
-    expect(tags(parse(xml), 'IVASeat')[0].getAttribute('Id')).toBe(
+    expect(tags(parse(xml), 'IVASeat')[0].getAttribute('Key')).toBe(
       'CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA',
     );
     // Still never the editor id.
@@ -1155,35 +1161,43 @@ describe('serializeGameData IVA seats', () => {
     expect(seats.map((el) => axis(el, 'Position').x)).toEqual([1, 2, 3]);
   });
 
-  it('emits the seats BEFORE the unmodeled passthrough', () => {
+  it('emits seats and unknown IVA components in the same Components wrapper', () => {
     const xml = serializeGameData(
       editingPart({
         gameData: {
           ...createEmptyGameData(),
-          unknownChildren: [{ tag: 'AttachedInternal', attrs: { InstanceOf: 'X' }, children: [] }],
+          unknownComponents: [
+            { tag: 'AttachedInternal', attrs: { Key: 'interior' }, children: [] },
+          ],
         },
         ivaSeats: [seat({})],
       }),
     );
-    expect(xml.indexOf('<IVASeat>')).toBeLessThan(xml.indexOf('<AttachedInternal'));
+    expect(tags(parse(xml), 'Components')).toHaveLength(1);
+    expect(tags(parse(xml), 'IVASeat')).toHaveLength(1);
+    expect(tags(parse(xml), 'AttachedInternal')).toHaveLength(1);
   });
 
   it('disables imported and authored IVA without losing data, and restores identical XML when enabled', () => {
     const imported = gameDataFromAssets(
-      `<Assets><PartGameData Id="P">
-        <AttachedInternal InstanceOf="CoreIVASpaceA_Prefab_MediumCapsuleA" />
+      `<Assets><Part Id="P"><Components>
+        <AttachedInternal Key="inside"><Internal Ref="CoreIVASpaceA_Prefab_MediumCapsuleA" /></AttachedInternal>
         <EVADoor SeatId="pilot" />
         <Control />
-        <GrabRail Id="rail"><Node><Position X="1" /></Node></GrabRail>
-      </PartGameData></Assets>`,
+        <GrabRail Key="rail"><Node><Position X="1" /></Node></GrabRail>
+      </Components></Part></Assets>`,
       'P',
       new DOMParser(),
     )!;
     const spd = createSubPartGameData('Chair');
-    spd.unknownChildren = [
-      { tag: 'IVASeat', attrs: { Id: 'chairSeat' }, children: [] },
-      { tag: 'AttachedInternal', attrs: { InstanceOf: 'Interior' }, children: [] },
-      { tag: 'GrabRail', attrs: { Id: 'chairRail' }, children: [] },
+    spd.unknownComponents = [
+      { tag: 'IVASeat', attrs: { Key: 'chairSeat' }, children: [] },
+      {
+        tag: 'AttachedInternal',
+        attrs: { Key: 'inside' },
+        children: [{ tag: 'Internal', attrs: { Ref: 'Interior' }, children: [] }],
+      },
+      { tag: 'GrabRail', attrs: { Key: 'chairRail' }, children: [] },
     ];
     const part = editingPart({
       gameData: imported.gameData,
@@ -1227,7 +1241,9 @@ describe('serializeGameData IVA seats', () => {
       ],
       'Fleet',
     );
-    expect(tags(parse(xml), 'IVASeat').map((el) => el.getAttribute('Id'))).toEqual(['enabledSeat']);
+    expect(tags(parse(xml), 'IVASeat').map((el) => el.getAttribute('Key'))).toEqual([
+      'enabledSeat',
+    ]);
   });
 
   it('round-trips positions and orientations through serialize → parse', () => {
@@ -1262,10 +1278,10 @@ describe('serializeGameData IVA seats', () => {
 // `IVASeatTemplate.Id`, resolved by `EVADoor.ResolveAlignedSeats`). Import → export must
 // reproduce both verbatim, and absent attributes must stay absent.
 describe('EVA door ⇄ IVA seat link (D17)', () => {
-  const IMPORTED = `<Assets><PartGameData Id="P">
+  const IMPORTED = `<Assets><Part Id="P"><Components>
       <EVADoor SeatId="pilot" />
-      <IVASeat Id="pilot"><Position X="1" /><ForwardAxis X="1" /><UpAxis Z="-1" /></IVASeat>
-    </PartGameData></Assets>`;
+      <IVASeat Key="pilot"><Position X="1" /><ForwardAxis X="1" /><UpAxis Z="-1" /></IVASeat>
+    </Components></Part></Assets>`;
 
   function reexport(xml: string): XmlDocument {
     const parsed = gameDataFromAssets(xml, 'P', new DOMParser())!;
@@ -1276,28 +1292,28 @@ describe('EVA door ⇄ IVA seat link (D17)', () => {
     );
   }
 
-  it('reproduces <EVADoor SeatId> and <IVASeat Id> verbatim', () => {
+  it('reproduces <EVADoor SeatId> and <IVASeat Key> verbatim', () => {
     const doc = reexport(IMPORTED);
     expect(tags(doc, 'EVADoor')[0].getAttribute('SeatId')).toBe('pilot');
-    expect(tags(doc, 'IVASeat')[0].getAttribute('Id')).toBe('pilot');
+    expect(tags(doc, 'IVASeat')[0].getAttribute('Key')).toBe('pilot');
   });
 
   it('leaves both attributes absent when the source authored neither', () => {
     const doc = reexport(
-      `<Assets><PartGameData Id="P">
+      `<Assets><Part Id="P"><Components>
         <EVADoor />
         <IVASeat><Position X="1" /><ForwardAxis X="1" /><UpAxis Z="-1" /></IVASeat>
-      </PartGameData></Assets>`,
+      </Components></Part></Assets>`,
     );
     expect(tags(doc, 'EVADoor')[0].hasAttribute('SeatId')).toBe(false);
-    expect(tags(doc, 'IVASeat')[0].hasAttribute('Id')).toBe(false);
+    expect(tags(doc, 'IVASeat')[0].hasAttribute('Key')).toBe(false);
   });
 });
 
 // ── N parts in ONE Assets document (MULTI_PART_PLAN P3.03) ───────────────────
 //
 // An Assets file is a flat polymorphic list (`KSA/AssetBundle.cs` — `[XmlRoot("Assets")]` over
-// `List<SerializedId>`), so N `<Part>` / `<PartGameData>` / `<SubPartGameData>` /
+// `List<SerializedId>`), so N `<Part>` / `<Part>` / `<SubPart>` /
 // `<FixedReaction>` siblings in one file are first-class (plan §0.3 fact 1). Everything above
 // pins single-entry parity (I8); everything here pins what N entries add: entry order, one
 // remap PER entry, per-part entity-id spaces (I3), and the hoisted reaction block.
@@ -1346,24 +1362,24 @@ describe('serializePartsXml — N parts in one <Assets>', () => {
 
   it('keeps each part’s placements inside its OWN <Part>', () => {
     const [a, b] = tags(doc, 'Part');
-    expect(tags(a, 'SubPart').map((e) => e.getAttribute('Id'))).toEqual(['a_1']);
-    expect(tags(b, 'SubPart').map((e) => e.getAttribute('Id'))).toEqual(['b_1']);
+    expect(tags(a, 'SubPart').map((e) => e.getAttribute('Key'))).toEqual(['a_1']);
+    expect(tags(b, 'SubPart').map((e) => e.getAttribute('Key'))).toEqual(['b_1']);
   });
 
   it('remaps each part’s placement through ITS OWN variant map', () => {
     // One shared built-in template, two variant ids — the `ns` segment is what keeps part B's
     // SubPartGameData from merging onto part A's SubPart (KSA registers the id globally).
-    expect(subPartById(doc, 'a_1').getAttribute('InstanceOf')).toBe(VARIANT_A);
-    expect(subPartById(doc, 'b_1').getAttribute('InstanceOf')).toBe(VARIANT_B);
-    expect(serializePartsXml(fleetEntries)).not.toContain(`InstanceOf="${SHARED_TEMPLATE}"`);
+    expect(subPartById(doc, 'a_1').getAttribute('Ref')).toBe(VARIANT_A);
+    expect(subPartById(doc, 'b_1').getAttribute('Ref')).toBe(VARIANT_B);
+    expect(serializePartsXml(fleetEntries)).not.toContain(`Ref="${SHARED_TEMPLATE}"`);
   });
 
   // I3 — entity ids are unique only WITHIN one part. Two parts may both carry `_connector1`,
   // and each `<Part>` is its own scope in KSA, so the collision is legal and must round-trip.
   it('serializes colliding per-part connector ids as two independent connectors', () => {
     const [a, b] = tags(doc, 'Part');
-    expect(tags(a, 'Connector').map((e) => e.getAttribute('Id'))).toEqual(['_connector1']);
-    expect(tags(b, 'Connector').map((e) => e.getAttribute('Id'))).toEqual(['_connector1']);
+    expect(tags(a, 'Connector').map((e) => e.getAttribute('Key'))).toEqual(['_connector1']);
+    expect(tags(b, 'Connector').map((e) => e.getAttribute('Key'))).toEqual(['_connector1']);
     // Same id, different geometry — proof the two are not one merged element.
     expect(child(tags(a, 'Connector')[0], 'Position')!.getAttribute('X')).toBe('1');
     expect(child(tags(b, 'Connector')[0], 'Position')!.getAttribute('X')).toBe('-1');
@@ -1374,19 +1390,19 @@ describe('serializeGameDataXml — N parts in one <Assets>', () => {
   const xml = serializeGameDataXml(fleetEntries, 'Fleet');
   const doc = parse(xml);
 
-  it('emits one <PartGameData> per entry, in ENTRY order', () => {
-    expect(tags(doc, 'PartGameData').map((e) => e.getAttribute('Id'))).toEqual(['ShipA', 'ShipB']);
-    // Each part's connectors stay under its own <PartGameData>, colliding id and all (I3).
-    const [a, b] = tags(doc, 'PartGameData');
-    expect(tags(a, 'Connector').map((e) => e.getAttribute('Id'))).toEqual(['_connector1']);
-    expect(tags(b, 'Connector').map((e) => e.getAttribute('Id'))).toEqual(['_connector1']);
+  it('emits one <Part> per entry, in ENTRY order', () => {
+    expect(tags(doc, 'Part').map((e) => e.getAttribute('Id'))).toEqual(['ShipA', 'ShipB']);
+    // Each part's connectors stay under its own <Part>, colliding id and all (I3).
+    const [a, b] = tags(doc, 'Part');
+    expect(tags(a, 'Connector').map((e) => e.getAttribute('Key'))).toEqual(['_connector1']);
+    expect(tags(b, 'Connector').map((e) => e.getAttribute('Key'))).toEqual(['_connector1']);
   });
 
-  it('attaches each part’s <SubPartGameData> to ITS OWN remapped variant id', () => {
-    const blocks = tags(doc, 'SubPartGameData');
+  it('attaches each part’s <SubPart> to ITS OWN remapped variant id', () => {
+    const blocks = tags(doc, 'SubPart');
     expect(blocks.map((e) => e.getAttribute('Id'))).toEqual([VARIANT_A, VARIANT_B]);
     // The shared built-in template is NEVER redefined — that is the whole point of the ns.
-    expect(xml).not.toContain(`<SubPartGameData Id="${SHARED_TEMPLATE}">`);
+    expect(xml).not.toContain(`<SubPart Id="${SHARED_TEMPLATE}">`);
     // Each block carries its own part's light, unmerged.
     expect(child(blocks[0], 'Range')!.getAttribute('Value')).toBe('5');
     expect(child(blocks[1], 'Range')!.getAttribute('Value')).toBe('9');
@@ -1429,10 +1445,10 @@ describe('serializeGameDataXml — N parts in one <Assets>', () => {
       ),
     );
     expect(rootChildTags(laid)).toEqual([
-      'PartGameData', // ShipA
-      'SubPartGameData',
-      'PartGameData', // ShipB
-      'SubPartGameData',
+      'Part', // ShipA
+      'SubPart',
+      'Part', // ShipB
+      'SubPart',
       'FixedReaction', // …then every reaction, hoisted to the end of the file
       'FixedReaction',
     ]);

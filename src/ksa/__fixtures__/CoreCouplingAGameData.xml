@@ -1,0 +1,149 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<Assets>
+    <Part Id="CoreCouplingA_Prefab_DockingPort1WAndrogynousA" Modify="Patch">
+        <EditorTags Modify="Extend">
+            <EditorTag Ref="Coupling" />
+        </EditorTags>
+        <Diameters Modify="Extend">
+            <Diameter M="1"/>
+        </Diameters>
+        <Components Modify="Extend">
+            <DockingPort>
+                <Connector KeyRef="_connector3" />
+                <LatchingKineticEnergy J="50" />
+                <PushoffImpulse Ns="7000" />
+            </DockingPort>
+            <Collider Key="Collider1">
+              <Colliders>
+                <Cylinder Key="CylinderCollider1">
+                  <LocationAsmb X="-0.1" Y="0" Z="0" />
+                  <Collider2Asmb X="0" Y="0" Z="1.57" />
+                  <LengthY M="0.4" />
+                  <Radius M="0.5" />
+                </Cylinder>
+              </Colliders>
+            </Collider>
+        </Components>
+    </Part>
+
+    <Part Id="CoreCouplingA_Prefab_DecouplerQuarterWA" Modify="Patch">
+        <EditorTags Modify="Extend">
+            <EditorTag Ref="Coupling" />
+        </EditorTags>
+        <Diameters Modify="Extend">
+            <Diameter M="0.25"/>
+        </Diameters>
+        <Components Modify="Extend">
+            <Decoupler Force="5">
+              <Connector KeyRef="_connector23" />
+            </Decoupler>
+        </Components>
+        <InertMasses Modify="Extend">
+            <HollowOpenCylinderMass>
+                <Material Ref="Aluminum.2014" Phase="Solid" />
+                <Length M="0.04" />
+                <OuterRadius M="0.125" />
+                <WallThickness Mm="6" />
+            </HollowOpenCylinderMass>
+        </InertMasses>
+    </Part>
+
+    <Part Id="CoreCouplingA_Prefab_DecouplerHalfWA" Modify="Patch">
+        <EditorTags Modify="Extend">
+            <EditorTag Ref="Coupling" />
+        </EditorTags>
+        <Diameters Modify="Extend">
+            <Diameter M="0.5"/>
+        </Diameters>
+        <Components Modify="Extend">
+            <Decoupler Force="35">
+              <Connector KeyRef="_connector19" />
+            </Decoupler>
+        </Components>
+        <InertMasses Modify="Extend">
+            <HollowOpenCylinderMass>
+                <Material Ref="Aluminum.2014" Phase="Solid" />
+                <Length M="0.07" />
+                <OuterRadius M="0.25" />
+                <WallThickness Mm="6" />
+            </HollowOpenCylinderMass>
+        </InertMasses>
+    </Part>
+
+    <Part Id="CoreCouplingA_Prefab_Decoupler1WA" Modify="Patch">
+        <EditorTags Modify="Extend">
+            <EditorTag Ref="Coupling" />
+        </EditorTags>
+        <Diameters Modify="Extend">
+            <Diameter M="1"/>
+        </Diameters>
+        <Components Modify="Extend">
+            <Decoupler Force="300">
+              <Connector KeyRef="_connector8" />
+            </Decoupler>
+        </Components>
+        <InertMasses Modify="Extend">
+            <HollowOpenCylinderMass>
+                <Material Ref="Aluminum.2014" Phase="Solid" />
+                <Length M="0.12" />
+                <OuterRadius M="0.5" />
+                <WallThickness Mm="6" />
+            </HollowOpenCylinderMass>
+        </InertMasses>
+    </Part>
+
+    <Part Id="CoreCouplingA_Prefab_Decoupler2WA" Modify="Patch">
+        <EditorTags Modify="Extend">
+            <EditorTag Ref="Coupling" />
+        </EditorTags>
+        <Diameters Modify="Extend">
+            <Diameter M="2"/>
+        </Diameters>
+        <Components Modify="Extend">
+            <Decoupler Force="2000">
+              <Connector KeyRef="_connector11" />
+            </Decoupler>
+        </Components>
+        <InertMasses Modify="Extend">
+            <HollowOpenCylinderMass>
+                <Material Ref="Aluminum.2014" Phase="Solid" />
+                <Length M="0.13" />
+                <OuterRadius M="1" />
+                <WallThickness Mm="6" />
+            </HollowOpenCylinderMass>
+        </InertMasses>
+    </Part>
+
+    <Part Id="CoreCouplingA_Prefab_Decoupler3WA" Modify="Patch">
+        <EditorTags Modify="Extend">
+            <EditorTag Ref="Coupling" />
+        </EditorTags>
+        <Diameters Modify="Extend">
+            <Diameter M="3"/>
+        </Diameters>
+        <Components Modify="Extend">
+            <Decoupler Force="7000">
+              <Connector KeyRef="_connector15" />
+            </Decoupler>
+        </Components>
+        <InertMasses Modify="Extend">
+            <HollowOpenCylinderMass>
+                <Material Ref="Aluminum.2014" Phase="Solid" />
+                <Length M="0.21" />
+                <OuterRadius M="1.5" />
+                <WallThickness Mm="6" />
+            </HollowOpenCylinderMass>
+        </InertMasses>
+    </Part>
+
+    <SubPart Id="CoreCouplingA_Subpart_BaseA" Modify="Patch">
+        <InertMasses Modify="Extend">
+            <HollowOpenCylinderMass>
+                <Material Ref="Aluminum.2014" Phase="Solid" />
+                <Length M="0.37" />
+                <OuterRadius M="0.5" />
+                <WallThickness Mm="85" />
+            </HollowOpenCylinderMass>
+        </InertMasses>
+    </SubPart>
+</Assets>

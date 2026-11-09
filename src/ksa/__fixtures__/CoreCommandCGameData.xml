@@ -1,0 +1,71 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<Assets>
+    <Part Id="CoreCommandC_Prefab_ProbeCoreSmallA" Modify="Patch">
+        <EditorTags Modify="Extend">
+            <EditorTag Ref="Capsules" />
+        </EditorTags>
+        <Diameters Modify="Extend">
+            <Diameter M="0.5"/>
+        </Diameters>
+        <InertMasses Modify="Extend">
+            <SolidCuboidMass>
+                <Mass Kg="30"/>
+                <LengthX M="0.5"/>
+                <LengthY M="0.5"/>
+                <LengthZ M="0.5"/>
+            </SolidCuboidMass>
+        </InertMasses>
+        <Components Modify="Extend">
+            <Control />
+            <Battery>
+                <MaximumCapacity J="2500" />
+            </Battery>
+        </Components>
+    </Part>
+
+    <Part Id="CoreCommandC_Prefab_ProbeCoreMediumA" Modify="Patch">
+        <EditorTags Modify="Extend">
+            <EditorTag Ref="Capsules" />
+        </EditorTags>
+        <Diameters Modify="Extend">
+            <Diameter M="0.5"/>
+        </Diameters>
+        <InertMasses Modify="Extend">
+            <SolidCuboidMass>
+                <Mass Kg="60"/>
+                <LengthX M="0.494"/>
+                <LengthY M="0.999"/>
+                <LengthZ M="0.896"/>
+            </SolidCuboidMass>
+        </InertMasses>
+        <Components Modify="Extend">
+            <Control />
+            <Battery>
+                <MaximumCapacity J="5000" />
+            </Battery>
+        </Components>
+    </Part>
+
+    <Part Id="CoreCommandC_Prefab_ProbeCoreLargeA" Modify="Patch">
+        <EditorTags Modify="Extend">
+            <EditorTag Ref="Capsules" />
+        </EditorTags>
+        <Diameters Modify="Extend">
+            <Diameter M="0.5"/>
+        </Diameters>
+        <InertMasses Modify="Extend">
+            <SolidCuboidMass>
+                <Mass Kg="120"/>
+                <LengthX M="0.775"/>
+                <LengthY M="1.314"/>
+                <LengthZ M="1.318"/>
+            </SolidCuboidMass>
+        </InertMasses>
+        <Components Modify="Extend">
+            <Control />
+            <Battery>
+                <MaximumCapacity J="10000" />
+            </Battery>
+        </Components>
+    </Part>
+</Assets>

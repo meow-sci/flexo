@@ -2,8 +2,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { buildPreviewManifest } from './previewManifest';
-import { ASSET_FILES } from '../src/ksa/catalog';
-import { parsePartsFile, type CatalogPart } from '../src/ksa/partCatalog';
+import { CORE_CONTENT_FILES } from '../src/ksa/coreFiles';
+import { resolveContent } from '../src/ksa/contentXml';
+import { catalogPartsFromContent } from '../src/ksa/partCatalog';
 import { ENVIRONMENT_PRESETS } from '../src/state/environmentPresets';
 import { hasKsaAssets, KSA_ASSETS_DIR } from '../src/ksa/ksaTestAssets';
 
@@ -21,8 +22,8 @@ describe.runIf(hasKsaAssets)('buildPreviewManifest against the real KSA asset tr
   });
 
   it('contains known Core prefab ids', () => {
-    expect(manifest.part_ids).toContain('CoreStructuralA_Prefab_EnginePlateLowProfile2WA');
-    expect(manifest.part_ids).toContain('CoreStructuralA_Prefab_RadialDecouplerLargeA');
+    expect(manifest.part_ids).toContain('CoreCommandB_Prefab_SmallLanderB');
+    expect(manifest.part_ids).toContain('CoreLifeSupportA_Prefab_SupplyLockerA');
     expect(manifest.part_ids).toContain('CoreCommandA_Prefab_MediumCapsuleVariantA');
   });
 
@@ -42,20 +43,15 @@ describe.runIf(hasKsaAssets)('buildPreviewManifest against the real KSA asset tr
   // parts the viewer rejects (or hide ones it accepts). vitest runs under happy-dom, so
   // this is a genuinely independent, non-xmldom parse of the same bytes.
   it('matches what the browser DOMParser produces for the same files', () => {
-    const parts: CatalogPart[] = [];
-    for (const file of ASSET_FILES) {
+    const files = CORE_CONTENT_FILES.flatMap((file) => {
       const abs = join(KSA_ASSETS_DIR, file);
-      if (!existsSync(abs)) continue;
+      if (!existsSync(abs)) return [];
       const xml = readFileSync(abs, 'utf-8')
-        .replace(/^﻿/, '')
-        // happy-dom's XML parser rejects a SINGLE-quoted XML declaration ("Malformed
-        // declaration expecting version") — KSA writes `<?xml version='1.0'?>`, which is
-        // valid XML that every real browser accepts. Normalising the declaration is purely
-        // a happy-dom workaround; it touches nothing the parser under test reads.
+        .replace(/^\uFEFF/, '')
         .replace(/^<\?xml[^?]*\?>/, '<?xml version="1.0" encoding="UTF-8"?>');
-      parsePartsFile(new DOMParser().parseFromString(xml, 'application/xml'), file, parts);
-    }
-    const ids = [...new Set(parts.map((p) => p.id))].sort((a, b) => a.localeCompare(b));
+      return [{ file, doc: new DOMParser().parseFromString(xml, 'application/xml') }];
+    });
+    const ids = catalogPartsFromContent(resolveContent(files)).map((p) => p.id);
     expect(manifest.part_ids).toEqual(ids);
   });
 });

@@ -45,6 +45,23 @@ describe('stock mass definitions', () => {
     expect(massDefinitionVolumeM3(cylinder)).toBeCloseTo(Math.PI * 0.5 ** 2 * 0.2468, 12);
   });
 
+  it('computes hollow sphere shells with native wall and radius clamping', () => {
+    const shell = createMassDefinition('HollowSphereMass', 'shell');
+    shell.massKg = null;
+    shell.materialId = 'Aluminum.2014(s)';
+    shell.dimensions = { radiusM: 0.175, wallThicknessM: 0.002 };
+    const volume = ((4 * Math.PI) / 3) * (0.175 ** 3 - 0.173 ** 3);
+    expect(massDefinitionVolumeM3(shell)).toBeCloseTo(volume, 12);
+    expect(resolveMassDefinitionKg(shell, DENSITIES)).toBeCloseTo(volume * 2800, 10);
+    shell.sweepRad = Math.PI;
+    expect(massDefinitionVolumeM3(shell)).toBeCloseTo(volume / 2, 12);
+    shell.sweepRad = null;
+    shell.dimensions = { radiusM: 0.1, wallThicknessM: 0.2 };
+    expect(massDefinitionVolumeM3(shell)).toBeCloseTo(((4 * Math.PI) / 3) * 0.2 ** 3, 12);
+    shell.dimensions.wallThicknessM = -1;
+    expect(massDefinitionVolumeM3(shell)).toBe(0);
+  });
+
   it('computes an open cylindrical shell rather than a capped tank', () => {
     const definition = createMassDefinition('HollowOpenCylinderMass', 'shell');
     definition.massKg = null;
@@ -243,7 +260,7 @@ describe('combined defined mass', () => {
     definition.massKg = 25;
     const catalog = new Map([['template', [definition]]]);
     const data = createSubPartGameData('template');
-    data.unknownChildren = [{ tag: 'HollowSphereMass', attrs: {}, children: [] }];
+    data.unknownChildren = [{ tag: 'HollowCuboidMass', attrs: {}, children: [] }];
     part.subPartGameData = [data];
     part.placements = [
       {

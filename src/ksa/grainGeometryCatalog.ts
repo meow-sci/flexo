@@ -87,7 +87,8 @@ export function parseGrainGeometriesFile(doc: Document, out: GrainGeometryTable[
   for (const el of Array.from(doc.getElementsByTagName('GrainGeometry'))) {
     const id = el.getAttribute('Id')?.trim();
     if (!id) continue;
-    const rows = directChildren(el, 'DepthCondition')
+    const conditions = directChildren(el, 'DepthConditions')[0];
+    const rows = (conditions ? directChildren(conditions, 'DepthCondition') : [])
       .map((row) => ({
         depth: readValue(directChildren(row, 'Depth')[0]),
         perimeter: readValue(directChildren(row, 'Perimeter')[0]),

@@ -828,8 +828,8 @@ describe('editorStore', () => {
           tag: 'Aligned',
           attrs: {},
           children: [
-            { tag: 'ConnectorRef', attrs: { Id: '_connector19' }, children: [] },
-            { tag: 'ConnectorRef', attrs: { Id: '_connector41' }, children: [] },
+            { tag: 'Connector', attrs: { KeyRef: '_connector19' }, children: [] },
+            { tag: 'Connector', attrs: { KeyRef: '_connector41' }, children: [] },
           ],
         },
       ],
@@ -865,8 +865,8 @@ describe('editorStore', () => {
         tag: 'Aligned',
         attrs: {},
         children: [
-          { tag: 'ConnectorRef', attrs: { Id: '_connector2' }, children: [] },
-          { tag: 'ConnectorRef', attrs: { Id: '_connector3' }, children: [] },
+          { tag: 'Connector', attrs: { KeyRef: '_connector2' }, children: [] },
+          { tag: 'Connector', attrs: { KeyRef: '_connector3' }, children: [] },
         ],
       },
     ]);
@@ -1071,7 +1071,7 @@ describe('editorStore', () => {
     undo(); // undo the shape change
     expect(spd()?.tanks[0].shape).toBe('Cylindrical');
     removeTank(tmpl, 0);
-    expect(spd()).toBeUndefined(); // entry pruned when tanks empty
+    expect(spd()?.tanks).toEqual([]); // retain the explicit empty template override
     undo();
     expect(spd()?.tanks.length).toBe(1);
   });
@@ -4175,7 +4175,7 @@ describe('removeAllTemplateData', () => {
 
     removeAllTemplateData(template);
 
-    expect($part.get().subPartGameData).toEqual([]);
+    expect($part.get().subPartGameData).toEqual([createSubPartGameData(template)]);
     expect($part.get().lights.map((l) => l.ownerTemplateId)).toEqual([null]);
     expect($historyList.get().length).toBe(before + 1);
 

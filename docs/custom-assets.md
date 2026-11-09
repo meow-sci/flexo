@@ -5,9 +5,10 @@ textures (per PBR channel), author reusable **materials** (base color as a picke
 color or an image, metalness/roughness as sliders or grayscale maps, normal maps,
 packed ORM), create a parametric primitive mesh (box / cylinder / sphere / plane),
 texture it, place/transform it like any built-in SubPart, and export the whole
-thing as a KSA part mod that **loads and renders in the game** (diffuse pipeline
-validated in-game 2026-05-30; the full-material pipeline + UNORM re-tag await an
-in-game pass — see "Pending in-game verification" below).
+thing as a mod targeting KSA 5801. The diffuse pipeline was checked in-game on
+2026-05-30, before the current XML overhaul. Current schema/browser checks are
+recorded in [the 5801 upgrade](../plans/KSA_5801_UPGRADE.md); running-game checks
+remain separate — see "Pending in-game verification" below.
 
 A **model imported from Blender** (`.glb` / `.gltf`) rides the same machinery: it becomes
 ordinary `CustomMesh` descriptors — one SubPart per (glTF mesh × material), one placement
@@ -221,7 +222,7 @@ source — so the confirm dialog says it in as many words before the user commit
 
 #### Imported materials — the glTF → KSA slot mapping
 
-KSA's `<PbrMaterial>` has **five texture slots and zero scalars**, so **every glTF factor is
+KSA's `<PbrMaterial>` has **six texture slots and zero scalars**, so **every glTF factor is
 baked into pixels** at import (there is nowhere downstream to put a number):
 
 | KSA slot | glTF source | Import handling |
@@ -354,9 +355,9 @@ same path as hand-authored ones. Nothing about them is a parallel universe.
   **overwrites binaries** deterministically.
 - **One mod, N parts, one atlas each.** Every included part with custom meshes contributes its
   own `<MeshAtlas>` to the shared `<Base>Assets.xml`; multiple atlases per file are legal
-  because KSA registers GLB meshes by NAME into one global first-wins registry. That is also
-  why every id here — mesh names, `_VM` names, `<SubPart>`/`<PartModel>`/`<PbrMaterial>` ids —
-  must be unique across the whole PROJECT, not per part; `assetsXmlSerializer.claimId` throws
+  because KSA registers GLB meshes globally by NAME. Mesh names, `_VM` names and
+  top-level SubPart/Material/Texture/Atlas IDs must be unique across the whole
+  project; PartModel Keys are local to their owner; `assetsXmlSerializer.claimId` throws
   if one ever repeats. See [scope/part-and-subpart-xml.md](../scope/part-and-subpart-xml.md)
   ▸ *Multi-part export*.
 
@@ -555,7 +556,7 @@ flexo's own `MeshAtlasCache.getObjectByName` resolves on re-import. Guarded by
 
 ### Custom materials (`CustomMaterial`) + solid texels — every PbrMaterial carries D+N+ORM
 
-KSA's `<PbrMaterial>` has **exactly five texture slots and zero scalar params**
+KSA's `<PbrMaterial>` has six texture slots and zero scalar params
 (`PbrMaterialReference.cs`: Diffuse / Normal / AoRoughMetal / Emissive / ThinFilm), and
 BOTH the thumbnail renderer (`ThumbnailRenderResources.AddDraw`) **and** every placed
 part (`PartModel.WriteInstancesToGpu`) dereference Diffuse/Normal/PBRMap with **no null
@@ -594,10 +595,10 @@ through the same KSA-replica shader patch, so editor == game by construction.
 
 ```
 flexo-parts/
-  mod.toml                          # assets = [ "...Part.xml", "...GameData.xml", "...Assets.xml" ]
-  <Name>Part.xml                    # placements; custom SubParts via InstanceOf="<subPartId>"
+  mod.toml                          # assets = [ "...Assets.xml", "...Part.xml", "...GameData.xml" ]
+  <Name>Part.xml                    # placements; custom SubParts via Key and Ref
   <Name>GameData.xml
-  <Name>Assets.xml                  # <MeshAtlas> + <PbrMaterial>(s) + <SubPart>(s, each with a <MeshView>)
+  <Name>Assets.xml                  # <MeshAtlas> + <Texture>/<PbrMaterial> + <SubPart> definitions
   Meshes/<Name>_MeshAtlas.glb       # one geometry GLB; per subpart: render mesh + <id>_VM view mesh
                                     #   (primitive params, kitten bakes AND imported glTF geometry
                                     #    all land here; heavy <id>_VM meshes are decimated)
@@ -611,26 +612,29 @@ Example `<Name>Assets.xml`:
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <Assets>
-    <MeshAtlas Path="Meshes/MyMod_MeshAtlas.glb" />
+    <MeshAtlas Id="MyMod_MeshAtlas" Path="Meshes/MyMod_MeshAtlas.glb" />
+    <Texture Id="Panel_Diffuse" Path="Textures/dean_tex_xy_Diffuse.ktx2" Category="Vessel" />
+    <Texture Id="Panel_Normal" Path="Textures/MyMod_FlatNormal.ktx2" Category="Vessel" />
+    <Texture Id="Panel_ORM" Path="Textures/MyMod_NeutralORM.ktx2" Category="Vessel" />
     <PbrMaterial Id="flexo_Panel_ab12cd_Material">
-        <Diffuse Path="Textures/dean_tex_xy_Diffuse.ktx2" Category="Vessel" />
-        <Normal Path="Textures/MyMod_FlatNormal.ktx2" Category="Vessel" />
-        <AoRoughMetal Path="Textures/MyMod_NeutralORM.ktx2" Category="Vessel" />
+        <Diffuse Ref="Panel_Diffuse" />
+        <Normal Ref="Panel_Normal" />
+        <AoRoughMetal Ref="Panel_ORM" />
     </PbrMaterial>
     <SubPart Id="flexo_Panel_ab12cd">
-        <PartModel>
-            <Mesh Id="flexo_Panel_ab12cd" />
-            <Material Id="flexo_Panel_ab12cd_Material" />
-        </PartModel>
-        <MeshView>
-            <Mesh Id="flexo_Panel_ab12cd_VM" />
-        </MeshView>
+        <Components>
+            <PartModel Key="flexo_Panel_ab12cd_Model">
+                <Mesh Ref="flexo_Panel_ab12cd" />
+                <Material Ref="flexo_Panel_ab12cd_Material" />
+            </PartModel>
+            <MeshView><Mesh Ref="flexo_Panel_ab12cd_VM" /></MeshView>
+        </Components>
     </SubPart>
 </Assets>
 ```
 
 `mod.toml`'s `assets` lists only **XML** files; meshes/textures are referenced by
-relative `Path` from the Assets XML (Core does the same). `<Mesh Id>` equals the
+top-level file rows by mod-relative `Path`. Material slots reference those Texture IDs. `<Mesh Ref>` equals the
 named mesh inside the GLB. Every SubPart also emits a `<MeshView>` (pickability is
 independent of texturing).
 
@@ -652,8 +656,7 @@ a `<MeshView>` element. The raycast then runs a watertight triangle test against
 view mesh's vertices (`MeshReference.PositionCompare`).
 
 So every custom SubPart emits a `<MeshView>` pointing at a `<id>_VM` mesh, and
-`buildMeshAtlasGlb` writes that `_VM` mesh into the atlas. Every built-in Core SubPart ships
-a distinct `_VM` mesh; this mirrors that exactly. The `_VM` node must be a **distinct**
+`buildMeshAtlasGlb` writes that `_VM` mesh into the atlas. Built-in view meshes retain their original references on copied templates. The `_VM` node must be a **distinct**
 geometry instance in the GLB, or `GLTFExporter` dedupes it with the render mesh into a
 single glTF mesh and KSA registers only one name.
 

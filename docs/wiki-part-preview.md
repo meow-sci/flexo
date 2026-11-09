@@ -150,9 +150,9 @@ transitively) wraps its `localStorage` access in a try/catch and falls back to a
 in-memory engine when the browser throws on an opaque origin. Verified end-to-end at
 200×200 and 800×400 against the production build with `sandbox="allow-scripts"`, from a
 cross-origin host page: `localStorage` genuinely throws `SecurityError` inside the frame,
-the part still renders, and the only console output is a benign 404 for the
-non-existent `CoreIVAPropAGameData.xml` (an optional GameData sibling the catalog loader
-treats as absent — the main app does the same).
+the part still renders. That historical run used the earlier catalog loader. The
+5801 loader uses an explicit manifest-derived file list and no longer requests a
+nonexistent CoreIVAPropAGameData sibling.
 
 What *is* required:
 
@@ -320,18 +320,11 @@ See [asset-pipeline.md](./asset-pipeline.md) for the `KSA_ASSETS_DIR` tree itsel
 (a plain write rather than `this.emitFile`, so the file lands *after* `emptyOutDir` has
 run) and serves the same bytes from dev middleware.
 
-The part list is **not** re-derived with a bespoke rule. The plugin reads the same
-`ASSET_FILES` the browser fetches out of `KSA_ASSETS_DIR`, parses them with
-`@xmldom/xmldom` (DOM-core compatible for the APIs the parser uses), and feeds each
-`Document` through the app's **own** `parsePartsFile` from `src/ksa/partCatalog.ts`. So
-"a part exists" has exactly one definition — `<Part Id>` present and at least one
-renderable placement — and the manifest can never advertise a part the viewer rejects, or
-hide one it accepts. GameData siblings are irrelevant here: they merge data into existing
-entries but never add parts.
-
-Two robustness details: a BOM before the `<?xml?>` declaration is stripped (the browser's
-fetch drops it; `@xmldom` rejects it), and ids are de-duplicated defensively even though
-Core repeats none.
+The plugin reads the same manifest-ordered Core files as the browser, applies the
+shared `resolveContent` prepass, and calls `catalogPartsFromContent`. All concrete
+Part IDs, including explicit cosmetic family members and standalone gameplay-file
+definitions, remain addressable. Test content is excluded. A BOM before the XML
+declaration is stripped for `@xmldom/xmldom`.
 
 `skybox_ids` comes from `ENVIRONMENT_PRESETS` in `src/state/environmentPresets.ts` — a
 deliberately dependency-free module (no nanostores, no `import.meta.env`, no browser
@@ -408,14 +401,12 @@ test alike.
 | `--no-turntable` | off | Skip animated WebP synthesis; img2webp is then not needed. Existing turntable files remain discoverable in the patched manifest. |
 | `--verbose` | off | Forward every page console message, not just errors. |
 
-One 404 is normal and is now reported as a note rather than an error: the catalog fetches a
-`<Base>GameData.xml` sibling for every asset file, and `CoreIVAPropAAssets.xml` has none.
-Chromium's console line for it carries no URL, so the driver drops that message and reports
-404s from the network layer instead — absent GameData siblings as an expected-note, anything
-else as a `WARNING` naming the path.
+The current catalog fetches only the explicit Core file list. Catalog, mesh and texture
+404s are unexpected. The capture driver reports network failures by URL; its historical
+optional-sibling diagnostic allowance does not mean a missing current pack is acceptable.
 
 A part that loads but has **no renderable geometry** is reported and skipped without failing
-the run: `KittenBackPackPart`'s only placement instances `<SubPart Id="KittenBackPackSubPart"/>`,
+the run: `KittenBackPackPart`'s only placement instances `<SubPart Key="KittenBackPackSubPart" Ref="KittenBackPackSubPart"/>`,
 which carries no mesh, so the live embed renders it just as empty. Any other failure fails
 the run (exit 1) — every other `part_id` is renderable by construction, so a failure is a
 real bug, and CI must not publish a manifest with holes in it.

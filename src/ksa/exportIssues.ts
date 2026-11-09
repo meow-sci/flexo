@@ -119,8 +119,8 @@ export function collectExportIssues(
   const seen = new Set<string>();
   const dupes = new Set<string>();
   for (const placement of part.placements) {
-    if (seen.has(placement.instanceId)) dupes.add(placement.instanceId);
-    seen.add(placement.instanceId);
+    if (seen.has(placement.instanceId.toLowerCase())) dupes.add(placement.instanceId);
+    seen.add(placement.instanceId.toLowerCase());
   }
   if (dupes.size > 0) {
     // A `block`: KSA keys placements by instance id and refuses a Part that repeats one.
@@ -321,9 +321,9 @@ export function collectProjectExportIssues(
   // ── duplicate Part Id: two <Part Id>/<PartGameData Id> siblings, first wins ─
   const byPartId = new Map<string, NamedExportPart>();
   for (const entry of parts) {
-    const first = byPartId.get(entry.part.partId);
+    const first = byPartId.get(entry.part.partId.toLowerCase());
     if (!first) {
-      byPartId.set(entry.part.partId, entry);
+      byPartId.set(entry.part.partId.toLowerCase(), entry);
       continue;
     }
     issues.push({
@@ -342,13 +342,13 @@ export function collectProjectExportIssues(
   // itself is what actually guarantees no two parts share a variant namespace.
   const byNs = new Map<string, NamedExportPart>();
   for (const entry of parts) {
-    const first = byNs.get(entry.ns);
+    const first = byNs.get(entry.ns.toLowerCase());
     if (!first) {
-      byNs.set(entry.ns, entry);
+      byNs.set(entry.ns.toLowerCase(), entry);
       continue;
     }
     // Identical Part Ids are already reported above; don't say it twice.
-    if (first.part.partId === entry.part.partId) continue;
+    if (first.part.partId.toLowerCase() === entry.part.partId.toLowerCase()) continue;
     issues.push({
       severity: 'block',
       area: 'part',
@@ -363,9 +363,9 @@ export function collectProjectExportIssues(
   const meshOwners = new Map<string, NamedExportPart>();
   for (const entry of parts) {
     for (const mesh of entry.part.customMeshes) {
-      const first = meshOwners.get(mesh.subPartId);
+      const first = meshOwners.get(mesh.subPartId.toLowerCase());
       if (!first) {
-        meshOwners.set(mesh.subPartId, entry);
+        meshOwners.set(mesh.subPartId.toLowerCase(), entry);
         continue;
       }
       if (first.entryId === entry.entryId) continue;
@@ -387,9 +387,9 @@ export function collectProjectExportIssues(
   const reactionOwners = new Map<string, { entry: NamedExportPart; reaction: CustomReaction }>();
   for (const entry of parts) {
     for (const reaction of entry.part.customReactions) {
-      const first = reactionOwners.get(reaction.id);
+      const first = reactionOwners.get(reaction.id.toLowerCase());
       if (!first) {
-        reactionOwners.set(reaction.id, { entry, reaction });
+        reactionOwners.set(reaction.id.toLowerCase(), { entry, reaction });
         continue;
       }
       if (first.entry.entryId === entry.entryId) continue;

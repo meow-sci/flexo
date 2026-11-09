@@ -1,5 +1,5 @@
 /**
- * Editable mass shapes authored by Core @ 2026.10.10.5554. Their dimensions and
+ * Editable mass shapes authored by the current Core content. Their dimensions and
  * volumes follow KSA's *MassTemplate classes and MassGeometry.cs. This model
  * describes explicit mass definitions, not a part's tank walls or stored fuel.
  */
@@ -9,6 +9,7 @@ export const MASS_SHAPES = [
   'CustomMass',
   'SolidCuboidMass',
   'SolidSphereMass',
+  'HollowSphereMass',
   'SolidCylinderMass',
   'HollowOpenCylinderMass',
   'HollowOpenTruncatedConeMass',
@@ -109,6 +110,7 @@ export const MASS_SHAPE_DEFS: Record<MassShape, MassShapeDefinition> = {
     revolved: false,
   },
   SolidSphereMass: { label: 'Solid sphere', dimensions: [RADIUS], revolved: true },
+  HollowSphereMass: { label: 'Hollow sphere', dimensions: [RADIUS, WALL], revolved: true },
   SolidCylinderMass: {
     label: 'Solid cylinder',
     dimensions: [LENGTH, RADIUS],
@@ -220,6 +222,11 @@ export function massDefinitionVolumeM3(definition: MassDefinition): number {
       return Math.max(d('lengthXM'), 0) * Math.max(d('lengthYM'), 0) * Math.max(d('lengthZM'), 0);
     case 'SolidSphereMass':
       return (2 * sweep * Math.max(d('radiusM'), 0) ** 3) / 3;
+    case 'HollowSphereMass': {
+      const wall = Math.max(d('wallThicknessM'), 0);
+      const radius = Math.max(d('radiusM'), wall);
+      return shellVolume((2 * sweep * radius ** 3) / 3, (2 * sweep * (radius - wall) ** 3) / 3);
+    }
     case 'SolidCylinderMass':
       return cylinderVolume(d('lengthM'), d('radiusM'), sweep);
     case 'HollowOpenCylinderMass': {
@@ -414,9 +421,8 @@ export interface MassSummary {
   definitionCount: number;
 }
 
-const MASS_XML_TAGS = new Set<string>([
+export const MASS_XML_TAGS: ReadonlySet<string> = new Set<string>([
   ...MASS_SHAPES,
-  'HollowSphereMass',
   'SolidOgiveMass',
   'SolidConeMass',
   'HollowOpenConeMass',

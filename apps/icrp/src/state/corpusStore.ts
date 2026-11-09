@@ -4,6 +4,9 @@
  * (body picker) and the system-mod export (body cloning).
  */
 import { atom } from 'nanostores';
+import stockBodies from '../ksa/__fixtures__/SolSystemAstronomicals.xml?raw';
+import stockVehicles from '../ksa/__fixtures__/SolSystemVehicles.xml?raw';
+import { resolveContent } from '../../../../src/ksa/contentXml';
 import { fetchXmlFile } from '../../../../src/ksa/catalog';
 import { parseCelestialCorpus, type CelestialCorpus } from '../ksa/systemXml';
 
@@ -25,9 +28,11 @@ let loading: Promise<CelestialCorpus | null> | null = null;
 /** Fetches + parses the corpus once; null (with a console error) when unavailable. */
 export function ensureCorpusLoaded(): Promise<CelestialCorpus | null> {
   loading ??= (async () => {
-    const [astro, sol] = await Promise.all([
+    const [astro, sol, bodies, vehicles] = await Promise.all([
       fetchXmlFile('Astronomicals.xml'),
       fetchXmlFile('SolSystem.xml'),
+      fetchXmlFile('SolSystemAstronomicals.xml'),
+      fetchXmlFile('SolSystemVehicles.xml'),
     ]);
     if (astro.kind !== 'ok' || sol.kind !== 'ok') {
       console.error(
@@ -37,18 +42,37 @@ export function ensureCorpusLoaded(): Promise<CelestialCorpus | null> {
       return null;
     }
     try {
-      const corpus = parseCelestialCorpus([
+      const parser = new DOMParser();
+      const content = resolveContent([
         { doc: astro.doc, file: 'Astronomicals.xml' },
+        {
+          doc:
+            bodies.kind === 'ok'
+              ? bodies.doc
+              : parser.parseFromString(stockBodies, 'application/xml'),
+          file: 'SolSystemAstronomicals.xml',
+        },
+        {
+          doc:
+            vehicles.kind === 'ok'
+              ? vehicles.doc
+              : parser.parseFromString(stockVehicles, 'application/xml'),
+          file: 'SolSystemVehicles.xml',
+        },
         { doc: sol.doc, file: 'SolSystem.xml' },
       ]);
+      const corpus = parseCelestialCorpus([{ doc: content.doc, file: 'Core' }]);
       $bodyIds.set([...corpus.bodies.keys()]);
       const stock = new Map<string, StockLandmark[]>();
       for (const [bodyId, el] of corpus.bodies) {
         const rows: StockLandmark[] = [];
-        for (const lm of Array.from(el.childNodes)) {
+        const landmarks = Array.from(el.childNodes).find(
+          (n) => n.nodeType === 1 && (n as Element).tagName === 'Landmarks',
+        );
+        for (const lm of Array.from(landmarks?.childNodes ?? [])) {
           if (lm.nodeType !== 1 || (lm as Element).tagName !== 'Landmark') continue;
           const landmark = lm as Element;
-          const id = landmark.getAttribute('Id');
+          const id = landmark.getAttribute('Key');
           if (!id) continue;
           const deg = (tag: string) => {
             for (const child of Array.from(landmark.childNodes)) {

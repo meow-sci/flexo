@@ -1,14 +1,36 @@
 # Scope — Kittens (Character rendering)
 
+## Current contract — KSA 2026.11.10.5801
+
+Character rendering remains a separate editor-aide pipeline, not a Part model
+catalog. The browser build retains Characters and Textures/Characters including
+glTF sidecars. New Part/SubPart appearance grouping does not synthesize Character
+variants or turn the nonrendering KittenBackPackPart into a mesh.
+
+The existing bind-pose bake, material retargeting and socket corrections remain.
+The historical MMU asset gap T4, no animated character simulation and skipped fur
+shells are retained limitations; this Part/XML upgrade does not claim a new native
+Character renderer. Resource references in exported custom SubParts now follow the
+current Texture/Material/Components contract. See [custom assets](custom-assets-and-mod-export.md).
+
+Current implementation evidence and validation are recorded in
+[the 5801 upgrade](../plans/KSA_5801_UPGRADE.md).
+
+## Archived detail from audits through 5554
+
+The remainder records earlier source investigations. Its old XML examples and
+compatibility verdicts apply to their named builds; use the current contract above
+and [Part XML](part-and-subpart-xml.md) when authoring 5801 content.
+
 > flexo renders the 3 default KSA EVA "kittens" (Hunter/Polaris/Banjo) as **editor-only**
 > scale/placement aides (never exported) — a faithful three.js re-implementation of KSA's
 > Character rendering. The contract is a long list of asset/material/bone names + render quirks.
 
-**Baseline:** re-verified against KSA build **2026.10.10.5554** (decomp + shipped Core XML + private character binaries).
+**Historical baseline:** re-verified against KSA build **2026.10.10.5554** (decomp + shipped Core XML + private character binaries).
 5482 leaves `CharacterAssets.xml`, `CharacterRenderResources.cs`, `CharacterAvatar.cs`,
 `ModelTranslucent.frag` and every private character binary unchanged; `KittenRenderable.cs` changed
 only in draw plumbing (see [What changed in 5482](#what-changed-in-5482)).
-**Baseline status:** 📝 **INTACT, one stale asset** — 5402 added `<HeadMeshIndices>` to
+**Historical baseline status:** 📝 **INTACT, one stale asset** — 5402 added `<HeadMeshIndices>` to
 `CharacterCore` for a first-person head hide (`KittenRenderable.HideHead`), which the editor aide
 never needs (see [What changed in 5402](#what-changed-in-5402)); at 5348 `CharacterAssets.xml` re-pointed the
 MMU to a new `SK_KSA_MMU.glb`; the legacy `.gltf` flexo names still ships, so the aide loads but

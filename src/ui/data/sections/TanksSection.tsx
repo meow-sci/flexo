@@ -73,14 +73,7 @@ export function TanksSection({
   );
 }
 
-const ROLE_AFFINITIES: readonly { id: TankRoleAffinity; label: string }[] = [
-  // KSA's `ConsumerRole` [Flags] enum. `Engine` IS the schema default (the element is omitted
-  // at it), so it carries the "(default)" sentinel wording rather than a separate null option.
-  { id: 'Engine', label: 'Engine (default)' },
-  { id: 'Thruster', label: 'Thruster' },
-  { id: 'Engine Thruster', label: 'Engine + Thruster' },
-  { id: 'None', label: 'None' },
-];
+const ROLE_AFFINITIES = ['Engine', 'Thruster', 'Air', 'Water'] as const;
 
 function TankCard({ owner, tank, index }: { owner: TankOwner; tank: Tank; index: number }) {
   // The findings pipeline names a tank card by its INDEX (`gameDataFindings.ts`), so a
@@ -185,21 +178,25 @@ function TankCard({ owner, tank, index }: { owner: TankOwner; tank: Tank; index:
             other propellants.
           </span>
           <Field label="Role affinity (which consumer kind this tank prefers to feed)">
-            <Select
-              size="sm"
-              aria-label="Tank role affinity"
-              value={tank.roleAffinity}
-              onChange={(k) => {
-                pushUndo('tank role affinity', String(k));
-                patch({ roleAffinity: k as TankRoleAffinity });
-              }}
-            >
+            <div className="flex flex-wrap gap-3">
               {ROLE_AFFINITIES.map((role) => (
-                <ListBoxItem key={role.id} id={role.id} textValue={role.label}>
-                  {role.label}
-                </ListBoxItem>
+                <Switch
+                  key={role}
+                  isSelected={tank.roleAffinity.split(/\s+/).includes(role)}
+                  onChange={(on) => {
+                    const roles = tank.roleAffinity
+                      .split(/\s+/)
+                      .filter((value) => value && value !== 'None');
+                    const next = on ? [...roles, role] : roles.filter((value) => value !== role);
+                    pushUndo('tank role affinity', role);
+                    patch({ roleAffinity: (next.join(' ') || 'None') as TankRoleAffinity });
+                  }}
+                >
+                  {role}
+                  {role === 'Engine' ? ' (default)' : ''}
+                </Switch>
               ))}
-            </Select>
+            </div>
           </Field>
           <div className="flex flex-col gap-1">
             <span className="text-xs text-fg-subtle">Location offset (assembly frame, m)</span>

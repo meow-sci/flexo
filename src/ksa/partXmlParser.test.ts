@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { DOMParser } from '@xmldom/xmldom';
+import { DOMParser, XMLSerializer, type Document as XmlDocument } from '@xmldom/xmldom';
 import {
   animationModulesFromGameData,
   connectorsFromPartElement,
@@ -31,6 +31,24 @@ import {
   KNOWN_EDITOR_TAGS,
 } from './types';
 import { readVendoredAsset } from './ksaTestAssets';
+import { CORE_CONTENT_FILES } from './coreFiles';
+import { resolveContent } from './contentXml';
+
+let resolvedCoreCache: string | undefined;
+function resolvedCoreXml(): string {
+  if (resolvedCoreCache) return resolvedCoreCache;
+  const files = CORE_CONTENT_FILES.map((file) => ({
+    file,
+    doc: new DOMParser().parseFromString(
+      readVendoredAsset(file),
+      'application/xml',
+    ) as unknown as Document,
+  }));
+  resolvedCoreCache = new XMLSerializer().serializeToString(
+    resolveContent(files).doc as unknown as XmlDocument,
+  );
+  return resolvedCoreCache;
+}
 
 /**
  * Single-entry calls through the multi-part serializers (MULTI_PART_PLAN P3.03) — the
@@ -41,6 +59,39 @@ const serializePart = (part: EditingPart, remap: TemplateRemap = new Map()) =>
   serializePartsXml([{ part, remap }]);
 const serializeGameData = (part: EditingPart, base = '', remap: TemplateRemap = new Map()) =>
   serializeGameDataXml([{ part, remap }], base);
+
+function roundTripGameData(part: EditingPart) {
+  const templateIds = new Set([
+    ...part.subPartGameData.map((row) => row.subPartTemplateId),
+    ...part.lights.flatMap((light) => (light.ownerTemplateId ? [light.ownerTemplateId] : [])),
+    ...part.colliders.flatMap((collider) =>
+      collider.ownerTemplateId ? [collider.ownerTemplateId] : [],
+    ),
+  ]);
+  const templates = `<Assets>${Array.from(templateIds, (id) => `<SubPart Id="${id}"/>`).join('')}</Assets>`;
+  const resolved = resolveContent([
+    {
+      file: 'templates.xml',
+      doc: new DOMParser().parseFromString(templates, 'application/xml') as unknown as Document,
+    },
+    {
+      file: 'part.xml',
+      doc: new DOMParser().parseFromString(
+        serializePart(part),
+        'application/xml',
+      ) as unknown as Document,
+    },
+    {
+      file: 'game.xml',
+      doc: new DOMParser().parseFromString(
+        serializeGameData(part),
+        'application/xml',
+      ) as unknown as Document,
+    },
+  ]);
+  const xml = new XMLSerializer().serializeToString(resolved.doc as unknown as XmlDocument);
+  return gameDataFromAssets(xml, part.partId, new DOMParser())!;
+}
 
 function editingPart(over: Partial<EditingPart>): EditingPart {
   return {
@@ -126,18 +177,11 @@ describe('parsePartPlacements (round-trip with serializer)', () => {
     expect(() => parsePartPlacements(xml, 'Nope', new DOMParser())).toThrow();
   });
 
-  it('warns on a partial <Scale> (older flexo output; KSA reads a missing axis as 0)', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const legacy = `<?xml version="1.0"?><Assets><Part Id="L"><SubPart Id="s" InstanceOf="T">
-        <Transform><Scale X="2"/></Transform></SubPart></Part></Assets>`;
-      const [p] = parsePartPlacements(legacy, 'L', new DOMParser());
-      expect(p.scale).toEqual({ x: 2, y: 1, z: 1 });
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn.mock.calls[0][0]).toContain('missing Y/Z');
-    } finally {
-      warn.mockRestore();
-    }
+  it('reads omitted Scale axes using KSA Vector3Reference defaults', () => {
+    const current = `<?xml version="1.0"?><Assets><Part Id="L"><SubParts><SubPart Key="s" Ref="T">
+      <Transform><Scale X="2"/></Transform></SubPart></SubParts></Part></Assets>`;
+    const [p] = parsePartPlacements(current, 'L', new DOMParser());
+    expect(p.scale).toEqual({ x: 2, y: 0, z: 0 });
   });
 });
 
@@ -146,7 +190,7 @@ describe('parseConnectorFlags', () => {
   // the form KSA authors and the form flexo emits; commas are tolerated on the way in.
   it('splits a whitespace-separated list, trimming and dropping unknowns', () => {
     expect(parseConnectorFlags('Internal ToSurface')).toEqual(['Internal', 'ToSurface']);
-    expect(parseConnectorFlags('Internal, ToSurface')).toEqual(['Internal', 'ToSurface']);
+    expect(parseConnectorFlags('Internal, ToSurface')).toEqual(['ToSurface']);
     expect(parseConnectorFlags(' FromSurface ')).toEqual(['FromSurface']);
     expect(parseConnectorFlags('Bogus Internal')).toEqual(['Internal']);
     expect(parseConnectorFlags('')).toEqual([]);
@@ -316,7 +360,7 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
     ],
   });
 
-  const parsed = gameDataFromAssets(serializeGameData(source), 'GD', new DOMParser())!;
+  const parsed = roundTripGameData(source);
 
   it('recovers display name, tags, mass', () => {
     expect(parsed.gameData.displayName).toBe('Round Trip');
@@ -391,14 +435,14 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
   });
 });
 
-// `<Light>` is legal (and Core-authored) at BOTH GameData sites: `<PartGameData>` (CoreCommandA
-// headlights, CoreIVASpaceA's interior light) and `<SubPartGameData>` (CoreElectricalA spot/flood
+// `<Light>` is legal (and Core-authored) at BOTH GameData sites: `<Part>` (CoreCommandA
+// headlights, CoreIVASpaceA's interior light) and `<SubPart>` (CoreElectricalA spot/flood
 // lights). flexo normalises every light into one flat PartLight list keyed by owner.
 describe('part-level and SubPart-level <Light> parsing (direct GameData XML)', () => {
   it('parses both sites, assigning _lightN ids in document order (part-level first)', () => {
     const parsed = gameDataFromAssets(
       `<Assets>
-        <PartGameData Id="P">
+        <Part Id="P"><Components>
           <Light>
             <Type>Spot</Type>
             <Transform><Position X="0.09" Y="0.4364" Z="-0.61633" /></Transform>
@@ -414,14 +458,14 @@ describe('part-level and SubPart-level <Light> parsing (direct GameData XML)', (
             <Color R="1" G="0.9" B="0.7" />
             <RayTracing>true</RayTracing>
           </Light>
-        </PartGameData>
-        <SubPartGameData Id="Tmpl">
+        </Components></Part>
+        <SubPart Id="Tmpl"><Components>
           <Light>
             <Type>Spot</Type>
             <Range Value="5" />
             <Intensity Value="10" />
           </Light>
-        </SubPartGameData>
+        </Components></SubPart>
       </Assets>`,
       'P',
       new DOMParser(),
@@ -444,12 +488,12 @@ describe('part-level and SubPart-level <Light> parsing (direct GameData XML)', (
     expect(parsed.subPartGameData).toEqual([]);
   });
 
-  it('accumulates lights across duplicate-Id <SubPartGameData> blocks in document order', () => {
+  it('accumulates lights across duplicate-Id <SubPart> blocks in document order', () => {
     const parsed = gameDataFromAssets(
       `<Assets>
-        <PartGameData Id="P" />
-        <SubPartGameData Id="Tmpl"><Light><Range Value="1" /></Light></SubPartGameData>
-        <SubPartGameData Id="Tmpl"><Light><Range Value="2" /></Light></SubPartGameData>
+        <Part Id="P" />
+        <SubPart Id="Tmpl"><Components><Light Key="lamp1"><Range Value="1" /></Light></Components></SubPart>
+        <SubPart Id="Tmpl"><Components><Light Key="lamp2"><Range Value="2" /></Light></Components></SubPart>
       </Assets>`,
       'P',
       new DOMParser(),
@@ -465,34 +509,34 @@ describe('part-level and SubPart-level <Light> parsing (direct GameData XML)', (
   // an id. The authored id rides `ksaId`, kept apart from the flexo-local document id.
   it('preserves an authored <Light Id> in ksaId and re-emits it verbatim', () => {
     const parsed = gameDataFromAssets(
-      `<Assets><PartGameData Id="P">
-        <Light Id="Headlight"><Range Value="3" /></Light>
-      </PartGameData></Assets>`,
+      `<Assets><Part Id="P"><Components>
+        <Light Key="Headlight"><Range Value="3" /></Light>
+      </Components></Part></Assets>`,
       'P',
       new DOMParser(),
     )!;
     expect(parsed.lights[0].id).toBe('_light1');
     expect(parsed.lights[0].ksaId).toBe('Headlight');
     const xml = serializeGameData(editingPart({ partId: 'P', lights: parsed.lights }));
-    expect(xml).toContain('<Light Id="Headlight">');
+    expect(xml).toContain('<Light Key="Headlight">');
   });
 
-  it('names an id-less light by its document id, so two lights never collide in-game', () => {
+  it('keeps distinct authored module Keys for separate lights', () => {
     const parsed = gameDataFromAssets(
-      `<Assets><PartGameData Id="P">
-        <Light><Range Value="3" /></Light>
-        <Light><Range Value="4" /></Light>
-      </PartGameData></Assets>`,
+      `<Assets><Part Id="P"><Components>
+        <Light Key="head"><Range Value="3" /></Light>
+        <Light Key="tail"><Range Value="4" /></Light>
+      </Components></Part></Assets>`,
       'P',
       new DOMParser(),
     )!;
-    expect(parsed.lights.map((l) => l.ksaId)).toEqual([null, null]);
+    expect(parsed.lights.map((l) => l.ksaId)).toEqual(['head', 'tail']);
     const xml = serializeGameData(editingPart({ partId: 'P', lights: parsed.lights }));
-    expect(xml).toContain('<Light Id="_light1">');
-    expect(xml).toContain('<Light Id="_light2">');
+    expect(xml).toContain('<Light Key="head">');
+    expect(xml).toContain('<Light Key="tail">');
   });
 
-  it('round-trips a part-level light back under <PartGameData>', () => {
+  it('round-trips a part-level light back under <Part>', () => {
     const source = editingPart({
       partId: 'P',
       lights: [
@@ -645,7 +689,7 @@ describe('engine modules (round-trip with serializeGameData)', () => {
     ],
   });
 
-  const parsed = gameDataFromAssets(serializeGameData(source), 'ENG', new DOMParser())!;
+  const parsed = roundTripGameData(source);
 
   it('round-trips the reusable thrust chamber under SubPartGameData (combustor/nozzle/rocket)', () => {
     const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === TMPL)!;
@@ -667,12 +711,12 @@ describe('engine modules (round-trip with serializeGameData)', () => {
 
   it('parses RocketThrusterController + ControlMap as an RCS controller', () => {
     const rcs = gameDataFromAssets(
-      `<Assets><PartGameData Id="P">
-        <RocketThrusterController Id="RCS">
-          <RocketReference Id="Thruster" SubPartId="t1" />
+      `<Assets><Part Id="P">
+        <RocketThrusterControllers><RocketThrusterController Key="RCS">
+          <Rockets><Rocket KeyRef="Thruster" SubPart="t1" /></Rockets>
           <ControlMap CSV="PitchUp, YawRight" />
-        </RocketThrusterController>
-      </PartGameData></Assets>`,
+        </RocketThrusterController></RocketThrusterControllers>
+      </Part></Assets>`,
       'P',
       new DOMParser(),
     )!;
@@ -684,7 +728,7 @@ describe('engine modules (round-trip with serializeGameData)', () => {
 describe('gameDataFromAssets docking port (direct GameData XML)', () => {
   const parseDp = (inner: string) =>
     gameDataFromAssets(
-      `<Assets><PartGameData Id="P"><DockingPort>${inner}</DockingPort></PartGameData></Assets>`,
+      `<Assets><Part Id="P"><Components><DockingPort>${inner}</DockingPort></Components></Part></Assets>`,
       'P',
       new DOMParser(),
     )!.gameData.dockingPort;
@@ -692,7 +736,7 @@ describe('gameDataFromAssets docking port (direct GameData XML)', () => {
   it('parses the child-element form (ConnectorId / LatchingKineticEnergy J / PushoffImpulse Ns)', () => {
     expect(
       parseDp(
-        '<ConnectorId Value="_connector2" /><LatchingKineticEnergy J="50" /><PushoffImpulse Ns="7000" />',
+        '<Connector KeyRef="_connector2" /><LatchingKineticEnergy J="50" /><PushoffImpulse Ns="7000" />',
       ),
     ).toEqual({
       connectorId: '_connector2',
@@ -704,43 +748,40 @@ describe('gameDataFromAssets docking port (direct GameData XML)', () => {
 
 describe('gameDataFromAssets diameter + control (direct GameData XML)', () => {
   const parse = (inner: string) =>
-    gameDataFromAssets(
-      `<Assets><PartGameData Id="P">${inner}</PartGameData></Assets>`,
-      'P',
-      new DOMParser(),
-    )!.gameData;
+    gameDataFromAssets(`<Assets><Part Id="P">${inner}</Part></Assets>`, 'P', new DOMParser())!
+      .gameData;
 
   it('parses <Diameter M> (size class) and a bare <Control/> command marker', () => {
-    const g = parse('<Diameter M="1"/><Control />');
+    const g = parse('<Diameters><Diameter M="1"/></Diameters><Components><Control /></Components>');
     expect(g.diameterM).toBe(1);
     expect(g.controllable).toBe(true);
   });
 
   it('reads sub-meter <Diameter Cm> via the distance reference', () => {
-    expect(parse('<Diameter Cm="50"/>').diameterM).toBeCloseTo(0.5, 6);
+    expect(parse('<Diameters><Diameter Cm="50"/></Diameters>').diameterM).toBeCloseTo(0.5, 6);
   });
 
   it('defaults to null diameter / not-controllable when both are absent', () => {
-    const g = parse('<EditorTag Value="Capsules" />');
+    const g = parse('<EditorTags><EditorTag Ref="Capsules" /></EditorTags>');
     expect(g.diameterM).toBeNull();
     expect(g.controllable).toBe(false);
   });
 
   it('keeps every <Diameter> of a KSA 2026.7 multi-size adapter (first editable, rest preserved)', () => {
-    const g = parse('<Diameter M="3"/><Diameter M="2"/>');
+    const g = parse('<Diameters><Diameter M="3"/><Diameter M="2"/></Diameters>');
     expect(g.diameterM).toBe(3);
     expect(g.extraDiametersM).toEqual([2]);
 
     // ...and re-emits both on export so the adapter keeps every size-class filter.
     const part = editingPart({ partId: 'P', gameData: g });
-    const reparsed = gameDataFromAssets(serializeGameData(part), 'P', new DOMParser())!.gameData;
+    const reparsed = roundTripGameData(part).gameData;
     expect(reparsed.diameterM).toBe(3);
     expect(reparsed.extraDiametersM).toEqual([2]);
   });
 });
 
 describe('editor-tag registry (gap 5)', () => {
-  it('matches CoreEditorTagsGameData.xml order (build 5554)', () => {
+  it('matches the current Core editor-tag registry order', () => {
     expect(KNOWN_EDITOR_TAGS).toEqual([
       'Booster',
       'Capsules',
@@ -750,11 +791,12 @@ describe('editor-tag registry (gap 5)', () => {
       'Electrical',
       'Coupling',
       'Structural',
+      'Panels',
       'Landing',
       'Interstage',
-      'Passage',
       'Cargo',
       'Lights',
+      'Life Support',
       'Interstellar',
       'Radial',
       'NoFaceSnapping',
@@ -777,16 +819,12 @@ describe('editor-tag registry (gap 5)', () => {
 
 describe('unmodeled-XML passthrough (gap 6)', () => {
   it.each([
-    ['CoreElectricalA_Prefab_InlineBatteryBankA', 'SolidCylinderMass', 1, 87],
+    ['CoreElectricalA_Prefab_InlineBattery1WBankV1A', 'SolidCylinderMass', 1, 87],
     ['CoreElectricalA_Prefab_LightSmallB', 'SolidCuboidMass', 1, 6],
-    ['CoreElectricalA_Prefab_SolarPanelB', 'SolidCuboidMass', 4, 19],
-    ['CoreElectricalA_Prefab_BayFuelcellSmall', 'SolidCylinderMass', 1, 49],
+    ['CoreElectricalA_Prefab_SolarPanelFixedSmallV1A', 'SolidCuboidMass', 1, 2],
+    ['CoreElectricalA_Prefab_BayFuelcellSmallA', 'SolidCylinderMass', 1, 49],
   ] as const)('models stock mass geometry for %s', (partId, tag, count, massKg) => {
-    const parsed = gameDataFromAssets(
-      readVendoredAsset('CoreElectricalAGameData.xml'),
-      partId,
-      new DOMParser(),
-    )!;
+    const parsed = gameDataFromAssets(resolvedCoreXml(), partId, new DOMParser())!;
     const masses = parsed.gameData.massDefinitions.filter((n) => n.shape === tag);
     expect(masses).toHaveLength(count);
     expect(masses.reduce((sum, n) => sum + (n.massKg ?? 0), 0)).toBe(massKg);
@@ -799,69 +837,72 @@ describe('unmodeled-XML passthrough (gap 6)', () => {
   });
 
   it('preserves 5438 ordered parachute material choices at Part and SubPart scope', () => {
-    const partId = 'CoreUtilityA_Prefab_ParachuteBayB';
-    const parsed = gameDataFromAssets(
-      readVendoredAsset('CoreUtilityAGameData.xml'),
-      partId,
-      new DOMParser(),
-    )!;
+    const partId = 'CoreUtilityA_Prefab_ParachuteBayA';
+    const parsed = gameDataFromAssets(resolvedCoreXml(), partId, new DOMParser())!;
     // Every radial Part and both standalone SubParts author the six current Core choices.
     const radial = gameDataFromAssets(
-      readVendoredAsset('CoreUtilityAGameData.xml'),
+      resolvedCoreXml(),
       'CoreUtilityA_Prefab_RadialParachuteMediumA',
       new DOMParser(),
     );
     expect(radial).not.toBeNull();
-    const partChute = radial!.gameData.unknownChildren.find((n) => n.tag === 'Parachute')!;
+    const partChute = radial!.gameData.unknownComponents.find((n) => n.tag === 'Parachute')!;
     expect(partChute).toBeDefined();
     const subPart = parsed.subPartGameData.find(
       (s) => s.subPartTemplateId === 'CoreUtilityA_Subpart_StandaloneParachuteB',
     )!;
-    const subChute = subPart.unknownChildren.find((n) => n.tag === 'Parachute')!;
+    const subChute = subPart.unknownComponents.find((n) => n.tag === 'Parachute')!;
     for (const chute of [partChute, subChute]) {
-      expect(chute.children.filter((n) => n.tag === 'PbrMaterialRef')).toHaveLength(6);
+      expect(
+        chute.children
+          .find((n) => n.tag === 'Materials')
+          ?.children.filter((n) => n.tag === 'PbrMaterial'),
+      ).toHaveLength(6);
     }
-    expect(subChute.children.find((n) => n.tag === 'PbrMaterialRef')!.attrs.Id).toBe(
-      'ParachuteCanopy_Material_StripesRed',
-    );
+    expect(
+      subChute.children
+        .find((n) => n.tag === 'Materials')!
+        .children.find((n) => n.tag === 'PbrMaterial')!.attrs.Ref,
+    ).toBe('ParachuteCanopy_Material_StripesRed');
     const source = editingPart({
       partId: 'CoreUtilityA_Prefab_RadialParachuteMediumA',
       gameData: radial!.gameData,
       subPartGameData: parsed.subPartGameData,
     });
-    const reparsed = gameDataFromAssets(serializeGameData(source), source.partId, new DOMParser())!;
-    expect(reparsed.gameData.unknownChildren).toEqual(source.gameData.unknownChildren);
+    const reparsed = roundTripGameData(source);
+    expect(reparsed.gameData.unknownComponents).toEqual(source.gameData.unknownComponents);
     expect(
       reparsed.subPartGameData.find((s) => s.subPartTemplateId === subPart.subPartTemplateId)
-        ?.unknownChildren,
-    ).toEqual(subPart.unknownChildren);
+        ?.unknownComponents,
+    ).toEqual(subPart.unknownComponents);
   });
 
   const xml = `<Assets>
-    <PartGameData Id="P">
-      <EditorTag Value="Fuel Tanks" />
-      <Collider Id="Collider1">
-        <Cylinder Id="Cyl1">
+    <Part Id="P">
+      <EditorTags><EditorTag Ref="Fuel Tanks" /></EditorTags>
+      <Components><Collider Key="Collider1"><Colliders>
+        <Cylinder Key="Cyl1">
           <Radius M="0.5007" />
           <LengthY M="1.0197" />
         </Cylinder>
-      </Collider>
-      <SolidConeMass><Mass Kg="50" /></SolidConeMass>
-    </PartGameData>
-    <SubPartGameData Id="Tmpl" DisplayName="Wing Skin">
-      <SubstanceStorageVolume Id="Vol1" />
-    </SubPartGameData>
+      </Colliders></Collider></Components>
+      <InertMasses><SolidCuboidMass><Mass Kg="50" /><LengthX M="1"/><LengthY M="1"/><LengthZ M="1"/></SolidCuboidMass></InertMasses>
+    </Part>
+    <SubPart Id="Tmpl" DisplayName="Wing Skin">
+      <Components><SubstanceStorageVolume Key="Vol1" /></Components>
+    </SubPart>
   </Assets>`;
   const parsed = gameDataFromAssets(xml, 'P', new DOMParser())!;
 
-  it('captures unmodeled <PartGameData> children verbatim (tag/attrs/nested tree)', () => {
+  it('captures unmodeled <Part> children verbatim (tag/attrs/nested tree)', () => {
     // <Collider> is MODELED now (it lands in `colliders`, not the passthrough).
-    expect(parsed.gameData.unknownChildren.map((n) => n.tag)).toEqual(['SolidConeMass']);
-    const mass = parsed.gameData.unknownChildren[0];
-    expect(mass.children.map((c) => [c.tag, c.attrs])).toEqual([['Mass', { Kg: '50' }]]);
+    expect(parsed.gameData.massDefinitions.map((mass) => [mass.shape, mass.massKg])).toEqual([
+      ['SolidCuboidMass', 50],
+    ]);
+    expect(parsed.gameData.unknownChildren).toEqual([]);
   });
 
-  it('reads the <PartGameData><Collider> into the typed model instead of passthrough', () => {
+  it('reads the <Part><Collider> into the typed model instead of passthrough', () => {
     expect(parsed.colliders).toEqual([
       {
         id: 'Cyl1',
@@ -876,11 +917,11 @@ describe('unmodeled-XML passthrough (gap 6)', () => {
     ]);
   });
 
-  it('captures an unmodeled <SubPartGameData> DisplayName attr + child', () => {
+  it('captures an unmodeled <SubPart> DisplayName attr + child', () => {
     const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!;
     expect(spd.unknownAttrs).toEqual({ DisplayName: 'Wing Skin' });
-    expect(spd.unknownChildren.map((n) => n.tag)).toEqual(['SubstanceStorageVolume']);
-    expect(spd.unknownChildren[0].attrs).toEqual({ Id: 'Vol1' });
+    expect(spd.unknownChildren).toEqual([]);
+    expect(spd.unknownComponents[0].attrs).toEqual({ Key: 'Vol1' });
   });
 
   it('round-trips the unmodeled XML through serialize → re-parse', () => {
@@ -890,52 +931,58 @@ describe('unmodeled-XML passthrough (gap 6)', () => {
       gameData: parsed.gameData,
       subPartGameData: parsed.subPartGameData,
     });
-    const reparsed = gameDataFromAssets(serializeGameData(part), 'P', new DOMParser())!;
-    expect(reparsed.gameData.unknownChildren).toEqual(parsed.gameData.unknownChildren);
+    const reparsed = roundTripGameData(part);
+    expect(reparsed.gameData.massDefinitions).toEqual(parsed.gameData.massDefinitions);
     const spd = reparsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!;
     expect(spd.unknownAttrs).toEqual({ DisplayName: 'Wing Skin' });
-    expect(spd.unknownChildren).toEqual([
-      { tag: 'SubstanceStorageVolume', attrs: { Id: 'Vol1' }, children: [] },
+    expect(spd.unknownComponents).toEqual([
+      { tag: 'SubstanceStorageVolume', attrs: { Key: 'Vol1' }, children: [] },
     ]);
   });
 
-  it('captures KSA 2026.7 <Aligned> connector groups verbatim (unmodeled → passthrough)', () => {
-    const aligned = `<Assets><PartGameData Id="P">
-      <Aligned><ConnectorRef Id="_connector19"/><ConnectorRef Id="_connector41"/></Aligned>
-    </PartGameData></Assets>`;
+  it('captures current <AlignedGroups> connector keys verbatim at the Part row', () => {
+    const aligned = `<Assets><Part Id="P">
+      <AlignedGroups><Aligned><Connector KeyRef="_connector19"/><Connector KeyRef="_connector41"/></Aligned></AlignedGroups>
+    </Part></Assets>`;
     const p = gameDataFromAssets(aligned, 'P', new DOMParser())!;
     expect(p.gameData.unknownChildren).toEqual([
       {
-        tag: 'Aligned',
+        tag: 'AlignedGroups',
         attrs: {},
         children: [
-          { tag: 'ConnectorRef', attrs: { Id: '_connector19' }, children: [] },
-          { tag: 'ConnectorRef', attrs: { Id: '_connector41' }, children: [] },
+          {
+            tag: 'Aligned',
+            attrs: {},
+            children: [
+              { tag: 'Connector', attrs: { KeyRef: '_connector19' }, children: [] },
+              { tag: 'Connector', attrs: { KeyRef: '_connector41' }, children: [] },
+            ],
+          },
         ],
       },
     ]);
     const part = editingPart({ partId: 'P', gameData: p.gameData });
-    const reparsed = gameDataFromAssets(serializeGameData(part), 'P', new DOMParser())!;
+    const reparsed = roundTripGameData(part);
     expect(reparsed.gameData.unknownChildren).toEqual(p.gameData.unknownChildren);
   });
 
-  it('remapRawConnectorRefs rewrites ConnectorRef/Sibling Ids at any depth, leaving unmapped ids alone', () => {
+  it('remapRawConnectorRefs rewrites Connector/Sibling KeyRefs at any depth', () => {
     const nodes: RawXmlNode[] = [
       {
-        tag: 'Aligned',
+        tag: 'AlignedGroups',
         attrs: {},
         children: [
-          { tag: 'ConnectorRef', attrs: { Id: '_connector19' }, children: [] },
-          { tag: 'ConnectorRef', attrs: { Id: '_connector41' }, children: [] },
+          { tag: 'Connector', attrs: { KeyRef: '_connector19' }, children: [] },
+          { tag: 'Connector', attrs: { KeyRef: '_connector41' }, children: [] },
         ],
       },
       {
         tag: 'SymmetryGroup',
         attrs: {},
         children: [
-          { tag: 'ConnectorRef', attrs: { Id: '_connector19' }, children: [] },
+          { tag: 'Connector', attrs: { KeyRef: '_connector19' }, children: [] },
           // No mapping — a ref to a connector outside the imported set stays verbatim.
-          { tag: 'ConnectorRef', attrs: { Id: '_connector99' }, children: [] },
+          { tag: 'Connector', attrs: { KeyRef: '_connector99' }, children: [] },
         ],
       },
       // Non-ref tags keep their Id even when it collides with a mapped connector id.
@@ -948,38 +995,38 @@ describe('unmodeled-XML passthrough (gap 6)', () => {
     const out = remapRawConnectorRefs(nodes, map);
     expect(out).toEqual([
       {
-        tag: 'Aligned',
+        tag: 'AlignedGroups',
         attrs: {},
         children: [
-          { tag: 'ConnectorRef', attrs: { Id: '_connector1' }, children: [] },
-          { tag: 'ConnectorRef', attrs: { Id: '_connector2' }, children: [] },
+          { tag: 'Connector', attrs: { KeyRef: '_connector1' }, children: [] },
+          { tag: 'Connector', attrs: { KeyRef: '_connector2' }, children: [] },
         ],
       },
       {
         tag: 'SymmetryGroup',
         attrs: {},
         children: [
-          { tag: 'ConnectorRef', attrs: { Id: '_connector1' }, children: [] },
-          { tag: 'ConnectorRef', attrs: { Id: '_connector99' }, children: [] },
+          { tag: 'Connector', attrs: { KeyRef: '_connector1' }, children: [] },
+          { tag: 'Connector', attrs: { KeyRef: '_connector99' }, children: [] },
         ],
       },
       { tag: 'Whatever', attrs: { Id: '_connector19' }, children: [], text: 'keep' },
     ]);
     // Pure: the input trees are untouched.
-    expect(nodes[0].children[0].attrs.Id).toBe('_connector19');
+    expect(nodes[0].children[0].attrs.KeyRef).toBe('_connector19');
   });
 });
 
 describe('<CustomMass> fidelity (typed mass and inertia, unknown children preserved)', () => {
   // Mirrors Core's CoreCommandA capsule: CustomMass with an offset + specific inertia.
   const xml = `<Assets>
-    <PartGameData Id="P">
+    <Part Id="P"><InertMasses>
       <CustomMass>
-        <LocationBody X="-0.3601690873" />
+        <Opaque Source="external"><Preserve Value="yes" /></Opaque>
         <Mass Kg="1800" />
         <MassSpecificInertia Ixx="0.3252281349" Iyy="0.668371379" Izz="0.668371379" />
       </CustomMass>
-    </PartGameData>
+    </InertMasses></Part>
   </Assets>`;
   const parsed = gameDataFromAssets(xml, 'P', new DOMParser())!;
 
@@ -988,7 +1035,13 @@ describe('<CustomMass> fidelity (typed mass and inertia, unknown children preser
     expect(parsed.gameData.massDefinitions[0]).toMatchObject({
       massKg: 1800,
       massSpecificInertia: { ixx: 0.3252281349, iyy: 0.668371379, izz: 0.668371379 },
-      unknownChildren: [{ tag: 'LocationBody', attrs: { X: '-0.3601690873' }, children: [] }],
+      unknownChildren: [
+        {
+          tag: 'Opaque',
+          attrs: { Source: 'external' },
+          children: [{ tag: 'Preserve', attrs: { Value: 'yes' }, children: [] }],
+        },
+      ],
     });
     expect(parsed.gameData.unknownChildren).toEqual([]);
   });
@@ -1001,7 +1054,7 @@ describe('<CustomMass> fidelity (typed mass and inertia, unknown children preser
     expect(custom[0].getElementsByTagName('MassSpecificInertia')[0].getAttribute('Ixx')).toBe(
       '0.325228',
     );
-    const reparsed = gameDataFromAssets(serializeGameData(part), 'P', new DOMParser())!;
+    const reparsed = roundTripGameData(part);
     expect(reparsed.gameData.massDefinitions[0].massKg).toBe(1800);
     expect(reparsed.gameData.massDefinitions[0].massSpecificInertia?.ixx).toBeCloseTo(
       0.3252281349,
@@ -1013,9 +1066,9 @@ describe('<CustomMass> fidelity (typed mass and inertia, unknown children preser
   });
 
   it('retains invalid CustomMass source data for correction in Mass', () => {
-    const dens = `<Assets><PartGameData Id="P">
+    const dens = `<Assets><Part Id="P"><InertMasses>
       <CustomMass><Density KgPerM3="2700" /><MassSpecificInertia Ixx="1" Iyy="1" Izz="1" /></CustomMass>
-    </PartGameData></Assets>`;
+    </InertMasses></Part></Assets>`;
     const p = gameDataFromAssets(dens, 'P', new DOMParser())!;
     expect(p.gameData.customMass).toBeNull();
     expect(p.gameData.customMassExtras).toEqual([]);
@@ -1028,10 +1081,10 @@ describe('<CustomMass> fidelity (typed mass and inertia, unknown children preser
   });
 
   it('keeps every repeated CustomMass as an editable entry', () => {
-    const two = `<Assets><PartGameData Id="P">
+    const two = `<Assets><Part Id="P"><InertMasses>
       <CustomMass><Mass Kg="10" /></CustomMass>
       <CustomMass><Mass Kg="5" /><MassSpecificInertia Ixx="2" Iyy="2" Izz="2" /></CustomMass>
-    </PartGameData></Assets>`;
+    </InertMasses></Part></Assets>`;
     const p = gameDataFromAssets(two, 'P', new DOMParser())!;
     expect(p.gameData.massDefinitions.map((mass) => mass.massKg)).toEqual([10, 5]);
     expect(p.gameData.massDefinitions[1].massSpecificInertia).toEqual({ ixx: 2, iyy: 2, izz: 2 });
@@ -1041,15 +1094,15 @@ describe('<CustomMass> fidelity (typed mass and inertia, unknown children preser
 
 describe('SubPartGameData tank <RoleAffinity> (KSA 2026.7.5)', () => {
   const xml = `<Assets>
-    <PartGameData Id="P"/>
-    <SubPartGameData Id="Tmpl">
-      <Tank Id="Tank1"><SphericalTank>
-        <Material Id="Aluminum.2014(s)" />
+    <Part Id="P"/>
+    <SubPart Id="Tmpl"><Components>
+      <Tank Key="Tank1"><SphericalTank>
+        <Material Ref="Aluminum.2014" Phase="Solid" />
         <OuterRadius M="0.5" />
         <WallThickness Mm="4" />
         <RoleAffinity>Thruster</RoleAffinity>
       </SphericalTank></Tank>
-    </SubPartGameData>
+    </Components></SubPart>
   </Assets>`;
 
   it('parses + round-trips the consumer role a <SphericalTank> feeds', () => {
@@ -1058,15 +1111,15 @@ describe('SubPartGameData tank <RoleAffinity> (KSA 2026.7.5)', () => {
     expect(spd.tanks[0].roleAffinity).toBe('Thruster');
 
     const part = editingPart({ partId: 'P', subPartGameData: parsed.subPartGameData });
-    const reparsed = gameDataFromAssets(serializeGameData(part), 'P', new DOMParser())!;
+    const reparsed = roundTripGameData(part);
     const rspd = reparsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!;
     expect(rspd.tanks[0].roleAffinity).toBe('Thruster');
   });
 
   it('defaults an affinity-less tank to Engine and omits the element on emit', () => {
-    const bare = `<Assets><PartGameData Id="P"/><SubPartGameData Id="Tmpl">
-      <Tank Id="Tank1"><SphericalTank><OuterRadius M="0.5" /><WallThickness Mm="4" /></SphericalTank></Tank>
-    </SubPartGameData></Assets>`;
+    const bare = `<Assets><Part Id="P"/><SubPart Id="Tmpl"><Components>
+      <Tank Key="Tank1"><SphericalTank><OuterRadius M="0.5" /><WallThickness Mm="4" /></SphericalTank></Tank>
+    </Components></SubPart></Assets>`;
     const parsed = gameDataFromAssets(bare, 'P', new DOMParser())!;
     const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!;
     expect(spd.tanks[0].roleAffinity).toBe('Engine');
@@ -1076,30 +1129,30 @@ describe('SubPartGameData tank <RoleAffinity> (KSA 2026.7.5)', () => {
   });
 
   it('normalizes a combined flags body', () => {
-    const combined = `<Assets><PartGameData Id="P"/><SubPartGameData Id="Tmpl">
-      <Tank Id="Tank1"><SphericalTank><OuterRadius M="0.5" /><WallThickness Mm="4" />
+    const combined = `<Assets><Part Id="P"/><SubPart Id="Tmpl"><Components>
+      <Tank Key="Tank1"><SphericalTank><OuterRadius M="0.5" /><WallThickness Mm="4" />
         <RoleAffinity>Thruster Engine</RoleAffinity>
       </SphericalTank></Tank>
-    </SubPartGameData></Assets>`;
+    </Components></SubPart></Assets>`;
     const parsed = gameDataFromAssets(combined, 'P', new DOMParser())!;
     const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!;
-    expect(spd.tanks[0].roleAffinity).toBe('Engine Thruster');
+    expect(spd.tanks[0].roleAffinity).toBe('Thruster Engine');
   });
 });
 
 describe('animationModulesFromGameData', () => {
-  const xml = `
-    <PartGameData Id="SolarPanelB">
-      <KeyframeAnimationModule Id="SolarPanelAnimation" ShowDeployRetract="true">
-        <KeyframeAnimation Path="Animations/SolarPanelB_Anim.glb" Id="SolarPanelB_Anim" />
-        <SolarTracking DegreesPerSecond="5" SubPart="DriveRotorB1">
-          <ExcludeSubPart>DriveHousingB1</ExcludeSubPart>
+  const xml = `<Assets><KeyframeAnimation Id="SolarPanelB_Anim" Path="Animations/SolarPanelB_Anim.glb" />
+    <Part Id="SolarPanelB"><Components>
+      <KeyframeAnimationModule Key="SolarPanelAnimation" ShowDeployRetract="true">
+        <KeyframeAnimation Ref="SolarPanelB_Anim" />
+        <SolarTracking DegreesPerSecond="5"><Tracked KeyRef="DriveRotorB1" />
+          <ExcludeSubParts><ExcludeSubPart KeyRef="DriveHousingB1" /></ExcludeSubParts>
         </SolarTracking>
       </KeyframeAnimationModule>
-    </PartGameData>`;
+    </Components></Part></Assets>`;
   const gd = new DOMParser()
     .parseFromString(xml, 'application/xml')
-    .getElementsByTagName('PartGameData')[0] as unknown as Element;
+    .getElementsByTagName('Part')[0] as unknown as Element;
 
   it('parses the module, ShowDeployRetract, GLB path and solar tracking (original ids)', () => {
     const [m] = animationModulesFromGameData(gd);
@@ -1116,10 +1169,10 @@ describe('animationModulesFromGameData', () => {
   it('defaults ShowDeployRetract to false when absent', () => {
     const x = new DOMParser()
       .parseFromString(
-        `<PartGameData Id="X"><KeyframeAnimationModule Id="A"><KeyframeAnimation Path="Animations/A.glb" Id="A" /></KeyframeAnimationModule></PartGameData>`,
+        `<Assets><KeyframeAnimation Id="A" Path="Animations/A.glb"/><Part Id="X"><Components><KeyframeAnimationModule Key="A"><KeyframeAnimation Ref="A" /></KeyframeAnimationModule></Components></Part></Assets>`,
         'application/xml',
       )
-      .getElementsByTagName('PartGameData')[0] as unknown as Element;
+      .getElementsByTagName('Part')[0] as unknown as Element;
     const [m] = animationModulesFromGameData(x);
     expect(m.showDeployRetract).toBe(false);
     expect(m.solarTracking).toBeNull();
@@ -1129,13 +1182,14 @@ describe('animationModulesFromGameData', () => {
 describe('PowerConsumer is collapsed to one per part (KSA Part.LightSwitch slot)', () => {
   it('keeps the LightSwitch consumer when several are present, and warns', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const xml = `<Assets><PartGameData Id="P">
-        <PowerConsumer><Consumed W="4" /></PowerConsumer>
-        <PowerConsumer LightSwitch="true" LightIsActive="true"><Consumed W="60" /></PowerConsumer>
-      </PartGameData></Assets>`;
+    const xml = `<Assets><Part Id="P"><Components>
+        <PowerConsumer Key="plain"><Consumed W="4" /></PowerConsumer>
+        <PowerConsumer Key="switched" LightSwitch="true" LightIsActive="true"><Consumed W="60" /></PowerConsumer>
+      </Components></Part></Assets>`;
     const parsed = gameDataFromAssets(xml, 'P', new DOMParser())!;
     expect(parsed.gameData.powerConsumer).toEqual({
       consumedWatts: 60,
+      ksaId: 'switched',
       lightSwitch: true,
       lightIsActive: true,
     });
@@ -1146,12 +1200,13 @@ describe('PowerConsumer is collapsed to one per part (KSA Part.LightSwitch slot)
   it('keeps the sole consumer (no warning) and null when there is none', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const one = gameDataFromAssets(
-      `<Assets><PartGameData Id="P"><PowerConsumer><Consumed W="2" /></PowerConsumer></PartGameData></Assets>`,
+      `<Assets><Part Id="P"><Components><PowerConsumer Key="plain"><Consumed W="2" /></PowerConsumer></Components></Part></Assets>`,
       'P',
       new DOMParser(),
     )!;
     expect(one.gameData.powerConsumer).toEqual({
       consumedWatts: 2,
+      ksaId: 'plain',
       lightSwitch: false,
       lightIsActive: false,
     });
@@ -1159,7 +1214,7 @@ describe('PowerConsumer is collapsed to one per part (KSA Part.LightSwitch slot)
     warn.mockRestore();
 
     const none = gameDataFromAssets(
-      `<Assets><PartGameData Id="P"><EditorTag Value="Structural" /></PartGameData></Assets>`,
+      `<Assets><Part Id="P"><EditorTags><EditorTag Ref="Structural" /></EditorTags></Part></Assets>`,
       'P',
       new DOMParser(),
     )!;
@@ -1174,7 +1229,7 @@ describe('PowerConsumer is collapsed to one per part (KSA Part.LightSwitch slot)
 
 /** Round-trips a GameData document through the serializer and back. */
 function roundTrip(source: EditingPart) {
-  return gameDataFromAssets(serializeGameData(source), source.partId, new DOMParser())!;
+  return roundTripGameData(source);
 }
 
 describe('<Capabilities> round-trip', () => {
@@ -1234,9 +1289,9 @@ describe('<Capabilities> round-trip', () => {
 
   it('drops unknown capability tokens on the way in', () => {
     const parsed = gameDataFromAssets(
-      `<Assets><PartGameData Id="P"><Connector Id="_c1">
+      `<Assets><Part Id="P"><Connectors><Connector Key="_c1">
          <Capabilities>Bogus BulkFluid</Capabilities>
-       </Connector></PartGameData></Assets>`,
+       </Connector></Connectors></Part></Assets>`,
       'P',
       new DOMParser(),
     )!;
@@ -1279,12 +1334,11 @@ describe('<FeedsFrom> / <Plumbing> round-trip', () => {
 
   it('drops a <FeedsFrom> that names more than one target (KSA logs an error for it)', () => {
     const parsed = gameDataFromAssets(
-      `<Assets><PartGameData Id="P"><Combustor Id="C">
-         <FeedsFrom Container="Fuel" Connector="_c1" />
-         <FeedsFrom Parent="true" Container="Fuel" />
-         <FeedsFrom />
-         <FeedsFrom Connector="_c1" />
-       </Combustor></PartGameData></Assets>`,
+      `<Assets><Part Id="P"><RocketCores><Combustor Key="C">
+         <FeedsFroms><FeedsFrom><Container KeyRef="Fuel"/><Connector KeyRef="_c1"/></FeedsFrom>
+         <FeedsFrom FromParent="true"><Container KeyRef="Fuel"/></FeedsFrom>
+         <FeedsFrom/><FeedsFrom><Connector KeyRef="_c1"/></FeedsFrom></FeedsFroms>
+       </Combustor></RocketCores></Part></Assets>`,
       'P',
       new DOMParser(),
     )!;
@@ -1340,9 +1394,9 @@ describe('<ConsumerFeedWiring> round-trip', () => {
 
   it('drops a Parent="true" child (KSA: "cannot itself defer to Parent")', () => {
     const parsed = gameDataFromAssets(
-      `<Assets><PartGameData Id="P">
-         <ConsumerFeedWiring Id="C"><FeedsFrom Parent="true" /><FeedsFrom Connector="_c1" /></ConsumerFeedWiring>
-       </PartGameData></Assets>`,
+      `<Assets><Part Id="P"><ConsumerFeedWirings>
+         <ConsumerFeedWiring KeyRef="C"><FeedsFroms><FeedsFrom><FromParent>true</FromParent></FeedsFrom><FeedsFrom><Connector KeyRef="_c1"/></FeedsFrom></FeedsFroms></ConsumerFeedWiring>
+       </ConsumerFeedWirings></Part></Assets>`,
       'P',
       new DOMParser(),
     )!;
@@ -1407,8 +1461,8 @@ describe('<Tank Id> round-trip at both levels', () => {
 
   it('puts the Id on the wrapping <Tank>, not the shape element, and omits a blank one', () => {
     const xml = serializeGameData(source);
-    expect(xml).toContain('<Tank Id="Fuel">');
-    expect(xml).toContain('<Tank Id="PropellantTank">');
+    expect(xml).toContain('<Tank Key="Fuel">');
+    expect(xml).toContain('<Tank Key="PropellantTank">');
     const anon = editingPart({
       partId: 'A',
       gameData: { ...createEmptyGameData(), tanks: [createTank()] },
@@ -1420,11 +1474,7 @@ describe('<Tank Id> round-trip at both levels', () => {
 describe('<Tank><MagneticTrap> (KSA 2026.10.10.5554)', () => {
   it('preserves the stock magnetic trap tank through export and reimport', () => {
     const partId = 'CoreFuelTankA_Prefab_MagneticTrapA';
-    const parsed = gameDataFromAssets(
-      readVendoredAsset('CoreFuelTankAGameData.xml'),
-      partId,
-      new DOMParser(),
-    )!;
+    const parsed = gameDataFromAssets(resolvedCoreXml(), partId, new DOMParser())!;
     expect(parsed.gameData.tanks[0]).toMatchObject({ magneticTrap: true, outerRadiusM: 3 });
     const source = editingPart({ partId, gameData: parsed.gameData });
     const xml = serializeGameData(source);
@@ -1436,7 +1486,7 @@ describe('<Tank><MagneticTrap> (KSA 2026.10.10.5554)', () => {
     'defaults to ordinary containment: %s',
     (marker) => {
       const parsed = gameDataFromAssets(
-        `<Assets><PartGameData Id="P"/><SubPartGameData Id="T"><Tank><SphericalTank><OuterRadius M="1"/></SphericalTank>${marker}</Tank></SubPartGameData></Assets>`,
+        `<Assets><Part Id="P"/><SubPart Id="T"><Components><Tank Key="T"><SphericalTank><OuterRadius M="1"/></SphericalTank>${marker}</Tank></Components></SubPart></Assets>`,
         'P',
         new DOMParser(),
       )!;
@@ -1450,18 +1500,18 @@ describe('<Tank><MagneticTrap> (KSA 2026.10.10.5554)', () => {
 describe('<ConicalTank> (KSA 2026.9.22.5482)', () => {
   // Core's CoreFairingA_Prefab_NoseconeE tank, verbatim (comment dropped).
   const GAMEDATA = `<Assets>
-  <PartGameData Id="CoreFairingA_Prefab_NoseconeE">
-    <Tank>
+  <Part Id="CoreFairingA_Prefab_NoseconeE">
+    <Components><Tank Key="nosecone">
         <ConicalTank>
             <LocationAsmb X="-0.3661" />
-            <Material Id="Aluminum.2014(s)" />
+            <Material Ref="Aluminum.2014" Phase="Solid" />
             <Length M="1.4735" />
             <RadiusBase M="1" />
             <RadiusTop M="0.6843" />
             <WallThickness Mm="4" />
         </ConicalTank>
-    </Tank>
-  </PartGameData>
+    </Tank></Components>
+  </Part>
 </Assets>`;
   const parsed = gameDataFromAssets(GAMEDATA, 'CoreFairingA_Prefab_NoseconeE', new DOMParser())!;
 
@@ -1469,6 +1519,7 @@ describe('<ConicalTank> (KSA 2026.9.22.5482)', () => {
     expect(parsed.gameData.tanks).toEqual([
       {
         ...createTank(),
+        id: 'nosecone',
         shape: 'Conical',
         wallMaterialId: 'Aluminum.2014(s)',
         lengthM: 1.4735,
@@ -1572,15 +1623,15 @@ describe('solid rocket motors round-trip', () => {
 
   it('emits Core’s exact SRB element shapes', () => {
     const xml = serializeGameData(source);
-    expect(xml).toContain('<SolidMotor Id="MotorCore">');
-    expect(xml).toContain('<Reaction Id="APCP"/>');
+    expect(xml).toContain('<SolidMotor Key="MotorCore">');
+    expect(xml).toContain('<Reaction Ref="APCP"/>');
     expect(xml).toContain('<DefaultPressure Bar="70"/>');
-    expect(xml).toContain('<Grain Id="Neutral"/>');
-    expect(xml).toContain('<FeedsFrom Container="Grain"/>');
-    expect(xml).toContain('<FeedsFrom Connector="_connector25"/>');
-    expect(xml).toContain('<SolidGrainSegment Id="Grain">');
+    expect(xml).toContain('<Grain Ref="Neutral"/>');
+    expect(xml).toContain('<Container KeyRef="Grain"/>');
+    expect(xml).toContain('<Connector KeyRef="_connector25"/>');
+    expect(xml).toContain('<SolidGrainSegment Key="Grain">');
     expect(xml).toContain('<WallThickness Mm="8"/>');
-    expect(xml).toContain('<SolidMotorNozzle Id="Nozzle">');
+    expect(xml).toContain('<SolidMotorNozzle Key="Nozzle">');
     expect(xml).toContain('<Capabilities>SolidMotorCase</Capabilities>');
   });
 
@@ -1595,13 +1646,11 @@ describe('solid rocket motors round-trip', () => {
   // motor (`CorePropulsionA_Prefab_LESA`), so dropping it is real data loss.
   it('round-trips <Nozzle AreaRatioMultiplier> and omits it at the default 1', () => {
     const parsed = gameDataFromAssets(
-      `<Assets><PartGameData Id="P">
-        <Rocket Id="Motor">
-          <Core Id="MotorCore" />
-          <Nozzle Id="Nozzle" SubPartId="a" />
-          <Nozzle Id="Nozzle" SubPartId="b" AreaRatioMultiplier="1.0025" />
-        </Rocket>
-      </PartGameData></Assets>`,
+      `<Assets><Part Id="P"><Rockets><Rocket Key="Motor">
+          <Core KeyRef="MotorCore" />
+          <Nozzles><Nozzle KeyRef="nozzleA" SubPart="a" /><Nozzle KeyRef="nozzleB" SubPart="b" AreaRatioMultiplier="1.0025" /></Nozzles>
+        </Rocket></Rockets>
+      </Part></Assets>`,
       'P',
       new DOMParser(),
     )!;
@@ -1609,15 +1658,14 @@ describe('solid rocket motors round-trip', () => {
       1, 1.0025,
     ]);
     const xml = serializeGameData(editingPart({ partId: 'P', gameData: { ...parsed.gameData } }));
-    expect(xml).toContain('<Nozzle Id="Nozzle" SubPartId="a"/>');
-    expect(xml).toContain('<Nozzle Id="Nozzle" SubPartId="b" AreaRatioMultiplier="1.0025"/>');
+    expect(xml).toContain('<Nozzle KeyRef="nozzleA" SubPart="a"/>');
+    expect(xml).toContain('<Nozzle KeyRef="nozzleB" SubPart="b" AreaRatioMultiplier="1.0025"/>');
   });
 
   it('resolves a non-positive <Nozzle AreaRatioMultiplier> to 1, as RocketNozzleReference does', () => {
     const parsed = gameDataFromAssets(
-      `<Assets><PartGameData Id="P">
-        <Rocket Id="Motor"><Core Id="C" /><Nozzle Id="N" AreaRatioMultiplier="0" /></Rocket>
-      </PartGameData></Assets>`,
+      `<Assets><Part Id="P"><Rockets><Rocket Key="Motor"><Core KeyRef="C" /><Nozzles><Nozzle KeyRef="N" AreaRatioMultiplier="0" /></Nozzles></Rocket></Rockets>
+      </Part></Assets>`,
       'P',
       new DOMParser(),
     )!;
@@ -1704,21 +1752,21 @@ describe('solid custom reactions (KSA hard requirements)', () => {
 describe('colliders', () => {
   /** The real `CoreCommandA_Prefab_MediumCapsuleVariantA` collision volume. */
   const MEDIUM_CAPSULE = `<Assets>
-    <PartGameData Id="CoreCommandA_Prefab_MediumCapsuleVariantA">
-      <Collider Id="Collider1">
-        <Cylinder Id="CylinderCollider1">
+    <Part Id="CoreCommandA_Prefab_MediumCapsuleVariantA"><Components>
+      <Collider Key="Collider1"><Colliders>
+        <Cylinder Key="CylinderCollider1">
           <LocationAsmb X="0" Y="0" Z="0" />
           <Collider2Asmb X="0" Y="0" Z="1.57" />
           <LengthY M="2" />
           <Radius M="0.5" />
         </Cylinder>
-        <Sphere Id="SphereCollider1">
+        <Sphere Key="SphereCollider1">
           <LocationAsmb X="-0.11" Y="0" Z="0" />
           <Collider2Asmb X="0" Y="0" Z="0" />
           <Radius M="0.89" />
         </Sphere>
-      </Collider>
-    </PartGameData>
+      </Colliders></Collider>
+    </Components></Part>
   </Assets>`;
 
   it('parses a real Core cylinder + sphere block into typed part-level colliders', () => {
@@ -1762,9 +1810,9 @@ describe('colliders', () => {
     });
     expect(roundTrip(part).colliders).toEqual(parsed.colliders);
     const xml = serializeGameData(part);
-    expect(xml).toContain('<Cylinder Id="CylinderCollider1">');
+    expect(xml).toContain('<Cylinder Key="CylinderCollider1">');
     expect(xml).toContain('<Collider2Asmb X="0" Y="0" Z="1.57"/>');
-    expect(xml).toContain('<Sphere Id="SphereCollider1">');
+    expect(xml).toContain('<Sphere Key="SphereCollider1">');
     expect(xml).toContain('<LocationAsmb X="-0.11" Y="0" Z="0"/>');
   });
 
@@ -1772,26 +1820,26 @@ describe('colliders', () => {
   // plus a SubPart-owned foot puck that rides the animated joint.
   it('routes part-level and SubPart-owned colliders to the right owners, both ways', () => {
     const xml = `<Assets>
-      <PartGameData Id="Leg">
-        <Collider Id="Collider1">
-          <Cylinder Id="Strut">
+      <Part Id="Leg"><Components>
+        <Collider Key="Collider1"><Colliders>
+          <Cylinder Key="Strut">
             <LocationAsmb X="-0.5501" Y="0.0013" Z="0.0464" />
             <Collider2Asmb X="3.0777" Y="0.008" Z="1.5705" />
             <LengthY M="2.1922" />
             <Radius M="0.4361" />
           </Cylinder>
-        </Collider>
-      </PartGameData>
-      <SubPartGameData Id="CoreLandingA_Subpart_MediumFootA">
-        <Collider Id="Collider1">
-          <Cylinder Id="Puck">
+        </Colliders></Collider>
+      </Components></Part>
+      <SubPart Id="CoreLandingA_Subpart_MediumFootA"><Components>
+        <Collider Key="Collider1"><Colliders>
+          <Cylinder Key="Puck">
             <LocationAsmb X="0" Y="0" Z="0" />
             <Collider2Asmb X="0" Y="0" Z="0" />
             <LengthY M="0.34" />
             <Radius M="0.5" />
           </Cylinder>
-        </Collider>
-      </SubPartGameData>
+        </Colliders></Collider>
+      </Components></SubPart>
     </Assets>`;
     const parsed = gameDataFromAssets(xml, 'Leg', new DOMParser())!;
     expect(parsed.colliders.map((c) => [c.id, c.ownerTemplateId])).toEqual([
@@ -1801,13 +1849,13 @@ describe('colliders', () => {
 
     const back = roundTrip(editingPart({ partId: 'Leg', colliders: parsed.colliders }));
     expect(back.colliders).toEqual(parsed.colliders);
-    // The foot has NO other GameData, so its <SubPartGameData> block exists purely to
+    // The foot has NO other GameData, so its <SubPart> block exists purely to
     // carry the collider — it must still be emitted.
     const out = serializeGameData(editingPart({ partId: 'Leg', colliders: parsed.colliders }));
-    expect(out).toContain('<SubPartGameData Id="CoreLandingA_Subpart_MediumFootA">');
+    expect(out).toContain('<SubPart Id="CoreLandingA_Subpart_MediumFootA" Modify="Patch">');
   });
 
-  it('emits SubPart-owned colliders INTO an existing <SubPartGameData> block, not a second one', () => {
+  it('emits SubPart-owned colliders INTO an existing <SubPart> block, not a second one', () => {
     const part = editingPart({
       partId: 'P',
       subPartGameData: [{ ...createSubPartGameData('Tmpl'), tanks: [createTank()] }],
@@ -1823,7 +1871,7 @@ describe('colliders', () => {
       ],
     });
     const xml = serializeGameData(part);
-    expect(xml.match(/<SubPartGameData Id="Tmpl">/g)).toHaveLength(1);
+    expect(xml.match(/<SubPart Id="Tmpl" Modify="Patch">/g)).toHaveLength(1);
     const back = roundTrip(part);
     expect(back.colliders[0].ownerTemplateId).toBe('Tmpl');
     // The owned light rides the same single block.
@@ -1857,9 +1905,9 @@ describe('colliders', () => {
   it('defaults a missing dimension to a visible size and warns', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const parsed = gameDataFromAssets(
-      `<Assets><PartGameData Id="P"><Collider Id="C">
-        <Sphere Id="s" />
-      </Collider></PartGameData></Assets>`,
+      `<Assets><Part Id="P"><Components><Collider Key="C"><Colliders>
+        <Sphere Key="s" />
+      </Colliders></Collider></Components></Part></Assets>`,
       'P',
       new DOMParser(),
     )!;
@@ -1871,10 +1919,10 @@ describe('colliders', () => {
 
   it('ignores an unsupported triangle-mesh collider child', () => {
     const parsed = gameDataFromAssets(
-      `<Assets><PartGameData Id="P"><Collider Id="C">
-        <TriangleMesh Id="nope" />
-        <Box Id="yes"><LengthX M="1"/><LengthY M="1"/><LengthZ M="1"/></Box>
-      </Collider></PartGameData></Assets>`,
+      `<Assets><Part Id="P"><Components><Collider Key="C"><Colliders>
+        <TriangleMesh Key="nope" />
+        <Box Key="yes"><LengthX M="1"/><LengthY M="1"/><LengthZ M="1"/></Box>
+      </Colliders></Collider></Components></Part></Assets>`,
       'P',
       new DOMParser(),
     )!;
@@ -1884,16 +1932,16 @@ describe('colliders', () => {
   it('round-trips the 5554 capsule convex hull and an explicitly scaled SubPart hull', () => {
     const parsed = gameDataFromAssets(
       `<Assets>
-        <PartGameData Id="P"><Collider Id="Collider1">
-          <ConvexHull Id="ConvexHullCollider1">
+        <Part Id="P"><Components><Collider Key="Collider1"><Colliders>
+          <ConvexHull Key="ConvexHullCollider1">
             <LocationAsmb X="0" Y="0" Z="0" />
             <Collider2Asmb X="0" Y="0" Z="-1.5708" />
-            <Mesh Id="_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1" />
+            <Mesh Ref="_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1" />
           </ConvexHull>
-        </Collider></PartGameData>
-        <SubPartGameData Id="T"><Collider Id="Collider1">
-          <ConvexHull Id="scaled"><Mesh Id="stock_hull"/><Scale X="2" Y="3" Z="4"/></ConvexHull>
-        </Collider></SubPartGameData>
+        </Colliders></Collider></Components></Part>
+        <SubPart Id="T"><Components><Collider Key="Collider1"><Colliders>
+          <ConvexHull Key="scaled"><Mesh Ref="stock_hull"/><Scale X="2" Y="3" Z="4"/></ConvexHull>
+        </Colliders></Collider></Components></SubPart>
       </Assets>`,
       'P',
       new DOMParser(),
@@ -1913,16 +1961,16 @@ describe('colliders', () => {
     const part = editingPart({ partId: 'P', colliders: parsed.colliders });
     expect(roundTrip(part).colliders).toEqual(parsed.colliders);
     expect(serializeGameData(part)).toContain(
-      '<Mesh Id="_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1"',
+      '<Mesh Ref="_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1"',
     );
   });
 
   it('distinguishes an absent hull Scale from omitted Vector3Reference attributes', () => {
     const parsed = gameDataFromAssets(
-      `<Assets><PartGameData Id="P"><Collider>
-      <ConvexHull Id="default"><Mesh Id="hull"/></ConvexHull>
-      <ConvexHull Id="partial"><Mesh Id="hull"/><Scale Y="2"/></ConvexHull>
-    </Collider></PartGameData></Assets>`,
+      `<Assets><Part Id="P"><Components><Collider Key="collider"><Colliders>
+      <ConvexHull Key="default"><Mesh Ref="hull"/></ConvexHull>
+      <ConvexHull Key="partial"><Mesh Ref="hull"/><Scale Y="2"/></ConvexHull>
+    </Colliders></Collider></Components></Part></Assets>`,
       'P',
       new DOMParser(),
     )!;
@@ -1933,8 +1981,8 @@ describe('colliders', () => {
   it('keeps <Collider> out of the unmodeled passthrough on both GameData levels', () => {
     const parsed = gameDataFromAssets(
       `<Assets>
-        <PartGameData Id="P"><Collider Id="C"><Sphere Id="s"><Radius M="1"/></Sphere></Collider></PartGameData>
-        <SubPartGameData Id="T"><Collider Id="C"><Sphere Id="t"><Radius M="1"/></Sphere></Collider></SubPartGameData>
+        <Part Id="P"><Components><Collider Key="C"><Colliders><Sphere Key="s"><Radius M="1"/></Sphere></Colliders></Collider></Components></Part>
+        <SubPart Id="T"><Components><Collider Key="C"><Colliders><Sphere Key="t"><Radius M="1"/></Sphere></Colliders></Collider></Components></SubPart>
       </Assets>`,
       'P',
       new DOMParser(),
@@ -1956,21 +2004,19 @@ describe('IVA seats', () => {
    * `<EVADoor SeatId>`s resolve against (`CoreIVASpaceAGameData.xml:18-28`).
    */
   const CORE_CAPSULE = `<Assets>
-    <PartGameData Id="CoreIVASpaceA_Prefab_MediumCapsuleA">
-        <EditorTag Value="Hidden"/>
-
-        <IVASeat Id="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA">
+    <Part Id="CoreIVASpaceA_Prefab_MediumCapsuleA"><Components>
+        <IVASeat Key="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA">
             <Position X="-0.45" Y="0.42" Z="-0.35" />
             <ForwardAxis X="1" />
             <UpAxis Z="-1" />
         </IVASeat>
 
-        <IVASeat Id="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatB">
+        <IVASeat Key="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatB">
             <Position X="-0.45" Y="-0.42" Z="-0.35" />
             <ForwardAxis X="1" />
             <UpAxis Z="-1" />
         </IVASeat>
-    </PartGameData>
+    </Components></Part>
   </Assets>`;
 
   const parseSeats = (xml: string, partId = 'P') =>
@@ -2011,15 +2057,15 @@ describe('IVA seats', () => {
 
   it('keeps <IVASeat> out of the unmodeled passthrough', () => {
     const parsed = parseSeats(CORE_CAPSULE, 'CoreIVASpaceA_Prefab_MediumCapsuleA');
-    expect(parsed.gameData.unknownChildren.map((n) => n.tag)).toEqual([]);
+    expect(parsed.gameData.unknownComponents.map((n) => n.tag)).toEqual([]);
   });
 
   it('preserves document order (KSA’s seat cycle order)', () => {
-    const parsed = parseSeats(`<Assets><PartGameData Id="P">
+    const parsed = parseSeats(`<Assets><Part Id="P"><Components>
       <IVASeat><Position X="1" /></IVASeat>
       <IVASeat><Position X="2" /></IVASeat>
       <IVASeat><Position X="3" /></IVASeat>
-    </PartGameData></Assets>`);
+    </Components></Part></Assets>`);
     expect(parsed.ivaSeats.map((s) => [s.id, s.position.x])).toEqual([
       ['_seat1', 1],
       ['_seat2', 2],
@@ -2029,7 +2075,7 @@ describe('IVA seats', () => {
 
   it('takes the C# FIELD defaults when the axis ELEMENTS are absent entirely', () => {
     const parsed = parseSeats(
-      `<Assets><PartGameData Id="P"><IVASeat><Position X="1" /></IVASeat></PartGameData></Assets>`,
+      `<Assets><Part Id="P"><Components><IVASeat><Position X="1" /></IVASeat></Components></Part></Assets>`,
     );
     expect(seats(parsed)).toEqual([
       {
@@ -2046,7 +2092,7 @@ describe('IVA seats', () => {
 
   it('captures the authored <IVASeat Id> separately from the regenerated editor id', () => {
     const parsed = parseSeats(
-      `<Assets><PartGameData Id="P"><IVASeat Id="pilot"><Position X="1" /></IVASeat></PartGameData></Assets>`,
+      `<Assets><Part Id="P"><Components><IVASeat Key="pilot"><Position X="1" /></IVASeat></Components></Part></Assets>`,
     );
     expect(parsed.ivaSeats[0].id).toBe('_seat1');
     expect(parsed.ivaSeats[0].ksaId).toBe('pilot');
@@ -2056,7 +2102,7 @@ describe('IVA seats', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     // A present <ForwardAxis/> reads (0,0,0) — a zero look direction KSA NaNs the camera on.
     const parsed = parseSeats(
-      `<Assets><PartGameData Id="P"><IVASeat><ForwardAxis /></IVASeat></PartGameData></Assets>`,
+      `<Assets><Part Id="P"><Components><IVASeat><ForwardAxis /></IVASeat></Components></Part></Assets>`,
     );
     expect(parsed.ivaSeats).toEqual([]);
     expect(warn).toHaveBeenCalledOnce();
@@ -2066,25 +2112,25 @@ describe('IVA seats', () => {
 
   it('drops a seat whose axes are parallel, and warns', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const parsed = parseSeats(`<Assets><PartGameData Id="P"><IVASeat>
+    const parsed = parseSeats(`<Assets><Part Id="P"><Components><IVASeat>
       <ForwardAxis X="1" /><UpAxis X="1" />
-    </IVASeat></PartGameData></Assets>`);
+    </IVASeat></Components></Part></Assets>`);
     expect(parsed.ivaSeats).toEqual([]);
     expect(warn).toHaveBeenCalledOnce();
     warn.mockRestore();
   });
 
-  it('leaves a <SubPartGameData><IVASeat> riding the passthrough (Part-level seats only)', () => {
+  it('leaves a <SubPart><IVASeat> riding the passthrough (Part-level seats only)', () => {
     const xml = `<Assets>
-      <PartGameData Id="P"><EditorTag Value="Hidden" /></PartGameData>
-      <SubPartGameData Id="Tmpl">
+      <Part Id="P"><EditorTags><EditorTag Ref="Hidden" /></EditorTags></Part>
+      <SubPart Id="Tmpl"><Components>
         <IVASeat><Position X="0.5" /><ForwardAxis X="1" /><UpAxis Z="-1" /></IVASeat>
-      </SubPartGameData>
+      </Components></SubPart>
     </Assets>`;
     const parsed = parseSeats(xml);
     expect(parsed.ivaSeats).toEqual([]);
     const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!;
-    expect(spd.unknownChildren.map((n) => n.tag)).toEqual(['IVASeat']);
+    expect(spd.unknownComponents.map((n) => n.tag)).toEqual(['IVASeat']);
     // …and it survives serialize → re-parse verbatim.
     const source = editingPart({ partId: 'P', subPartGameData: parsed.subPartGameData });
     const reparsed = roundTrip(source);
@@ -2095,7 +2141,7 @@ describe('IVA seats', () => {
 
   it('reads the real Core seats from the vendored fixture', () => {
     const parsed = gameDataFromAssets(
-      readVendoredAsset('CoreIVASpaceAGameData.xml'),
+      resolvedCoreXml(),
       'CoreIVASpaceA_Prefab_MediumCapsuleA',
       new DOMParser(),
     )!;
@@ -2105,11 +2151,15 @@ describe('IVA seats', () => {
     ]);
     // The fixture's part-level `<Light>` is MODELED (the warm ray-traced interior Point
     // light) — nothing rides the passthrough anymore.
-    expect(parsed.gameData.unknownChildren).toEqual([]);
+    expect(parsed.gameData.unknownComponents).toEqual([]);
     expect(parsed.lights.map((l) => [l.id, l.ownerTemplateId, l.type])).toEqual([
       ['_light1', null, 'Point'],
       ['_light2', null, 'Point'],
       ['_light3', null, 'Point'],
+      ['_light4', 'LightSubPart', 'Point'],
+      ['_light5', 'LightSubPart', 'Spot'],
+      ['_light6', 'CoreElectricalA_Subpart_SpotlightA', 'Spot'],
+      ['_light7', 'CoreElectricalA_Subpart_FloodlightA', 'Spot'],
     ]);
     expect(parsed.lights[0].position).toEqual({ x: -0.275, y: 0, z: -0.8 });
     expect(parsed.lights[0].rangeM).toBe(1.5);
@@ -2118,7 +2168,14 @@ describe('IVA seats', () => {
     expect(parsed.lights[0].rayTracing).toBe(true);
     expect(parsed.lights[0].disableInIva).toBe(false);
     // …and the two seat face-fill lights build 5261 added, which carry <DisableInIva>.
-    expect(parsed.lights.slice(1).map((l) => l.disableInIva)).toEqual([true, true]);
+    expect(parsed.lights.slice(1).map((l) => l.disableInIva)).toEqual([
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+    ]);
     expect(parsed.lights[1].position).toEqual({ x: -0.1, y: 0.42, z: -0.6 });
     expect(parsed.lights[2].position).toEqual({ x: -0.1, y: -0.42, z: -0.6 });
   });
@@ -2126,12 +2183,12 @@ describe('IVA seats', () => {
 
 // KSA 2026.9.7.5402 added `PartTemplate.CrashTolerance` (Pa) for its new part-failure model.
 // It is a GEOMETRY-<Part> root attribute that `ApplyGameData` never copies, so it must be read
-// from and written to the <Part> element — a <PartGameData CrashTolerance> would be dead.
+// from and written to the <Part> element — a <Part CrashTolerance> would be dead.
 describe('<Part CrashTolerance> (KSA 2026.9.7.5402 part-failure model)', () => {
   const partEl = (attrs: string): Element =>
     new DOMParser()
       .parseFromString(
-        `<Assets><Part Id="P" ${attrs}><SubPart Id="a_1" InstanceOf="Core.A"/></Part></Assets>`,
+        `<Assets><Part Id="P" ${attrs}><SubPart Id="a_1" Ref="Core.A"/></Part></Assets>`,
         'application/xml',
       )
       .getElementsByTagName('Part')[0] as unknown as Element;
@@ -2167,9 +2224,9 @@ describe('<Part CrashTolerance> (KSA 2026.9.7.5402 part-failure model)', () => {
 
 describe('template rocket controllers', () => {
   it('models additive controller blocks and exports each controller once at its template scope', () => {
-    const xml = `<Assets><PartGameData Id="TestPart"/>
-      <SubPartGameData Id="Thruster"><RocketThrusterController Id="RCS"><RocketReference Id="Local"/><ControlMap CSV=""/></RocketThrusterController></SubPartGameData>
-      <SubPartGameData Id="Thruster"><RocketEngineController Id="Engine"><RocketReference Id="Remote" SubPartId="Peer"/></RocketEngineController></SubPartGameData></Assets>`;
+    const xml = `<Assets><Part Id="TestPart"/>
+      <SubPart Id="Thruster"><RocketThrusterControllers><RocketThrusterController Key="RCS"><Rockets><Rocket KeyRef="Local"/></Rockets><ControlMap CSV=""/></RocketThrusterController></RocketThrusterControllers></SubPart>
+      <SubPart Id="Thruster"><RocketEngineControllers><RocketEngineController Key="Engine"><Rockets><Rocket KeyRef="Remote" SubPart="Peer"/></Rockets></RocketEngineController></RocketEngineControllers></SubPart></Assets>`;
     const parsed = gameDataFromAssets(xml, 'TestPart')!;
     const data = parsed.subPartGameData[0];
     expect(data.rocketControllers).toEqual([
@@ -2188,19 +2245,24 @@ describe('template rocket controllers', () => {
     ]);
     expect(data.unknownChildren).toEqual([]);
     const out = serializeGameData(editingPart({ subPartGameData: parsed.subPartGameData }));
-    expect(out.match(/<RocketThrusterController/g)).toHaveLength(1);
+    expect(out.match(/<RocketThrusterController Key=/g)).toHaveLength(1);
     expect(out).toContain('<ControlMap CSV=""');
-    expect(gameDataFromAssets(out, 'TestPart')!.subPartGameData).toEqual(parsed.subPartGameData);
+    const reparsed = roundTripGameData(editingPart({ subPartGameData: parsed.subPartGameData }));
+    const controllers = reparsed.subPartGameData[0].rocketControllers;
+    expect(controllers.toSorted((a, b) => a.id.localeCompare(b.id))).toEqual(
+      parsed.subPartGameData[0].rocketControllers.toSorted((a, b) => a.id.localeCompare(b.id)),
+    );
+    expect(reparsed.subPartGameData[0].unknownAttrs).toEqual({});
   });
 });
 
 describe('engine inherited fields', () => {
   it('retains casing mass, density and principal axes through grain import and export', () => {
-    const xml = `<Assets><PartGameData Id="Motor"><SolidGrainSegment Id="Grain"><Grain>
+    const xml = `<Assets><Part Id="Motor"><Components><SolidGrainSegment Key="Grain"><Grain>
       <Mass Tonnes="0.02" Kg="3" G="500"/><Density GPerCm3="2.7" KgPerM3="1"/>
       <Paf2Asmb X="0.2" Y="0.3" Z="0.4"/>
       <OuterRadius M="0.5"/><WallThickness Mm="6"/><Length M="1"/>
-      </Grain></SolidGrainSegment></PartGameData></Assets>`;
+      </Grain></SolidGrainSegment></Components></Part></Assets>`;
     const parsed = gameDataFromAssets(xml, 'Motor', new DOMParser())!;
     const grain = parsed.gameData.solidGrainSegments[0];
     expect(grain).toMatchObject({
@@ -2220,7 +2282,7 @@ describe('engine inherited fields', () => {
       description: 'A tuned engine propellant',
     };
     const part = editingPart({ partId: 'Motor', customReactions: [reaction] });
-    const parsed = gameDataFromAssets(serializeGameData(part), 'Motor', new DOMParser())!;
+    const parsed = roundTripGameData(part);
     expect(parsed.customReactions[0].description).toBe(reaction.description);
   });
 });

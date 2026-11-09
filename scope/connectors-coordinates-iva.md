@@ -1,5 +1,33 @@
 # Scope — Connectors, coordinate mapping, IVA
 
+## Current contract — KSA 2026.11.10.5801
+
+Coordinate mapping, quaternion ordering and the IVA view clamps were re-audited;
+the numerical conventions remain unchanged. XML now uses `<Connectors><Connector
+Key="…">`, `<Siblings><Sibling KeyRef="…"/>`, and keyed references throughout.
+The `Edge` flag is supported alongside the existing connector modes/capabilities.
+
+IVA camera definitions are keyed entries in `<IVASeats>`, preserving document order.
+Gimbals are entries in `<Gimbals>` with their own Key and a `<SubPart KeyRef="…"/>`
+target; the gimbal key is distinct from the placement key. Its Transform and zero
+angle metadata survive import/export. An absent Transform Scale defaults to one;
+a present Scale has zero for omitted axes, matching current native vector reading.
+
+Whole-Part import allocates distinct case-insensitive local keys and remaps
+connector, placement, engine, gimbal, seat and raw module references. A KeyRef with
+SubPart scope continues to resolve within that template. Global Refs are unchanged.
+Only PartModel supports the Internal field; Dynamic and Glass components do not.
+The multi-model catalog retains those distinctions.
+
+Current implementation evidence and validation are recorded in
+[the 5801 upgrade](../plans/KSA_5801_UPGRADE.md).
+
+## Archived detail from audits through 5554
+
+The remainder records earlier source investigations. Its old XML examples and
+compatibility verdicts apply to their named builds; use the current contract above
+and [Part XML](part-and-subpart-xml.md) when authoring 5801 content.
+
 > How flexo places geometry in KSA's frame, models connectors, authors `<IVASeat>` interior-camera
 > vantage points, and carries the `<Internal>` interior-only render flag.
 > Read alongside [docs/coordinates.md](../docs/coordinates.md),
@@ -7,8 +35,8 @@
 > `<Internal>` flag) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
-**Baseline:** re-vetted against KSA build **2026.10.10.5554** (decomp @ 5482 + shipped Core XML).
-**Baseline status:** ✅ **INTACT** — 5554 retains connector/seat/coordinate/IVA forms;
+**Historical baseline:** re-vetted against KSA build **2026.10.10.5554** (decomp @ 5482 + shipped Core XML).
+**Historical baseline status:** ✅ **INTACT** — 5554 retains connector/seat/coordinate/IVA forms;
 vehicle-relative camera precision and TVC changes need no authoring changes. See
 [What changed in 5554](#what-changed-in-5554). Previously, 5482 changed no connector, seat, coordinate or `<Internal>`
 schema; the seat keys survived the input-binding refactor and the render gate moved without

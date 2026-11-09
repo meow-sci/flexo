@@ -143,11 +143,22 @@ function readCategory(el: Element, fallback: ReactionCategory): ReactionCategory
   return raw && REACTION_CATEGORIES.has(raw) ? (raw as ReactionCategory) : fallback;
 }
 
+function wrappedChildren(el: Element, wrapper: string, tag: string): Element[] {
+  const container = directChildren(el, wrapper)[0];
+  return container ? directChildren(container, tag) : [];
+}
+
 /** Reactants → normalized mass fractions (ReactionTemplate.CreateReactants). */
 function readReactants(el: Element): ReactionReactant[] {
-  const raw = directChildren(el, 'Reactant')
+  const raw = wrappedChildren(el, 'Reactants', 'Reactant')
     .map((r) => ({
-      phaseId: r.getAttribute('Id') ?? '',
+      phaseId: (() => {
+        const ref = r.getAttribute('Ref') ?? '';
+        const suffix = (
+          { Solid: 's', Liquid: 'l', Gas: 'g', Plasma: 'p' } as Record<string, string>
+        )[r.getAttribute('Phase') ?? ''];
+        return ref && suffix ? `${ref}(${suffix})` : ref;
+      })(),
       massShare: readAttrNum(r, 'MassShare'),
     }))
     .filter((r) => r.phaseId && Number.isFinite(r.massShare) && r.massShare > 0);
@@ -162,7 +173,7 @@ function readReactants(el: Element): ReactionReactant[] {
 /** `<PressureCondition>` children → sorted 1-D LUT rows (ReactionTemplate.FillRow units). */
 function readPressureConditions(el: Element, fixedTemperature?: number): CombustionLutRow[] {
   const rows: CombustionLutRow[] = [];
-  for (const cond of directChildren(el, 'PressureCondition')) {
+  for (const cond of wrappedChildren(el, 'PressureConditions', 'PressureCondition')) {
     const lnPressure = readAttrNum(directChildren(cond, 'LnPressure')[0], 'Value');
     const temperature =
       fixedTemperature ?? sumUnits(directChildren(cond, 'Temperature')[0], { K: 1 });
@@ -205,7 +216,7 @@ export function parseReactionsFile(doc: Document, out: ReactionData[]): void {
   for (const el of directChildren(root, 'ThermalReaction')) {
     const id = el.getAttribute('Id');
     if (!id) continue;
-    const rows = directChildren(el, 'TemperatureCondition')
+    const rows = wrappedChildren(el, 'TemperatureConditions', 'TemperatureCondition')
       .map((condition) => {
         const temperature = readAttrNum(condition, 'K');
         return { temperature, lut: { rows: readPressureConditions(condition, temperature) } };
@@ -259,7 +270,7 @@ export function parseReactionsFile(doc: Document, out: ReactionData[]): void {
     // Rows sorted by their O/F ratio (MixtureReactionTemplate.Create sorts, then
     // rejects non-rectangular tables — we drop rows that don't match the first
     // row's pressure-axis length instead of throwing).
-    const rowEls = directChildren(el, 'MixtureRatioCondition')
+    const rowEls = wrappedChildren(el, 'MixtureRatioConditions', 'MixtureRatioCondition')
       .map((rowEl) => ({ ratio: readAttrNum(rowEl, 'Value'), rows: readPressureConditions(rowEl) }))
       .filter((r) => Number.isFinite(r.ratio) && r.rows.length > 0)
       .sort((a, b) => a.ratio - b.ratio);

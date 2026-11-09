@@ -1,21 +1,18 @@
-import { cpSync, createReadStream, existsSync, statSync } from 'node:fs';
-import { extname, join, normalize, resolve, sep } from 'node:path';
+import { cpSync, createReadStream, existsSync, statSync, writeFileSync } from 'node:fs';
+import { extname, join, normalize, relative, resolve, sep } from 'node:path';
 import { loadEnv, type Plugin } from 'vite';
+import { buildMeshIndex } from './meshIndex';
+import { selectBrowserAssets } from './assetSelection';
 
 /**
  * Serves the KSA "Core" mod assets (catalog XML + GLB/GLTF meshes and KTX2/DDS
  * textures) under the `/ksa/` URL prefix, sourced entirely from the directory
  * named by the `KSA_ASSETS_DIR` env var.
  *
- * That directory is produced by `scripts/copy-ksa-assets-to-private-repo.ts`,
- * which already prunes the upstream asset tree down to just the Part/SubPart
- * catalog XML and the binaries those reference. The licensed binaries live in a
- * separate private repo (they must stay out of this open-source repo) and are
- * pulled in at build time. So the plugin no longer needs to know anything about
- * the catalog — it just serves/copies the contents of `KSA_ASSETS_DIR` verbatim.
- *
- * - dev (`configureServer`): streams files on demand from `KSA_ASSETS_DIR`.
- * - build (`writeBundle`): copies the whole `KSA_ASSETS_DIR` tree into `dist/ksa/`.
+ * The private mirror may also contain planetary/cloud payloads. Development
+ * streams assets on demand; production copies the XML, referenced Part/static
+ * binaries and editor aides selected by assetSelection.ts. Licensed binaries
+ * remain outside this repository.
  *
  * See docs/asset-pipeline.md.
  */
@@ -57,7 +54,21 @@ export function ksaAssets(): Plugin {
         return;
       }
       const outDir = options.dir ?? join(root, 'dist');
-      cpSync(assetsDir, join(outDir, 'ksa'), { recursive: true });
+      const selected = selectBrowserAssets(assetsDir);
+      const allowed = new Set(selected);
+      allowed.add('');
+      for (const file of selected) {
+        const segments = file.split('/');
+        for (let i = 1; i < segments.length; i++) allowed.add(segments.slice(0, i).join('/'));
+      }
+      cpSync(assetsDir, join(outDir, 'ksa'), {
+        recursive: true,
+        filter: (source) => allowed.has(relative(assetsDir, source).split(sep).join('/')),
+      });
+      writeFileSync(
+        join(outDir, 'ksa', 'mesh-index.json'),
+        JSON.stringify(buildMeshIndex(assetsDir)),
+      );
     },
     configureServer(server) {
       if (!assetsDir || !existsSync(assetsDir)) {
@@ -70,6 +81,11 @@ export function ksaAssets(): Plugin {
         if (!req.url || !req.url.startsWith(urlPrefix) || !baseDir) return next();
         // Strip query string and decode, then prevent path traversal.
         const rel = decodeURIComponent(req.url.slice(urlPrefix.length).split('?')[0]);
+        if (rel === 'mesh-index.json') {
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(buildMeshIndex(baseDir)));
+          return;
+        }
         const abs = normalize(join(baseDir, rel));
         if (abs !== baseDir && !abs.startsWith(baseDir + sep)) {
           res.statusCode = 403;

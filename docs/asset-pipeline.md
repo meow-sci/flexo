@@ -70,44 +70,51 @@ var (set in `.env`, which is gitignored). This points at a **separate private re
 flexo is open source, but the licensed binary assets must stay out of it, so they live
 elsewhere and are referenced only at dev/build time.
 
-That directory holds a self-contained, pre-pruned asset tree (catalog XML at the root,
+That directory holds a self-contained asset tree (catalog XML at the root,
 `Meshes/`, `Textures/`, etc.) — exactly the layout the app fetches under `/ksa/`.
 
-### Producing `KSA_ASSETS_DIR`: the copy script
+### Producing `KSA_ASSETS_DIR`
 
-`copy-assets.ts` in the **private assets repo** (a Bun script) builds that tree from
-the installed game's `Content/Core`. Its `CONTENT_DIR` names the game installation;
-its output is the private repo's `assets/` directory. Run it on the machine with the
-installed game. It does the selective pruning so the Vite plugin doesn't have to:
+The private repository's Node 24+ entrypoint is `update-from-ksa-build.ts`.
+Run it there with the game installation directory (containing `KSA.dll`,
+`Content/Core/`, and `Content/Versions/`):
 
-1. Scans `Content/Core/**/*.xml` and discovers `<Assets>` catalogs containing
-   `<Part>`/`<SubPart>`, static objects, reactions, grain geometries, or solid
-   propellants (no hard-coded part-catalog filename list).
-2. Copies each catalog XML plus its `*GameData.xml` sibling (when present). Explicit
-   `Materials.xml` and `Volatiles.xml` copies supply physical substance densities for
-   Data → Mass; `SolidPropellants.xml` supplies the solid propellant phases.
-3. Parses every catalog + GameData XML for `Path="..."` references to `.glb`, `.gltf`,
-   `.ktx2`, and `.dds` files and copies each one, preserving its `Meshes/…` /
-   `Textures/…` layout. Referenced files missing on disk are warned + skipped.
-
-4. Copies the self-contained `Characters/` and `Textures/Characters/` directories,
-   the terrain-decal textures, `Astronomicals.xml`, `SolSystem.xml`, and the latest
-   game `version.json`.
-
-This avoids the huge unrelated planet/cloud assets in `Content/Core/Meshes`+`Textures`
-(a wholesale copy is multi-GB). From the private assets repo, run:
-
-```
-bun copy-assets.ts
-python3 tools/reencode-textures-uastc.py assets/Textures
+```sh
+node update-from-ksa-build.ts /path/to/ksa-game
 ```
 
-The second command is required after copying textures: game SubPart atlases use
-desktop BCn formats, while flexo serves UASTC so browsers can transcode them for
-their GPU. The re-encoder skips already-UASTC files and leaves `Textures/Characters/`
-in its shipped BC1/BC7 formats so exported kitten meshes retain game-compatible
-textures. Collision atlases referenced by `<MeshAtlas HostOnly="true">` travel
-through the same binary-path scan as rendering atlases.
+The updater discovers part, subpart, static-object, reaction, and grain XML;
+includes GameData-named patch files and the physical-material libraries; follows
+binary `Path` attributes; and copies characters, celestial XML, and terrain decals.
+It records the highest game revision in `assets/version.json`. Texture paths now
+live on top-level `<Texture Id Path Category>` rows; `<PbrMaterial>` slots use
+`Ref`, so all referenced definitions must be available to the catalog resolver.
+
+The updater stages the snapshot and runs its locked `uv` environment to convert
+2D BC1/BC4/BC5/BC7 atlases to UASTC, regenerating mipmaps. `Textures/Characters/`
+retains the game's formats for kitten exports. Cubemaps, arrays, and volumes stay
+in their original dimensional formats. It replaces the output only after a
+successful copy and conversion. Node and uv are required; the private repository
+provides its own Python dependencies and supported KTX binaries.
+
+Standalone inspection in the private repository uses:
+
+```sh
+uv run --locked python tools/reencode-textures-uastc.py assets/Textures --dry-run
+```
+
+The 5801 mirror already contains the new foil and cloth atlases in UASTC. No
+additional conversion is needed for those files. Collision atlases identified by
+`<MeshAtlas HostOnly="true">` are copied too, but are excluded from visual mesh
+lookup.
+
+The current mirror is about **2.3 GB**, compared with 213 MB in the supplied 5638
+mirror. Its broad XML discovery also matches the nested static-object references
+in `Astronomicals.xml`, which pulls in planet and cloud payloads. Production selection in `vite/assetSelection.ts` retains all root XML and the
+Part/static Path dependencies, plus Character sidecars, animations and tiny ICRP
+decals. It omits the unused planetary/cloud binaries without changing the private
+mirror. Development continues to stream requested files on demand. See the
+[5801 asset audit](../plans/KSA_5801_RENDER_RESEARCH.md) for the measured inventory.
 
 ## Dev + Build: `vite/ksaAssets.ts` plugin
 
@@ -116,10 +123,19 @@ The `ksaAssets()` plugin resolves `KSA_ASSETS_DIR` in `configResolved` (via Vite
 
 - **dev (`configureServer`)** — installs middleware that serves `GET /ksa/*` by
   streaming files from `KSA_ASSETS_DIR`, with a path-traversal guard and per-extension
-  `Content-Type`.
-- **build (`writeBundle`)** — recursively copies the whole `KSA_ASSETS_DIR` tree into
-  `dist/ksa/` (`cpSync`). No XML parsing or filename lists: the copy script already did
-  the pruning, so the plugin just mirrors the directory verbatim.
+  `Content-Type`. `/ksa/mesh-index.json` is generated from the referenced GLB mesh
+  names in the current resolved catalog.
+- **build (`writeBundle`)** — copies the resources selected by `assetSelection.ts`
+  into `dist/ksa/`, then generates `mesh-index.json` from the XML and GLB mesh names.
+  Part/static binary references, character aides and animation files remain available;
+  the planet/cloud payloads used only by the native game are omitted.
+
+`vite/meshIndex.ts` reads only the GLB JSON chunks to map mesh names to their
+owning atlas. It excludes HostOnly collision atlases, catches ambiguous referenced
+mesh names, and writes the same index into the build. Model references use glTF
+mesh names rather than atlas IDs or assumptions about the source XML file.
+The runtime catalog and preview manifest share the resolved content corpus;
+see [catalog loading](subpart-catalog.md).
 
 If `KSA_ASSETS_DIR` is unset or the directory is missing, the plugin warns (dev:
 `/ksa` requests 404; build: nothing emitted) rather than failing the build/tests.
@@ -163,8 +179,10 @@ private half of a read-only Deploy Key on `meow-sci/flexo-private-assets`).
 
 ## Other considerations
 
-- **Size:** all category atlases ship up front. To shrink, split per-category and
-  lazy-load, or convert textures offline (see `plans/FLEXO_TEXTURING.md` appendix).
+- **Size:** every file in the mirror is included in the production artifact; the
+  browser fetches the geometry and maps it needs on demand. Check the artifact size
+  after changing the private snapshot. UASTC conversion does not remove unrelated
+  planet payloads.
 - **Cache headers / CDN:** atlases are large and content-stable — serve with long
   cache lifetimes.
 

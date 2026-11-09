@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Assets>
+  <Part Id="CoreLifeSupportA_Prefab_SupplyLockerA" Modify="Patch" DisplayName="SL-M1 Supply Locker">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Life Support" />
+    </EditorTags>
+    <Components Modify="Extend">
+      <Habitat Key="SupplyLocker">
+        <StorageVolume M3="0.021" />
+        <LocationAsmb Y="0.19878" />
+      </Habitat>
+    </Components>
+    <InertMasses Modify="Extend">
+      <HollowSphereMass>
+        <LocationAsmb Y="0.19878" Z="0.184124" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Radius M="0.175" />
+        <WallThickness Mm="2" />
+      </HollowSphereMass>
+      <HollowSphereMass>
+        <LocationAsmb Y="0.19878" Z="-0.184124" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Radius M="0.175" />
+        <WallThickness Mm="2" />
+      </HollowSphereMass>
+    </InertMasses>
+  </Part>
+
+  <Part Id="CoreLifeSupportA_Prefab_SupplyLockerB" Modify="Patch" DisplayName="SL-M2 Supply Locker">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Life Support" />
+    </EditorTags>
+    <Components Modify="Extend">
+      <Habitat Key="SupplyLocker">
+        <StorageVolume M3="0.105" />
+        <LocationAsmb Y="0.1985" />
+      </Habitat>
+    </Components>
+    <InertMasses Modify="Extend">
+      <HollowOpenCylinderMass>
+        <LocationAsmb Y="0.1985" Z="0.18429" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Length M="0.90276" />
+        <OuterRadius M="0.175" />
+        <WallThickness Mm="2" />
+      </HollowOpenCylinderMass>
+      <HollowOpenCylinderMass>
+        <LocationAsmb Y="0.1985" Z="-0.18429" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Length M="0.90276" />
+        <OuterRadius M="0.175" />
+        <WallThickness Mm="2" />
+      </HollowOpenCylinderMass>
+    </InertMasses>
+  </Part>
+</Assets>

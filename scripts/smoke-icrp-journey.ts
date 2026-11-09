@@ -23,6 +23,7 @@ import { chromium } from 'playwright'
 const BASE = process.env.SMOKE_BASE ?? 'http://localhost:5173/flexo/apps/icrp/'
 const SERVER_TIMEOUT_MS = 90_000
 const OUT_SHOT = process.env.JOURNEY_SHOT ?? ''
+const CHROMIUM_EXECUTABLE_PATH = process.env.CHROMIUM_EXECUTABLE_PATH
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`ASSERT: ${msg}`)
@@ -73,10 +74,22 @@ if (!process.env.SMOKE_BASE) {
 let failed = false
 try {
   await waitForServer(BASE)
-  const browser = await chromium.launch()
+  const browser = await chromium.launch({ executablePath: CHROMIUM_EXECUTABLE_PATH })
 
   const page = await browser.newPage({ viewport: { width: 1500, height: 900 } })
-page.on('pageerror', (e) => console.log('PAGEERROR:', e.message))
+const browserErrors: string[] = []
+const badResponses: string[] = []
+const requestFailures: string[] = []
+page.on('console', (message) => {
+  if (message.type() === 'error') browserErrors.push(message.text())
+})
+page.on('pageerror', (error) => browserErrors.push(`pageerror: ${error.message}`))
+page.on('response', (response) => {
+  if (response.status() >= 400) badResponses.push(`${response.status()} ${response.url()}`)
+})
+page.on('requestfailed', (request) =>
+  requestFailures.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText ?? 'failed'}`),
+)
 await page.goto(BASE)
 await page.waitForTimeout(3000)
 
@@ -333,6 +346,12 @@ assert(Math.abs(posAfter.y - posBefore.y - 0.5) < 1e-9, `arrow nudged by snap in
 console.log('ok  ArrowRight nudged east by the 0.5 m snap increment')
 
 if (OUT_SHOT) await page.screenshot({ path: OUT_SHOT })
+console.log(
+  `browser errors: ${browserErrors.length}; bad responses: ${badResponses.length}; failed requests: ${requestFailures.length}`,
+)
+for (const error of browserErrors) console.log(`  browser error: ${error}`)
+for (const response of badResponses) console.log(`  bad response: ${response}`)
+for (const failure of requestFailures) console.log(`  request failure: ${failure}`)
 await browser.close()
 } catch (err) {
   failed = true

@@ -26,8 +26,24 @@ bytes + transfer function). `KTX2Loader` then transcodes UASTC at runtime to BC7
 compressed format — so SubParts render on **every** GPU/browser. The re-encode runs
 in place over `assets/Textures/` and **skips `Characters/`** (kitten atlases stay raw
 BC7 — flexo can bundle those verbatim into exported KSA mods, where the game needs
-real BC7). Re-run it after each game-asset sync (it's idempotent). The decode/encode
-needs the KTX-Software `ktx` v4 CLI + `pip install texture2ddecoder zstandard Pillow`.
+real BC7). Re-run it after each game-asset sync (it's idempotent). The private updater runs its locked uv environment and bundled KTX tools; see
+[asset pipeline](asset-pipeline.md).
+
+## Foil and cloth in KSA 5801
+
+`CoreSurfacesB_Material` (foil) and `CoreSurfacesA_Material` (cloth) use the same
+Diffuse, Normal, and AoRoughMetal channels as other vessel surfaces. Their metallic
+color and surface relief come from those maps; there is no foil material class or
+special shader parameter. The current mirror provides all six 2048² maps as UASTC
+with 12 mip levels. Existing color-space handling, packed PBR channels, and normal
+reconstruction apply unchanged.
+
+The XML resolver must first follow each material slot's `Ref` to its global
+`Texture` definition. A missing texture reference is a catalog failure, not a
+reason to approximate foil with an untextured material. The source and binary
+header evidence is recorded in the [5801 rendering audit](../plans/KSA_5801_RENDER_RESEARCH.md).
+Runtime heat/frost ThinFilm effects remain separate from foil and outside the
+current preview's lighting simulation.
 
 ## Pipeline (`src/three/`)
 

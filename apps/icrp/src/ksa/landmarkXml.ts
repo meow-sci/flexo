@@ -1,17 +1,4 @@
-/**
- * Pure DOM builders for the per-site XML fragments ICRP adds to an inline
- * celestial body (plans/ICRP_PLAN.md P7.03/P7.05):
- *
- *  - `<Landmark Id IsLaunchPad="true" StaticObject>` + lat/lon children
- *    (`decomp/KSA/LandmarkReference.cs`, `LocationReference.cs:15-22`);
- *  - `<Modifier Type="Decal" Name="LaunchSite_…">` with children exactly in
- *    Core's order — Core Astronomicals.xml:752-768 (VSFB LC-4) is the golden
- *    reference, enforced by landmarkXml.test.ts.
- *
- * Builders take the target `Document` as a factory, so they work with both the
- * browser DOM and @xmldom (tests) — nothing is appended here; systemXml.ts
- * places the elements inside the cloned body.
- */
+/** DOM builders for current KSA landmark and terrain-decal references. */
 import type { Site } from './siteTypes';
 
 /**
@@ -22,15 +9,7 @@ function degrees(n: number): string {
   return String(n);
 }
 
-/**
- * Sanitizes a landmark id for the decal `Name`/`Location Id` slots the way
- * Core does: spaces become dashes ("CCSFS LC-39A" → "CCSFS-LC-39A",
- * Astronomicals.xml:734/740 vs :1869). The `<Location Id>` is never looked up
- * by the game (`decomp/KSA/DecalModifierReference.cs:11-16` — the decal is
- * tied to a site only by sharing coordinates), so Core's own inconsistencies
- * (unsanitized "VSFB LC-4" at :758, ASCII-folded "Mahia-LC-1A" at :806) are
- * harmless; ICRP always sanitizes.
- */
+/** Sanitize spaces in a landmark Key for the decal Key. */
 export function sanitizeSiteId(landmarkId: string): string {
   return landmarkId.replace(/\s+/g, '-');
 }
@@ -50,50 +29,40 @@ function appendLatLon(doc: Document, parent: Element, site: Site): void {
 /** Builds the site's `<Landmark>` row (plan P7.05; `IsLaunchPad` always true, L11). */
 export function buildLandmarkElement(doc: Document, site: Site): Element {
   const landmark = el(doc, 'Landmark', {
-    Id: site.landmarkId,
+    Key: site.landmarkId,
     IsLaunchPad: 'true',
-    StaticObject: site.staticObjectId,
   });
+  landmark.appendChild(el(doc, 'StaticObject', { Ref: site.staticObjectId }));
   appendLatLon(doc, landmark, site);
   return landmark;
 }
 
-/**
- * Builds the site's `<Modifier Type="Decal">` terrain flattener (plan P7.03).
- * Child order and element set mirror Core's launch-site decals byte for byte
- * (Astronomicals.xml:752-768), including `<Additive Value="false"/>` — Core
- * writes the default explicitly at every site.
- */
+/** Build a keyed decal, converting the editor's metres into kilometres. */
 export function buildDecalModifierElement(doc: Document, site: Site): Element {
   const decal = site.decal;
   if (!decal) {
     throw new Error(`site "${site.landmarkId}" has no decal — nothing to build`);
   }
   const sanitized = sanitizeSiteId(site.landmarkId);
-  const modifier = el(doc, 'Modifier', {
-    Type: 'Decal',
-    Name: `LaunchSite_${sanitized}`,
-    Biomes: decal.biomes,
-  });
+  const modifier = el(doc, 'Decal', { Key: `LaunchSite_${sanitized}` });
+  const biomes = el(doc, 'Biomes');
+  for (const biome of decal.biomes
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean)) {
+    biomes.appendChild(el(doc, 'Biome', { KeyRef: biome }));
+  }
+  if (biomes.childNodes.length) modifier.appendChild(biomes);
   modifier.appendChild(el(doc, 'Amplitude', { Value: '0' }));
   modifier.appendChild(el(doc, 'Order', { Value: '9999' }));
-  modifier.appendChild(el(doc, 'Radius', { Value: String(decal.radiusM) }));
+  modifier.appendChild(el(doc, 'Radius', { Value: String(decal.radiusM / 1000) }));
   modifier.appendChild(el(doc, 'Rotation', { Degrees: String(decal.rotationDeg) }));
-  const location = el(doc, 'Location', { Id: sanitized });
+  const location = el(doc, 'Location', { Key: sanitized });
   appendLatLon(doc, location, site);
   modifier.appendChild(location);
-  // The attribute says Km but the game consumes METRES (plan fact L7): the
-  // terrain height buffer is metres, so terrainHeightM is written verbatim —
-  // exactly how Core writes Km="225" for Vandenberg's 225 m mesa.
-  modifier.appendChild(el(doc, 'AltitudeOffset', { Km: String(decal.terrainHeightM) }));
+  modifier.appendChild(el(doc, 'AltitudeOffset', { Km: String(decal.terrainHeightM / 1000) }));
   modifier.appendChild(el(doc, 'SmoothFactor', { Value: String(decal.smoothFactor) }));
   modifier.appendChild(el(doc, 'Additive', { Value: 'false' }));
-  modifier.appendChild(
-    el(doc, 'HeightMap', {
-      Id: 'Circle',
-      Path: 'Textures/Planets/_Decals/circle.dds',
-      Category: 'TerrainHeight',
-    }),
-  );
+  modifier.appendChild(el(doc, 'HeightMap', { Ref: 'Circle' }));
   return modifier;
 }

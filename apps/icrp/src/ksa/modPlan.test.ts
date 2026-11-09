@@ -88,15 +88,15 @@ describe('buildModPlan', () => {
     const assets = plan.files.find((f) => f.path === 'MyPadAssets.xml')!.data;
     // Vessel piece declared, referencing Core mesh/material ids, no MeshAtlas.
     expect(assets).toContain('<StaticSubObject Id="icrp_MyPad_CoreFuelTankA_Subpart_Tank">');
-    expect(assets).toContain('<Mesh Id="CoreFuelTankA_Subpart_Tank"/>');
-    expect(assets).toContain('<Material Id="CoreFuelTankA_Material"/>');
+    expect(assets).toContain('<Mesh Ref="CoreFuelTankA_Subpart_Tank"/>');
+    expect(assets).toContain('<Material Ref="CoreFuelTankA_Material"/>');
     expect(assets).not.toContain('<MeshAtlas');
     // Core static piece referenced, never declared.
-    expect(assets).toContain('InstanceOf="CoreLaunchPadA_Subpart_PadA"');
+    expect(assets).toContain('Ref="CoreLaunchPadA_Subpart_PadA"');
     expect(assets).not.toContain('<StaticSubObject Id="CoreLaunchPadA_Subpart_PadA">');
     // GameData split.
     const gd = plan.files.find((f) => f.path === 'MyPadGameData.xml')!.data;
-    expect(gd).toContain('<StaticObjectGameData Id="icrp_object_1">');
+    expect(gd).toContain('<StaticObject Id="icrp_object_1" Modify="Patch">');
     expect(gd).toContain('<GroundOffset M="0.2"/>');
     // mod.toml lists exactly the two files.
     const toml = plan.files.find((f) => f.path === 'mod.toml')!.data;
@@ -124,7 +124,7 @@ describe('buildModPlan', () => {
     const plan = buildModPlan(p, INDEX);
     const assets = plan.files.find((f) => f.path === 'MyPadAssets.xml')!.data;
     // The placement is re-pointed at an auto-minted variant piece…
-    expect(assets).toContain('InstanceOf="icrp_MyPad_v1_LaunchPadA_Subpart_PadA"');
+    expect(assets).toContain('Ref="icrp_MyPad_v1_LaunchPadA_Subpart_PadA"');
     // …whose collider dims carry the ×2 bake (source Box scale was 1×2×3).
     const variant = /<StaticSubObject Id="icrp_MyPad_v1_[^"]*">[\s\S]*?<\/StaticSubObject>/.exec(
       assets,
@@ -175,10 +175,10 @@ describe('buildModPlan', () => {
     ];
     const plan = buildModPlan(p, INDEX);
     const assets = plan.files.find((f) => f.path === 'MyPadAssets.xml')!.data;
-    // Object-level <Collider Id="Collider1"> holds the composed shape at 1.5/2/3.
+    // Object-level <Collider Key="Collider1"> holds the composed shape at 1.5/2/3.
     const objBlock = /<StaticObject Id="icrp_object_1">[\s\S]*?<\/StaticObject>/.exec(assets)![0];
-    expect(objBlock).toContain('<Collider Id="Collider1">');
-    expect(objBlock).toContain('<Cylinder Id="a1_CylinderCollider10">');
+    expect(objBlock).toContain('<Collider Key="Collider1">');
+    expect(objBlock).toContain('<Cylinder Key="a1_CylinderCollider10">');
     expect(objBlock).toContain('<LocationAsmb X="1.5" Y="2" Z="3"/>');
     expect(objBlock).toContain('<LengthY M="2"/>');
   });
@@ -186,10 +186,10 @@ describe('buildModPlan', () => {
   it('extend-stock-pad: one GameData append targeting the Core prefab (fact L3)', () => {
     const plan = buildModPlan(project(), INDEX, null, 'extend-stock-pad');
     const gd = plan.files.find((f) => f.path === 'MyPadGameData.xml')!.data;
-    expect(gd).toContain(`<StaticObjectGameData Id="${STOCK_PAD_ID}">`);
+    expect(gd).toContain(`<StaticObject Id="${STOCK_PAD_ID}" Modify="Patch">`);
     // Placements append INSIDE the GameData (ApplyGameData appends lists).
-    expect(gd).toContain('<SubObject Id="a1" InstanceOf="CoreLaunchPadA_Subpart_PadA"/>');
-    expect(gd).toContain('<SubObject Id="t1" InstanceOf="icrp_MyPad_CoreFuelTankA_Subpart_Tank"/>');
+    expect(gd).toContain('<SubObject Key="a1" Ref="CoreLaunchPadA_Subpart_PadA"/>');
+    expect(gd).toContain('<SubObject Key="t1" Ref="icrp_MyPad_CoreFuelTankA_Subpart_Tank"/>');
     // The Assets file declares only the vessel piece — no <StaticObject>.
     const assets = plan.files.find((f) => f.path === 'MyPadAssets.xml')!.data;
     expect(assets).not.toContain('<StaticObject ');
@@ -233,8 +233,8 @@ describe('buildModPlan', () => {
   });
 
   it('serializes systems into mod.toml when provided', () => {
-    expect(serializeIcrpModToml('X', ['A.xml'], ['systems/x_system.xml'])).toBe(
-      'name = "X"\nassets = [ "A.xml" ]\nsystems = [ "systems/x_system.xml" ]\n',
+    expect(serializeIcrpModToml('X', ['A.xml', 'systems/x_system.xml'])).toBe(
+      'name = "X"\nassets = [ "A.xml", "systems/x_system.xml" ]\n',
     );
   });
 });

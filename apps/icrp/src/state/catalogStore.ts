@@ -37,7 +37,7 @@ export function vesselPieceFromSubPart(
   entry: CatalogSubPart,
   gameDataColliders?: readonly PartCollider[],
 ): CatalogStaticPiece | null {
-  if (!entry.meshNodeName || !entry.materialId) return null;
+  if (entry.models?.length === 0 || !entry.meshNodeName || !entry.materialId) return null;
   return {
     id: entry.id,
     origin: 'core-subpart',

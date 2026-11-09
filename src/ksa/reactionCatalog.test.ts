@@ -33,10 +33,10 @@ describe('reactionCatalog: parseReactionsFile (synthetic)', () => {
   it('parses a FixedReaction: normalizes mass shares, builds the LUT, derives R from molar mass', () => {
     const [reaction] = parse(`<Assets>
       <FixedReaction Id="Test" Category="Solid">
-        <Name Value="Test Propellant" />
-        <Reactant Id="Fuel(s)" MassShare="1" />
-        <Reactant Id="Ox(s)" MassShare="3" />
-        ${PRESSURE_CONDITION(13.815510557964274, 3000)}
+        <Name Value="Test Propellant" /><Reactants>
+        <Reactant Ref="Fuel" Phase="Solid" MassShare="1" />
+        <Reactant Ref="Ox" Phase="Solid" MassShare="3" /></Reactants><PressureConditions>
+        ${PRESSURE_CONDITION(13.815510557964274, 3000)}</PressureConditions>
       </FixedReaction>
     </Assets>`);
 
@@ -58,10 +58,10 @@ describe('reactionCatalog: parseReactionsFile (synthetic)', () => {
 
   it('defaults a FixedReaction category to Monopropellant and falls back to the Id for a missing Name', () => {
     const [reaction] = parse(`<Assets>
-      <FixedReaction Id="Unnamed">
-        <Reactant Id="X(l)" MassShare="1" />
+      <FixedReaction Id="Unnamed"><Reactants>
+        <Reactant Ref="X" Phase="Liquid" MassShare="1" /></Reactants><PressureConditions>
         ${PRESSURE_CONDITION(12, 2000)}
-        ${PRESSURE_CONDITION(10, 1800)}
+        ${PRESSURE_CONDITION(10, 1800)}</PressureConditions>
       </FixedReaction>
     </Assets>`);
     expect(reaction.name).toBe('Unnamed');
@@ -74,18 +74,18 @@ describe('reactionCatalog: parseReactionsFile (synthetic)', () => {
   it('parses a MixtureReaction: sorted ratio rows, shared pressure axis, default ratio', () => {
     const [reaction] = parse(`<Assets>
       <MixtureReaction Id="TestMix" Category="Bipropellant">
-        <Name Value="Test Mix" />
-        <Reactant Id="Fuel(l)" MassShare="1" />
-        <Reactant Id="Ox(l)" MassShare="1" />
-        <DefaultMixtureRatio>2.5</DefaultMixtureRatio>
-        <MixtureRatioCondition Value="4">
+        <Name Value="Test Mix" /><Reactants>
+        <Reactant Ref="Fuel" Phase="Liquid" MassShare="1" />
+        <Reactant Ref="Ox" Phase="Liquid" MassShare="1" /></Reactants>
+        <DefaultMixtureRatio>2.5</DefaultMixtureRatio><MixtureRatioConditions>
+        <MixtureRatioCondition Value="4"><PressureConditions>
           ${PRESSURE_CONDITION(10, 2400)}
-          ${PRESSURE_CONDITION(12, 2600)}
+          ${PRESSURE_CONDITION(12, 2600)}</PressureConditions>
         </MixtureRatioCondition>
-        <MixtureRatioCondition Value="2">
+        <MixtureRatioCondition Value="2"><PressureConditions>
           ${PRESSURE_CONDITION(10, 2000)}
-          ${PRESSURE_CONDITION(12, 2200)}
-        </MixtureRatioCondition>
+          ${PRESSURE_CONDITION(12, 2200)}</PressureConditions>
+        </MixtureRatioCondition></MixtureRatioConditions>
       </MixtureReaction>
     </Assets>`);
 
@@ -100,12 +100,12 @@ describe('reactionCatalog: parseReactionsFile (synthetic)', () => {
 
   it('resolveReactionLut: slices a mixture at the ratio, refuses a missing ratio', () => {
     const [reaction] = parse(`<Assets>
-      <MixtureReaction Id="TestMix">
-        <Reactant Id="Fuel(l)" MassShare="1" />
-        <Reactant Id="Ox(l)" MassShare="1" />
-        <DefaultMixtureRatio>3</DefaultMixtureRatio>
-        <MixtureRatioCondition Value="2">${PRESSURE_CONDITION(10, 2000)}</MixtureRatioCondition>
-        <MixtureRatioCondition Value="4">${PRESSURE_CONDITION(10, 3000)}</MixtureRatioCondition>
+      <MixtureReaction Id="TestMix"><Reactants>
+        <Reactant Ref="Fuel" Phase="Liquid" MassShare="1" />
+        <Reactant Ref="Ox" Phase="Liquid" MassShare="1" /></Reactants>
+        <DefaultMixtureRatio>3</DefaultMixtureRatio><MixtureRatioConditions>
+        <MixtureRatioCondition Value="2"><PressureConditions>${PRESSURE_CONDITION(10, 2000)}</PressureConditions></MixtureRatioCondition>
+        <MixtureRatioCondition Value="4"><PressureConditions>${PRESSURE_CONDITION(10, 3000)}</PressureConditions></MixtureRatioCondition></MixtureRatioConditions>
       </MixtureReaction>
     </Assets>`);
 
@@ -118,15 +118,15 @@ describe('reactionCatalog: parseReactionsFile (synthetic)', () => {
 
   it('loads thermal reactions and skips reactions with no usable conditions', () => {
     const reactions = parse(`<Assets>
-      <FixedReaction Id="Empty"><Reactant Id="X(l)" MassShare="1" /></FixedReaction>
-      <ThermalReaction Id="ThermalH2" Category="Thermal">
-        <Reactant Id="H2(l)" MassShare="1" />
-        <TemperatureCondition K="2000">${PRESSURE_CONDITION(10, 2000)}</TemperatureCondition>
+      <FixedReaction Id="Empty"><Reactants><Reactant Ref="X" Phase="Liquid" MassShare="1" /></Reactants></FixedReaction>
+      <ThermalReaction Id="ThermalH2" Category="Thermal"><Reactants>
+        <Reactant Ref="H2" Phase="Liquid" MassShare="1" /></Reactants><TemperatureConditions>
+        <TemperatureCondition K="2000"><PressureConditions>${PRESSURE_CONDITION(10, 2000)}</PressureConditions></TemperatureCondition></TemperatureConditions>
       </ThermalReaction>
-      <MixtureReaction Id="NoDefault">
-        <Reactant Id="F(l)" MassShare="1" />
-        <Reactant Id="O(l)" MassShare="1" />
-        <MixtureRatioCondition Value="2">${PRESSURE_CONDITION(10, 2000)}</MixtureRatioCondition>
+      <MixtureReaction Id="NoDefault"><Reactants>
+        <Reactant Ref="F" Phase="Liquid" MassShare="1" />
+        <Reactant Ref="O" Phase="Liquid" MassShare="1" /></Reactants><MixtureRatioConditions>
+        <MixtureRatioCondition Value="2"><PressureConditions>${PRESSURE_CONDITION(10, 2000)}</PressureConditions></MixtureRatioCondition></MixtureRatioConditions>
       </MixtureReaction>
     </Assets>`);
     expect(reactions).toHaveLength(1);
@@ -140,8 +140,8 @@ describe('reactionCatalog: real Reactions.xml', () => {
     const reactions = parse(text);
     const index = indexReactionCatalog(reactions);
 
-    // The 6 mixtures + 2 monoprops + 2 solids + 7 thermal reactions.
-    expect(reactions).toHaveLength(17);
+    // The 6 mixtures + 2 monoprops + 2 solids + 6 thermal reactions.
+    expect(reactions).toHaveLength(16);
 
     for (const id of ['Kerolox', 'Hydrolox', 'Methalox', 'Ethalox', 'Ethanol_HTP', 'MMH_NTO']) {
       const r = index.get(id);
@@ -151,6 +151,9 @@ describe('reactionCatalog: real Reactions.xml', () => {
       expect(mix.mixtureLut.slices[0].rows.length).toBeGreaterThan(0);
     }
     expect(index.get('Hydrolox')!.kind === 'Mixture').toBe(true);
+    expect(index.get('Hydrolox')!.reactants.map((r) => r.phaseId)).toEqual(['H2(l)', 'O2(l)']);
+    expect(reactions.filter((r) => r.kind === 'Thermal')).toHaveLength(6);
+    expect(reactions.filter((r) => r.kind === 'Fixed')).toHaveLength(4);
     expect((index.get('Hydrolox') as MixtureReactionData).defaultMixtureRatio).toBeCloseTo(5.5, 9);
 
     for (const id of ['HTPDecomposition', 'HydrazineDecomposition', 'APCP', 'DoubleBase']) {
@@ -168,12 +171,12 @@ describe('reactionCatalog: clone mixture chemistry', () => {
   it.each([3, 100])(
     'bakes fuel shares and gas properties at the same clamped O/F ratio (%s)',
     (defaultRatio) => {
-      const [reaction] = parse(`<Assets><MixtureReaction Id="Mix">
-      <Reactant Id="Fuel(l)" MassShare="1" />
-      <Reactant Id="Ox(l)" MassShare="1" />
-      <DefaultMixtureRatio>${defaultRatio}</DefaultMixtureRatio>
-      <MixtureRatioCondition Value="2">${PRESSURE_CONDITION(10, 2000)}</MixtureRatioCondition>
-      <MixtureRatioCondition Value="4">${PRESSURE_CONDITION(10, 3000)}</MixtureRatioCondition>
+      const [reaction] = parse(`<Assets><MixtureReaction Id="Mix"><Reactants>
+      <Reactant Ref="Fuel" Phase="Liquid" MassShare="1" />
+      <Reactant Ref="Ox" Phase="Liquid" MassShare="1" /></Reactants>
+      <DefaultMixtureRatio>${defaultRatio}</DefaultMixtureRatio><MixtureRatioConditions>
+      <MixtureRatioCondition Value="2"><PressureConditions>${PRESSURE_CONDITION(10, 2000)}</PressureConditions></MixtureRatioCondition>
+      <MixtureRatioCondition Value="4"><PressureConditions>${PRESSURE_CONDITION(10, 3000)}</PressureConditions></MixtureRatioCondition></MixtureRatioConditions>
     </MixtureReaction></Assets>`);
       expect(reaction.kind).toBe('Mixture');
       if (reaction.kind !== 'Mixture') return;

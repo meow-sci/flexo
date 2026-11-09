@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { hasKsaAssets, ksaAsset } from './ksaTestAssets';
 import { describe, it, expect } from 'vitest';
 import { DOMParser } from '@xmldom/xmldom';
 import {
@@ -349,10 +351,10 @@ describe('grainGeometryCatalog parsing', () => {
     parseGrainGeometriesFile(
       parse(`<Assets>
         <GrainGeometry Id="Neutral">
-          <Name Value="Neutral" /><Shape Value="Star" />
+          <Name Value="Neutral" /><Shape Value="Star" /><DepthConditions>
           <DepthCondition><Depth Value="0.0" /><Perimeter Value="2.2" /><PortArea Value="0.38" /></DepthCondition>
           <DepthCondition><Depth Value="0.5" /><Perimeter Value="2.3" /><PortArea Value="1.5" /></DepthCondition>
-        </GrainGeometry>
+        </DepthConditions></GrainGeometry>
       </Assets>`) as unknown as Document,
       out,
     );
@@ -383,7 +385,7 @@ describe('grainGeometryCatalog parsing', () => {
     const out: GrainGeometryTable[] = [];
     parseGrainGeometriesFile(
       parse(
-        `<Assets><GrainGeometry Id="Bad">${body}</GrainGeometry></Assets>`,
+        `<Assets><GrainGeometry Id="Bad"><DepthConditions>${body}</DepthConditions></GrainGeometry></Assets>`,
       ) as unknown as Document,
       out,
     );
@@ -404,5 +406,18 @@ describe('grainGeometryCatalog parsing', () => {
     expect([...out]).toEqual([['APCP', 1780]]);
     expect(substanceIdOfPhase('APCP(s)')).toBe('APCP');
     expect(substanceIdOfPhase('APCP')).toBe('APCP');
+  });
+});
+
+describe('current Core grain profiles', () => {
+  it.runIf(hasKsaAssets)('loads all five shipped depth tables', () => {
+    const out: GrainGeometryTable[] = [];
+    const doc = new DOMParser().parseFromString(
+      readFileSync(ksaAsset('GrainGeometries.xml'), 'utf8'),
+      'application/xml',
+    );
+    parseGrainGeometriesFile(doc as unknown as Document, out);
+    expect(out).toHaveLength(5);
+    expect(out.every((entry) => entry.depth.length > 1)).toBe(true);
   });
 });

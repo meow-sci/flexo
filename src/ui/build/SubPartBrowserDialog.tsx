@@ -19,6 +19,7 @@ import { PreviewLoadProgress } from '../LoadProgress';
 import { BrowserLayout, BrowserPopup } from '../BrowserShell';
 import { fuzzyFind } from '../fuzzyMatch';
 import { toast } from '../toast';
+import { exactCatalogId } from './browserModels';
 import { BrowserCommitRow, MAX_RESULTS, ResultCapRow } from './browserCommon';
 
 /** `Interior` facet — KSA's `<Internal>` flag, which decides whether a mesh draws in IVA only. */
@@ -65,12 +66,21 @@ export function SubPartBrowserDialog({
 }
 
 function BrowserBody({ onClose }: { onClose: () => void }) {
-  const catalog = useStore($catalog);
+  const catalog = useStore($catalog).filter(
+    (entry) => entry.models === undefined || entry.models.length > 0,
+  );
   const loading = useStore($catalogLoading);
   const [query, setQuery] = useState('');
   const [source, setSource] = useState<string>(ALL_SOURCES);
   const [interior, setInterior] = useState<InteriorFilter>('all');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [storedSelectedId, setStoredSelectedId] = useState<string | null>(null);
+  const [selectionQuery, setSelectionQuery] = useState<string | null>(null);
+  const selectedId =
+    (selectionQuery !== query && exactCatalogId(catalog, query)) || storedSelectedId;
+  const setSelectedId = (id: string | null) => {
+    setStoredSelectedId(id);
+    setSelectionQuery(query);
+  };
   const isPhone = useIsPhone();
 
   // One entry per distinct `*Assets.xml` the catalog was parsed from — the missing category
@@ -120,6 +130,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
             <GridList
               aria-label="SubParts"
               selectionMode="single"
+              disallowEmptySelection
               // "replace": arrow keys move the actual selection (so keyboard navigation
               // drives the preview) and — with `onAction` present — react-aria routes a
               // MOUSE action to double-click and Enter only. That pairing is exactly the
@@ -187,7 +198,10 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
           size="sm"
           className="min-w-0 sm:flex-1"
           value={query}
-          onChange={setQuery}
+          onChange={(value) => {
+            setQuery(value);
+            setSelectionQuery(null);
+          }}
           placeholder="Search SubParts"
           aria-label="Search SubParts"
           // Autofocus raises the soft keyboard, which covers the preview on a
@@ -222,6 +236,22 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
           </Select>
         </div>
       </div>
+
+      {selected && (selected.appearanceIds?.length ?? 0) > 1 && (
+        <Select
+          size="sm"
+          label="Related appearances"
+          aria-label="Related appearances"
+          value={selected.id}
+          onChange={(key) => setSelectedId(String(key))}
+        >
+          {selected.appearanceIds!.map((id) => (
+            <ListBoxItem key={id} id={id} textValue={id}>
+              {id}
+            </ListBoxItem>
+          ))}
+        </Select>
+      )}
 
       <BrowserLayout list={listPane} preview={previewPane} details={detailsPane} />
 

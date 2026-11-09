@@ -1,12 +1,37 @@
 # Scope — Animation (keyframe import, rig, GLB export, easing)
 
+## Current contract — KSA 2026.11.10.5801
+
+The animation geometry and GLB node-transform interpretation remain unchanged by
+this upgrade. XML resource and local-reference shapes have changed: a top-level
+`<KeyframeAnimation Id="…" Path="…"/>` is referenced by
+`<Components><KeyframeAnimationModule Key="…"><KeyframeAnimation Ref="…"/>`.
+The module's named placement references use current KeyRef forms, including the
+SolarTracking Tracked and ExcludeSubParts collections.
+
+The resolved catalog supplies animation modules after inheritance/patching. Import
+fetches the declared GLB, remaps placements and keeps animation additions in the
+same undo step. Existing rest-pose and easing conventions below remain relevant;
+old inline GameData XML examples do not. See `animationImport.ts`, `partImport.ts`,
+`partXmlParser.ts`, `partXmlSerializer.ts`, and current native
+`KeyframeAnimationModule`/`KeyframeAnimationData` sources.
+
+Current implementation evidence and validation are recorded in
+[the 5801 upgrade](../plans/KSA_5801_UPGRADE.md).
+
+## Archived detail from audits through 5554
+
+The remainder records earlier source investigations. Its old XML examples and
+compatibility verdicts apply to their named builds; use the current contract above
+and [Part XML](part-and-subpart-xml.md) when authoring 5801 content.
+
 > flexo imports KSA's built-in keyframe animations (deployable panels, service modules…),
 > lets the user edit them, and re-exports animation GLBs that KSA's `KeyframeAnimationModule`
 > loads. The load-bearing integration is the **animation-GLB node-structure convention**.
 
-**Baseline:** re-verified against KSA build **2026.10.10.5554** (decomp + shipped Core XML + private animation GLBs);
+**Historical baseline:** re-verified against KSA build **2026.10.10.5554** (decomp + shipped Core XML + private animation GLBs);
 contract established at **2026.7.10.5056** and unchanged since.
-**Baseline status:** ✅ **INTACT** — but 5056 rewrote KSA's own GLB loader (rev 5034) to the
+**Historical baseline status:** ✅ **INTACT** — but 5056 rewrote KSA's own GLB loader (rev 5034) to the
 semantics flexo already implemented, and in doing so made the scene ROOT node's transform
 load-bearing for the first time. See [What changed in 5056](#what-changed-in-5056). The
 GameData schema (`KeyframeAnimationModule`) and the bone/transform math are unchanged.

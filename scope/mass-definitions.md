@@ -1,19 +1,20 @@
 # Scope — inert-mass definitions
 
-**Baseline:** KSA **2026.10.10.5554**, verified against
+**Baseline:** KSA **2026.11.10.5801**, verified against
 `ksa-game-assemblies/current/decomp/KSA/` and `current/Content/Core/`.
-**Status:** the eight stock shapes are editable at Part and SubPart scope, with
+**Status:** the nine stock shapes are editable at Part and SubPart scope, with
 additive import, variant-safe export and a combined defined-mass preview.
 
 ## Contract anchors
 
 - `PartTemplate.cs` declares `InertMasses` with polymorphic XML mass elements;
-  `ApplyGameData` calls `InertMasses.AddRange`. Supported authoring sites are
-  `<Part>`, `<SubPart>`, `<PartGameData>`, and `<SubPartGameData>`.
+  the `InertMasses` wrapper lives on `<Part>` and `<SubPart>`. Same-tag
+  `Modify="Patch"` rows modify these collections before deserialization;
+  `ApplyGameData` and the old GameData XML tags are no longer the loading model.
 - `AsmbTransformTemplate.cs`: `<LocationAsmb X Y Z>` in metres and
   `<Paf2Asmb X Y Z>` in Euler XYZ radians. These describe mass position and inertia
   orientation in the assembly frame, independently of render geometry.
-- `AsmbVolumetricMassTemplate.cs`: `<Material Id>` resolves an incompressible solid
+- `AsmbVolumetricMassTemplate.cs`: `<Material Ref Phase>` resolves an incompressible solid
   or liquid substance phase; then a valid `<Density>`; then a valid `<Mass>`.
   Authored sources may coexist. Gas materials cannot supply geometric mass.
 - `CustomMassTemplate.cs`: uses `<Mass>` directly, with optional
@@ -34,6 +35,7 @@ additive import, variant-safe export and a combined defined-mass preview.
 | `CustomMass`                  | None                                                 |
 | `SolidCuboidMass`             | `LengthX`, `LengthY`, `LengthZ`                      |
 | `SolidSphereMass`             | `Radius`                                             |
+| `HollowSphereMass`            | `Radius`, `WallThickness`                            |
 | `SolidCylinderMass`           | `Length`, `Radius`                                   |
 | `HollowOpenCylinderMass`      | `Length`, `OuterRadius`, `WallThickness`             |
 | `HollowOpenTruncatedConeMass` | `Height`, `RadiusBase`, `RadiusTop`, `WallThickness` |
@@ -41,7 +43,7 @@ additive import, variant-safe export and a combined defined-mass preview.
 | `HollowOpenOgiveMass`         | `Height`, `Radius`, `WallThickness`                  |
 
 These correspond to the same-named `*Template.cs` classes. Core stock examples
-include `CoreElectricalAGameData.xml`'s radial battery B (52 kg cuboid),
+include `CoreLifeSupportAGameData.xml`'s two supply-locker hollow spheres, `CoreElectricalAGameData.xml`'s radial battery B (52 kg cuboid),
 `CoreLandingAGameData.xml`'s multi-shape landing leg, `PartGameData.xml`'s hollow
 shells, and `CoreCommandAAssets.xml`'s custom inertia.
 
@@ -58,15 +60,15 @@ than inventing a density.
 
 `massDefinitionsOverride` records a SubPart's explicit definition list, including
 an empty list. `modExport.ts` mints fresh built-in variants when this intent exists.
-Explicit definitions are emitted in variant `<SubPartGameData>`; variants minted
-for another setting carry inherited catalog definitions in geometry `<SubPart>`.
+Explicit definitions are emitted in `<SubPart Id="…" Modify="Patch"><InertMasses>`;
+independent copies minted for another setting retain the resolved catalog definitions.
 The two paths never both emit the same mass. Editor ids never become KSA attributes.
-Unsupported shapes remain raw GameData XML. Existing project passthrough is not
-converted; it remains unresolved in the preview and survives export.
+Unsupported shapes remain raw GameData XML. Unmodeled mass entries remain unresolved in the preview and survive current-schema export.
+Incompatible older projects follow the version gate described in [Part XML](part-and-subpart-xml.md).
 
 ## Recheck on a game update
 
-Review mass XML declarations and `ApplyGameData` accumulation, every shape's
+Review mass XML declarations and prepass collection merging, every shape's
 dimensions/defaults, `MassGeometry` volume formulas, source precedence, substance
 phase ids/densities, inertia defaults, `Paf2Asmb` convention, and `ScaleFactors`.
 Check that new stock shapes remain preserved until modeled. Run domain, XML,

@@ -34,6 +34,12 @@ import {
   clampLayerIds,
   meshKind,
 } from '../ksa/types';
+import { lookupLocalKey } from '../ksa/idRemap';
+import {
+  mergeImportedRawChildren,
+  nextPlacementKey,
+  remapImportedLocalKeys,
+} from '../ksa/localKeyImport';
 import { remapRawConnectorRefs } from '../ksa/partXmlParser';
 import { remapConsumerFeedWiring, remapConsumerFeeds } from '../ksa/idRemap';
 import { randomId } from './ids';
@@ -580,7 +586,18 @@ export function mergeProjectImport(
   opts: { adoption?: AssetAdoption } = {},
 ): MergeResult {
   const part = structuredClone(current);
-  const { data } = entry;
+  const incoming = remapImportedLocalKeys(
+    part,
+    entry.data.gameData,
+    entry.data.ivaSeats,
+    entry.data.lights,
+  );
+  const data = {
+    ...entry.data,
+    gameData: incoming.game,
+    ivaSeats: incoming.seats,
+    lights: incoming.lights,
+  };
   const adoption = opts.adoption ?? emptyAdoption();
 
   // Part Id: adopt the source's only when the destination still carries the placeholder
@@ -709,9 +726,7 @@ export function mergeProjectImport(
   for (const src of data.placements) {
     if (droppedTemplateIds.has(src.subPartTemplateId)) continue;
     const templateId = mapTemplateId(src.subPartTemplateId);
-    const base = lastSegmentLower(templateId);
-    const count = part.placements.filter((p) => p.subPartTemplateId === templateId).length;
-    const instanceId = `${base}_${count + 1}`;
+    const instanceId = nextPlacementKey(part.placements, templateId);
     part.placements.push({
       instanceId,
       subPartTemplateId: templateId,
@@ -756,7 +771,7 @@ export function mergeProjectImport(
   // Rewire sibling refs to the regenerated ids (drop any pointing outside the pasted set).
   for (let i = connectorStart; i < part.connectors.length; i++) {
     part.connectors[i].siblingIds = part.connectors[i].siblingIds
-      .map((s) => connectorIdMap.get(s))
+      .map((s) => lookupLocalKey(connectorIdMap, s))
       .filter((s): s is string => s != null);
   }
 
@@ -770,7 +785,8 @@ export function mergeProjectImport(
   const collidersOwned = templatesAlreadyOwning(part.colliders);
   for (const src of data.colliders ?? []) {
     if (src.ownerTemplateId && droppedTemplateIds.has(src.ownerTemplateId)) continue;
-    if (src.ownerTemplateId && collidersOwned.has(mapTemplateId(src.ownerTemplateId))) continue;
+    if (src.ownerTemplateId && collidersOwned.has(mapTemplateId(src.ownerTemplateId).toLowerCase()))
+      continue;
     part.colliders.push({
       id: nextColliderId(part),
       shape: src.shape,
@@ -792,7 +808,8 @@ export function mergeProjectImport(
   const lightsOwned = templatesAlreadyOwning(part.lights);
   for (const src of data.lights ?? []) {
     if (src.ownerTemplateId && droppedTemplateIds.has(src.ownerTemplateId)) continue;
-    if (src.ownerTemplateId && lightsOwned.has(mapTemplateId(src.ownerTemplateId))) continue;
+    if (src.ownerTemplateId && lightsOwned.has(mapTemplateId(src.ownerTemplateId).toLowerCase()))
+      continue;
     part.lights.push({
       id: nextLightId(part),
       // `<Light Id>` rides along verbatim — it names nothing outside its own part, so
@@ -888,35 +905,22 @@ export function mergeProjectImport(
     );
     const solidNozzles = (sg.solidNozzles ?? []).map((n) => structuredClone(n));
     const solidGrainSegments = (sg.solidGrainSegments ?? []).map((s) => structuredClone(s));
+    const unknownComponents = remapRawConnectorRefs(
+      sg.unknownComponents,
+      connectorIdMap,
+      instanceIdMap,
+    );
     const unknownChildren = remapRawConnectorRefs(
       sg.unknownChildren,
       connectorIdMap,
       instanceIdMap,
     );
-    const existing = part.subPartGameData.find((x) => x.subPartTemplateId === templateId);
+    const existing = part.subPartGameData.find(
+      (x) => x.subPartTemplateId.toLowerCase() === templateId.toLowerCase(),
+    );
     if (existing) {
-      // Template mass is instantiated at EVERY placement, so a repeated paste must not
-      // append the same template's definitions a second time.
-      if (!existing.massDefinitionsOverride) {
-        existing.massDefinitions = massDefinitions;
-        existing.massDefinitionsOverride = sg.massDefinitionsOverride;
-      }
-      existing.tanks.push(...tanks);
-      existing.solarPanels.push(...solarPanels);
-      existing.combustors.push(...combustors);
-      existing.thermalCores.push(...thermalCores);
-      existing.antimatterRamCores.push(...antimatterRamCores);
-      existing.magneticNozzles.push(...magneticNozzles);
-      existing.magneticScoops.push(...magneticScoops);
-
-      existing.nozzles.push(...nozzles);
-      existing.rockets.push(...rockets);
-      existing.rocketControllers.push(...rocketControllers);
-      Object.assign(existing.unknownAttrs, sg.unknownAttrs);
-      existing.unknownChildren.push(...unknownChildren);
-      existing.solidMotors.push(...solidMotors);
-      existing.solidNozzles.push(...solidNozzles);
-      existing.solidGrainSegments.push(...solidGrainSegments);
+      // A template is shared by all placements; preserve the destination's edits.
+      continue;
     } else {
       const entry = createSubPartGameData(templateId);
       entry.massDefinitions = massDefinitions;
@@ -934,6 +938,7 @@ export function mergeProjectImport(
       entry.rocketControllers = rocketControllers;
       entry.unknownAttrs = { ...sg.unknownAttrs };
       entry.unknownChildren = unknownChildren;
+      entry.unknownComponents = unknownComponents;
       entry.solidMotors = solidMotors;
       entry.solidNozzles = solidNozzles;
       entry.solidGrainSegments = solidGrainSegments;
@@ -950,7 +955,7 @@ export function mergeProjectImport(
       joint.memberInstanceIds = remapIds(joint.memberInstanceIds, instanceIdMap);
     }
     if (anim.solarTracking) {
-      const driven = instanceIdMap.get(anim.solarTracking.subPartInstanceId);
+      const driven = lookupLocalKey(instanceIdMap, anim.solarTracking.subPartInstanceId);
       if (!driven) {
         anim.solarTracking = null;
       } else {
@@ -1032,7 +1037,10 @@ function mergeGameData(
   if (target.diameterM == null && src.diameterM != null) target.diameterM = src.diameterM;
   if (target.crashTolerancePa == null && src.crashTolerancePa != null)
     target.crashTolerancePa = src.crashTolerancePa;
-  if (!target.controllable && src.controllable) target.controllable = true;
+  if (!target.controllable && src.controllable) {
+    target.controllable = true;
+    target.controlKey = src.controlKey;
+  }
   // Unmodeled passthrough XML: fill only when the target has none (first part's leftover wins).
   // Connector refs inside the raw XML (<Aligned>/<SymmetryGroup> <ConnectorRef>s) are in the
   // source's original id space — rewrite them onto the regenerated connector ids.
@@ -1041,21 +1049,27 @@ function mergeGameData(
     Object.keys(src.unknownAttrs ?? {}).length > 0
   )
     target.unknownAttrs = { ...src.unknownAttrs };
-  if (target.unknownChildren.length === 0 && (src.unknownChildren ?? []).length > 0)
-    target.unknownChildren = remapRawConnectorRefs(src.unknownChildren, connectorIdMap);
+  mergeImportedRawChildren(
+    target.unknownChildren,
+    remapRawConnectorRefs(src.unknownChildren, connectorIdMap, instanceIdMap),
+  );
+  target.unknownComponents.push(
+    ...remapRawConnectorRefs(src.unknownComponents, connectorIdMap, instanceIdMap),
+  );
   target.batteries.push(...(src.batteries ?? []).map((b) => ({ ...b })));
   target.generators.push(...(src.generators ?? []).map((g) => ({ ...g })));
   target.solarPanels.push(...(src.solarPanels ?? []).map((sp) => structuredClone(sp)));
   // Single consumer per part: keep the target's, adopt the source's only when empty.
   if (!target.powerConsumer && src.powerConsumer) target.powerConsumer = { ...src.powerConsumer };
   if (target.decoupler == null && src.decoupler) {
-    const id = connectorIdMap.get(src.decoupler.connectorId);
+    const id = lookupLocalKey(connectorIdMap, src.decoupler.connectorId);
     if (id) target.decoupler = { ...src.decoupler, connectorId: id };
   }
   if (target.dockingPort == null && src.dockingPort) {
-    const id = connectorIdMap.get(src.dockingPort.connectorId);
+    const id = lookupLocalKey(connectorIdMap, src.dockingPort.connectorId);
     if (id)
       target.dockingPort = {
+        ...src.dockingPort,
         connectorId: id,
         latchingKineticEnergyJ: src.dockingPort.latchingKineticEnergyJ,
         pushoffImpulseNs: src.dockingPort.pushoffImpulseNs,
@@ -1063,7 +1077,7 @@ function mergeGameData(
   }
   if (target.evaDoor == null && src.evaDoor) {
     // Not connector-bound (`EVADoorTemplate` has only `SeatId`), so nothing to remap.
-    target.evaDoor = { seatId: src.evaDoor.seatId ?? null };
+    target.evaDoor = { ...src.evaDoor, seatId: src.evaDoor.seatId ?? null };
   }
   // Engine modules: append with every SubPart-instance reference remapped to the
   // freshly-generated instance ids (mirrors applyImportedGameData in editorStore).
@@ -1095,7 +1109,7 @@ function mergeGameData(
   target.gimbals.push(
     ...(src.gimbals ?? []).map((g) => ({
       ...g,
-      subPartInstanceId: instanceIdMap.get(g.subPartInstanceId) ?? g.subPartInstanceId,
+      subPartInstanceId: lookupLocalKey(instanceIdMap, g.subPartInstanceId) ?? g.subPartInstanceId,
     })),
   );
   // Plumbing topology (KSA 2026.7.9): tanks are plain containers; solid motors and the
@@ -1118,7 +1132,10 @@ function mergeGameData(
 /** Remaps a module→SubPart-instance ref through the import id map (null ⇒ root, unchanged). */
 function remapRef(ref: SubPartIdRef, map: Map<string, string>): SubPartIdRef {
   if (!ref.subPartInstanceId) return { id: ref.id, subPartInstanceId: ref.subPartInstanceId };
-  return { id: ref.id, subPartInstanceId: map.get(ref.subPartInstanceId) ?? ref.subPartInstanceId };
+  return {
+    id: ref.id,
+    subPartInstanceId: lookupLocalKey(map, ref.subPartInstanceId) ?? ref.subPartInstanceId,
+  };
 }
 
 /** Remaps a rocket's core + nozzle SubPart-instance refs through the import id map. */
@@ -1141,11 +1158,6 @@ function vec(v: Partial<Vec3> | undefined, def: number): Vec3 {
   return { x: v?.x ?? def, y: v?.y ?? def, z: v?.z ?? def };
 }
 
-function lastSegmentLower(templateId: string): string {
-  const seg = templateId.split('.').pop() ?? templateId;
-  return seg.toLowerCase();
-}
-
 function nextLayerId(part: EditingPart): string {
   let max = 0;
   for (const l of part.layers) {
@@ -1158,7 +1170,7 @@ function nextLayerId(part: EditingPart): string {
 function nextConnectorId(part: EditingPart): string {
   let max = 0;
   for (const c of part.connectors) {
-    const m = /^_connector(\d+)$/.exec(c.id);
+    const m = /^_connector(\d+)$/i.exec(c.id);
     if (m) max = Math.max(max, Number.parseInt(m[1], 10));
   }
   return `_connector${max + 1}`;
@@ -1176,7 +1188,7 @@ function templatesAlreadyOwning(
   entities: readonly { readonly ownerTemplateId: string | null }[],
 ): ReadonlySet<string> {
   const out = new Set<string>();
-  for (const e of entities) if (e.ownerTemplateId != null) out.add(e.ownerTemplateId);
+  for (const e of entities) if (e.ownerTemplateId != null) out.add(e.ownerTemplateId.toLowerCase());
   return out;
 }
 

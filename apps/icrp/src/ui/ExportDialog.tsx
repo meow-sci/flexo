@@ -25,7 +25,6 @@ import { buildSystemXml } from '../ksa/systemXml';
 import { $pieceIndex } from '../state/catalogStore';
 import { ensureCorpusLoaded } from '../state/corpusStore';
 import { $project } from '../state/docStore';
-import { $installPath, $texturePathMode } from '../state/toolStore';
 
 function download(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -40,8 +39,6 @@ function download(blob: Blob, filename: string): void {
 export function ExportDialog({ onClose }: { onClose: () => void }) {
   const project = useStore($project);
   const pieceIndex = useStore($pieceIndex);
-  const installPath = useStore($installPath);
-  const texturePathMode = useStore($texturePathMode);
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [plan, setPlan] = useState<ModPlanResult | null>(null);
   const [mode, setMode] = useState<ExportMode>('system-mod');
@@ -65,10 +62,6 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
             modId,
             corpus,
             sites: project.sites,
-            texturePaths:
-              texturePathMode === 'absolute'
-                ? { mode: 'absolute', installPath }
-                : { mode: 'core-relative' },
           });
           system = {
             fileName: `${modId.toLowerCase()}_system.xml`,
@@ -83,7 +76,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
     return () => {
       stale = true;
     };
-  }, [project, pieceIndex, mode, installPath, texturePathMode]);
+  }, [project, pieceIndex, mode]);
 
   const errors = plan?.issues.filter((i) => i.severity === 'error') ?? [];
   const warnings = plan?.issues.filter((i) => i.severity === 'warning') ?? [];
@@ -126,25 +119,6 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
               Extend stock pad
             </ToggleButton>
           </div>
-          {mode === 'system-mod' && (
-            <div className="flex items-center gap-2">
-              <TextField
-                label="KSA install path (for absolute Core texture paths)"
-                value={installPath}
-                onChange={(v) => $installPath.set(v)}
-              />
-              <label className="mt-4 flex items-center gap-1 text-xs text-fg-muted">
-                <input
-                  type="checkbox"
-                  checked={texturePathMode === 'core-relative'}
-                  onChange={(e) =>
-                    $texturePathMode.set(e.target.checked ? 'core-relative' : 'absolute')
-                  }
-                />
-                ../Core/ paths (Content install)
-              </label>
-            </div>
-          )}
           {mode === 'extend-stock-pad' && (
             <div className="text-[11px] text-fg-subtle">
               Appends every object's placements onto Core's launch pad prefab — the additions appear

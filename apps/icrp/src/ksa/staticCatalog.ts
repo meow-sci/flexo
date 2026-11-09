@@ -1,17 +1,4 @@
-/**
- * Loads the KSA "Core" static-object catalog: `<StaticSubObject>` piece templates,
- * `<StaticObject>` prefabs and `<StaticObjectGameData>` metres, from the Core
- * asset XML served under /ksa/ (same pipeline as flexo's SubPart catalog).
- *
- * Schema authority (plans/ICRP_PLAN.md §0.3 F1–F3, F10):
- *  - `<StaticSubObject Id>` = `<PartModel>`* + `<Collider>`* only
- *    (`decomp/KSA/StaticSubObjectTemplate.cs`). Static-only PartModel fields:
- *    `<Terrain>true</Terrain>` and the material's `<Alpha>` slot.
- *  - `<StaticObject Id>` = `<SubObject Id InstanceOf><Transform/>`* +
- *    `<PartModel>`* + `<Collider>`* + three `DistanceReference`s (all-NaN = unset).
- *  - `<StaticObjectGameData Id>` merges onto the object: lists APPEND, distances
- *    override only when set (`StaticObjectTemplate.ApplyGameData`).
- */
+/** Resolved current Core static pieces and objects for ICRP. */
 import { fetchXmlFile, toUrl } from '../../../../src/ksa/catalog';
 import {
   collidersFromElement,
@@ -20,6 +7,12 @@ import {
   readTransform,
 } from '../../../../src/ksa/partXmlParser';
 import type { PartCollider, Transform } from './types';
+import {
+  contentSource,
+  resolveContent,
+  type ResolvedContent,
+} from '../../../../src/ksa/contentXml';
+import { loadCoreContent } from '../../../../src/ksa/coreContent';
 
 /** Core files that declare static-object assets (KSA 2026.8.22.5348). */
 export const STATIC_ASSET_FILES = [
@@ -70,9 +63,9 @@ export interface CatalogStaticPiece {
 
 /** One `<SubObject>` placement inside a `<StaticObject>`. */
 export interface CatalogStaticPlacement {
-  /** The `Id` attribute (informational; bundler writes the mesh name). */
+  /** The placement Key. */
   instanceId: string;
-  /** `InstanceOf` — a `<StaticSubObject>` id (the ONLY thing it can name, F3). */
+  /** `Ref` — a `<StaticSubObject>` id. */
   instanceOf: string;
   transform: Transform;
 }
@@ -83,21 +76,11 @@ export interface CatalogStaticObject {
   placements: CatalogStaticPlacement[];
   /** Object-level colliders (`ownerTemplateId` = null). */
   colliders: PartCollider[];
-  /** Merged metres; null = unset in both Assets and GameData. */
+  /** Resolved metres; null = unset. */
   groundOffsetM: number | null;
   surfaceHeightM: number | null;
   footprintRadiusM: number | null;
   sourceFile: string;
-}
-
-/** A parsed `<StaticObjectGameData>` (same shape as the object it targets). */
-export interface CatalogStaticGameData {
-  id: string;
-  placements: CatalogStaticPlacement[];
-  colliders: PartCollider[];
-  groundOffsetM: number | null;
-  surfaceHeightM: number | null;
-  footprintRadiusM: number | null;
 }
 
 export interface StaticCatalog {
@@ -105,194 +88,124 @@ export interface StaticCatalog {
   objects: CatalogStaticObject[];
 }
 
-interface MaterialPaths {
-  diffuse?: string;
-  normal?: string;
-  aoRoughMetal?: string;
-  alpha?: string;
-}
-
 function firstChildByTag(parent: Element, tag: string): Element | null {
   return directChildren(parent, tag)[0] ?? null;
 }
 
-/** Collects `<PbrMaterial>`s (global by Id — cross-file refs are legal, first-wins). */
-function collectMaterials(doc: Document, out: Map<string, MaterialPaths>): void {
-  for (const mat of Array.from(doc.getElementsByTagName('PbrMaterial'))) {
-    const id = mat.getAttribute('Id');
-    if (!id || out.has(id)) continue;
-    out.set(id, {
-      diffuse: firstChildByTag(mat, 'Diffuse')?.getAttribute('Path') ?? undefined,
-      normal: firstChildByTag(mat, 'Normal')?.getAttribute('Path') ?? undefined,
-      aoRoughMetal: firstChildByTag(mat, 'AoRoughMetal')?.getAttribute('Path') ?? undefined,
-      alpha: firstChildByTag(mat, 'Alpha')?.getAttribute('Path') ?? undefined,
+function readStaticColliders(owner: Element, ownerId: string | null): PartCollider[] {
+  const wrapper = firstChildByTag(owner, 'Colliders');
+  if (!wrapper) return [];
+  const fake = owner.ownerDocument!.createElement('SubPart');
+  const components = owner.ownerDocument!.createElement('Components');
+  for (const collider of directChildren(wrapper, 'Collider'))
+    components.appendChild(collider.cloneNode(true));
+  fake.appendChild(components);
+  return collidersFromElement(fake, ownerId);
+}
+
+/** Parse the resolved global content using the shared mesh-name index. */
+export function staticCatalogFromContent(
+  content: ResolvedContent,
+  meshIndex: Record<string, string>,
+): StaticCatalog {
+  const rows = Array.from(content.doc.documentElement.childNodes).filter(
+    (n): n is Element => n.nodeType === 1,
+  );
+  const byId = (tag: string) =>
+    new Map(
+      rows.filter((e) => e.tagName === tag).map((e) => [e.getAttribute('Id')!.toLowerCase(), e]),
+    );
+  const textures = byId('Texture');
+  const materials = byId('PbrMaterial');
+  const pieces: CatalogStaticPiece[] = [];
+  const objects: CatalogStaticObject[] = [];
+  for (const sub of rows.filter((e) => e.tagName === 'StaticSubObject')) {
+    const id = sub.getAttribute('Id')!;
+    const models = firstChildByTag(sub, 'PartModels');
+    const model = models && firstChildByTag(models, 'PartModel');
+    const mesh = model && firstChildByTag(model, 'Mesh')?.getAttribute('Ref');
+    if (!model || !mesh) continue;
+    const atlas = meshIndex[mesh.toLowerCase()];
+    if (!atlas) throw new Error(`Unresolved mesh ${mesh} on ${id}`);
+    const materialId = firstChildByTag(model, 'Material')?.getAttribute('Ref') ?? undefined;
+    const material = materialId && materials.get(materialId.toLowerCase());
+    if (materialId && !material) throw new Error(`Unresolved material ${materialId} on ${id}`);
+    const texture = (slot: string) => {
+      const ref = material && firstChildByTag(material, slot)?.getAttribute('Ref');
+      if (!ref) return undefined;
+      const path = textures.get(ref.toLowerCase())?.getAttribute('Path');
+      if (!path) throw new Error(`Unresolved texture ${ref} on ${id}`);
+      return toUrl(path);
+    };
+    pieces.push({
+      id,
+      origin: 'core-static',
+      atlasUrl: toUrl(atlas),
+      meshNodeName: mesh,
+      materialId,
+      diffuseUrl: texture('Diffuse'),
+      normalUrl: texture('Normal'),
+      aoRoughMetalUrl: texture('AoRoughMetal'),
+      alphaUrl: texture('Alpha'),
+      terrain: firstChildByTag(model, 'Terrain')?.textContent?.trim().toLowerCase() === 'true',
+      colliders: readStaticColliders(sub, id),
+      sourceFile: contentSource(content, 'StaticSubObject', id),
     });
   }
-}
-
-/** The file's default (Id-less) `<MeshAtlas Path>`, or null. */
-function defaultAtlasPath(doc: Document): string | null {
-  for (const atlas of Array.from(doc.getElementsByTagName('MeshAtlas'))) {
-    const path = atlas.getAttribute('Path');
-    if (path && !atlas.getAttribute('Id')) return path;
-  }
-  return null;
-}
-
-function readPlacements(owner: Element): CatalogStaticPlacement[] {
-  const out: CatalogStaticPlacement[] = [];
-  for (const sub of directChildren(owner, 'SubObject')) {
-    const instanceOf = sub.getAttribute('InstanceOf');
-    if (!instanceOf) continue; // IsValid() requires InstanceOf; KSA skips these too
-    out.push({
-      instanceId: sub.getAttribute('Id') ?? instanceOf,
-      instanceOf,
-      transform: readTransform(sub),
+  for (const obj of rows.filter((e) => e.tagName === 'StaticObject')) {
+    const id = obj.getAttribute('Id')!;
+    const wrapper = firstChildByTag(obj, 'SubObjects');
+    const placements = wrapper
+      ? directChildren(wrapper, 'SubObject').flatMap((sub) => {
+          const instanceOf = sub.getAttribute('Ref');
+          return instanceOf
+            ? [
+                {
+                  instanceId: sub.getAttribute('Key') ?? instanceOf,
+                  instanceOf,
+                  transform: readTransform(sub),
+                },
+              ]
+            : [];
+        })
+      : [];
+    objects.push({
+      id,
+      placements,
+      colliders: readStaticColliders(obj, null),
+      groundOffsetM: readDistanceM(firstChildByTag(obj, 'GroundOffset')),
+      surfaceHeightM: readDistanceM(firstChildByTag(obj, 'SurfaceHeight')),
+      footprintRadiusM: readDistanceM(firstChildByTag(obj, 'FootprintRadius')),
+      sourceFile: contentSource(content, 'StaticObject', id),
     });
   }
-  return out;
-}
-
-/** Reads the three `DistanceReference` metres off an object/GameData element. */
-function readMeters(el: Element): {
-  groundOffsetM: number | null;
-  surfaceHeightM: number | null;
-  footprintRadiusM: number | null;
-} {
   return {
-    groundOffsetM: readDistanceM(firstChildByTag(el, 'GroundOffset')),
-    surfaceHeightM: readDistanceM(firstChildByTag(el, 'SurfaceHeight')),
-    footprintRadiusM: readDistanceM(firstChildByTag(el, 'FootprintRadius')),
+    pieces: pieces.sort((a, b) => a.id.localeCompare(b.id)),
+    objects: objects.sort((a, b) => a.id.localeCompare(b.id)),
   };
 }
 
-/**
- * Parses one Assets document. Two-phase caller contract: `collectMaterials` must
- * have seen EVERY document first (materials resolve globally), while the mesh
- * atlas resolves per-file (the bundler emits one default atlas per file).
- */
-export function parseStaticAssetsFile(
-  doc: Document,
-  sourceFile: string,
-  materials: ReadonlyMap<string, MaterialPaths>,
-  out: { pieces: CatalogStaticPiece[]; objects: CatalogStaticObject[] },
-  gameData: CatalogStaticGameData[],
-): void {
-  const atlasPath = defaultAtlasPath(doc);
-
-  for (const sub of Array.from(doc.getElementsByTagName('StaticSubObject'))) {
-    const id = sub.getAttribute('Id');
-    if (!id) continue;
-    const partModel = firstChildByTag(sub, 'PartModel');
-    const meshId = partModel ? firstChildByTag(partModel, 'Mesh')?.getAttribute('Id') : null;
-    if (!partModel || !meshId) {
-      // KSA logs "has a PartModel 'X' with no mesh" and skips it (StaticObject.cs:148).
-      console.warn(`icrp catalog: ${sourceFile}: StaticSubObject '${id}' has no mesh — skipped`);
-      continue;
-    }
-    if (!atlasPath) {
-      console.warn(`icrp catalog: ${sourceFile}: no default <MeshAtlas> — '${id}' skipped`);
-      continue;
-    }
-    const materialId = firstChildByTag(partModel, 'Material')?.getAttribute('Id') ?? undefined;
-    const mat = materialId ? materials.get(materialId) : undefined;
-    const terrain =
-      firstChildByTag(partModel, 'Terrain')?.textContent?.trim().toLowerCase() === 'true';
-    out.pieces.push({
-      id,
-      origin: 'core-static',
-      atlasUrl: toUrl(atlasPath),
-      meshNodeName: meshId,
-      materialId,
-      diffuseUrl: mat?.diffuse ? toUrl(mat.diffuse) : undefined,
-      normalUrl: mat?.normal ? toUrl(mat.normal) : undefined,
-      aoRoughMetalUrl: mat?.aoRoughMetal ? toUrl(mat.aoRoughMetal) : undefined,
-      alphaUrl: mat?.alpha ? toUrl(mat.alpha) : undefined,
-      terrain,
-      colliders: collidersFromElement(sub, id),
-      sourceFile,
-    });
-  }
-
-  for (const obj of Array.from(doc.getElementsByTagName('StaticObject'))) {
-    const id = obj.getAttribute('Id');
-    if (!id) continue;
-    out.objects.push({
-      id,
-      placements: readPlacements(obj),
-      colliders: collidersFromElement(obj, null),
-      ...readMeters(obj),
-      sourceFile,
-    });
-  }
-
-  for (const gd of Array.from(doc.getElementsByTagName('StaticObjectGameData'))) {
-    const id = gd.getAttribute('Id');
-    if (!id) continue;
-    gameData.push({
-      id,
-      placements: readPlacements(gd),
-      colliders: collidersFromElement(gd, null),
-      ...readMeters(gd),
-    });
-  }
+export function parseStaticCatalog(
+  docs: { doc: Document; file: string }[],
+  meshIndex: Record<string, string>,
+): StaticCatalog {
+  return staticCatalogFromContent(resolveContent(docs), meshIndex);
 }
 
-/**
- * Applies GameData onto its object exactly like `StaticObjectTemplate.ApplyGameData`
- * (StaticObjectTemplate.cs:73-90): lists APPEND, distances replace only when set.
- * GameData whose id matches no object is dropped (KSA logs an error there).
- */
-export function mergeStaticGameData(
-  objects: CatalogStaticObject[],
-  gameData: readonly CatalogStaticGameData[],
-): void {
-  const byId = new Map(objects.map((o) => [o.id, o]));
-  for (const gd of gameData) {
-    const obj = byId.get(gd.id);
-    if (!obj) {
-      console.warn(`icrp catalog: StaticObjectGameData '${gd.id}' matches no StaticObject`);
-      continue;
-    }
-    obj.placements.push(...gd.placements);
-    obj.colliders.push(...gd.colliders);
-    if (gd.groundOffsetM !== null) obj.groundOffsetM = gd.groundOffsetM;
-    if (gd.surfaceHeightM !== null) obj.surfaceHeightM = gd.surfaceHeightM;
-    if (gd.footprintRadiusM !== null) obj.footprintRadiusM = gd.footprintRadiusM;
-  }
-}
-
-/** Parses a set of already-fetched documents into a merged catalog (two-phase). */
-export function parseStaticCatalog(docs: { doc: Document; file: string }[]): StaticCatalog {
-  const materials = new Map<string, MaterialPaths>();
-  for (const { doc } of docs) collectMaterials(doc, materials);
-  const out: StaticCatalog = { pieces: [], objects: [] };
-  const gameData: CatalogStaticGameData[] = [];
-  for (const { doc, file } of docs) parseStaticAssetsFile(doc, file, materials, out, gameData);
-  mergeStaticGameData(out.objects, gameData);
-  out.pieces.sort((a, b) => a.id.localeCompare(b.id));
-  out.objects.sort((a, b) => a.id.localeCompare(b.id));
-  return out;
-}
-
-/** Fetches and parses every Core static-asset file. */
 export async function loadStaticCatalog(): Promise<StaticCatalog> {
-  const docs: { doc: Document; file: string }[] = [];
-  await Promise.all(
-    STATIC_ASSET_FILES.map(async (file) => {
-      const r = await fetchXmlFile(file);
-      if (r.kind === 'missing') {
-        console.error(`icrp catalog: required asset file ${file} not found`);
-        return;
-      }
-      if (r.kind === 'ok') docs.push({ doc: r.doc, file });
-    }),
+  const [core, response, ...results] = await Promise.all([
+    loadCoreContent(),
+    fetch(toUrl('mesh-index.json')),
+    ...STATIC_ASSET_FILES.map(fetchXmlFile),
+  ]);
+  if (!response.ok) throw new Error('Unable to load KSA mesh index');
+  const docs = results.flatMap((result, i) =>
+    result.kind === 'ok' ? [{ doc: result.doc, file: STATIC_ASSET_FILES[i] }] : [],
   );
-  const catalog = parseStaticCatalog(docs);
-  console.info(
-    `icrp catalog: ${catalog.pieces.length} pieces, ${catalog.objects.length} objects loaded`,
+  return staticCatalogFromContent(
+    resolveContent([{ doc: core.doc, file: 'Core' }, ...docs]),
+    (await response.json()) as Record<string, string>,
   );
-  return catalog;
 }
 
 /** Builds an id→piece index for O(1) lookups. */

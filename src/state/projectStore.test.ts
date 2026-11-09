@@ -210,7 +210,7 @@ describe('project persistence', () => {
     });
     redo();
     expect($part.get()).toEqual(authored);
-    expect(PROJECT_SCHEMA_VERSION).toBe(4);
+    expect(PROJECT_SCHEMA_VERSION).toBe(5);
   });
 
   it('round-trips the document, active layer, layer view, and history', async () => {
@@ -860,6 +860,8 @@ describe('normalization (default-fill, never conversion)', () => {
     // One stripped field at each of the four levels the normalizer covers.
     delete stalePart.kittens; // EditingPart
     delete stalePart.gameData.ivaEnabled;
+    delete stalePart.gameData.unknownComponents;
+    delete stalePart.subPartGameData[0].unknownComponents;
     for (const key of [
       'massDefinitions',
       'thermalCores',
@@ -885,6 +887,8 @@ describe('normalization (default-fill, never conversion)', () => {
     const part = $part.get();
     expect(part.kittens).toEqual([]);
     expect(part.gameData.ivaEnabled).toBe(true);
+    expect(part.gameData.unknownComponents).toEqual([]);
+    expect(part.subPartGameData[0].unknownComponents).toEqual([]);
     for (const key of [
       'massDefinitions',
       'thermalCores',

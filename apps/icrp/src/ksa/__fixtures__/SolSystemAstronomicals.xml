@@ -1,0 +1,1414 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Assets>
+    <MinorBody Id="Ceres">
+        <ParentBody Ref="Sol"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Au="2.769" />
+            <Inclination Degrees="10.594" />
+            <Eccentricity Value="0.0758" />
+            <LongitudeOfAscendingNode Degrees="80.3056" />
+            <ArgumentOfPeriapsis Degrees="73.5977" />
+        </Orbit>
+
+        <MeanRadius Km="469.73" />
+        <Mass Zg="938.392" />
+        <Color R="0.72" G="0.72" B="0.72" />
+    </MinorBody>
+
+    <MinorBody Id="Vesta">
+        <ParentBody Ref="Sol"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Au="2.361" />
+            <Inclination Degrees="7.140" />
+            <Eccentricity Value="0.089" />
+            <LongitudeOfAscendingNode Degrees="103.851" />
+            <ArgumentOfPeriapsis Degrees="151.198" />
+        </Orbit>
+
+        <MeanRadius Km="262.7" />
+        <Mass Zg="259.0271" />
+        <Color R="0.8" G="0.7" B="0.5" />
+    </MinorBody>
+
+    <MinorBody Id="Pallas">
+        <ParentBody Ref="Sol"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Au="2.773" />
+            <Inclination Degrees="34.837" />
+            <Eccentricity Value="0.231" />
+            <LongitudeOfAscendingNode Degrees="173.085" />
+            <ArgumentOfPeriapsis Degrees="310.881" />
+        </Orbit>
+
+        <MeanRadius Km="265" />
+        <Mass Zg="204.2" />
+        <Color R="0.75" G="0.75" B="0.75" />
+    </MinorBody>
+
+    <MinorBody Id="Hygiea">
+        <ParentBody Ref="Sol"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Au="3.139" />
+            <Inclination Degrees="3.842" />
+            <Eccentricity Value="0.113" />
+            <LongitudeOfAscendingNode Degrees="283.916" />
+            <ArgumentOfPeriapsis Degrees="312.345" />
+        </Orbit>
+
+        <MeanRadius Km="215" />
+        <Mass Zg="87.4" />
+        <Color R="0.6" G="0.6" B="0.6" />
+    </MinorBody>
+
+    <MinorBody Id="Eros">
+        <ParentBody Ref="Sol"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Au="1.458" />
+            <Inclination Degrees="10.829" />
+            <Eccentricity Value="0.223" />
+            <LongitudeOfAscendingNode Degrees="304.4" />
+            <ArgumentOfPeriapsis Degrees="178.8" />
+        </Orbit>
+
+        <MeanRadius Km="8.42" />
+        <Mass Eg="6.687" />
+        <Color R="0.9" G="0.8" B="0.7" />
+    </MinorBody>
+
+    <PlanetaryBody Id="Europa">
+        <ParentBody Ref="Jupiter"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="671100" />
+            <Inclination Degrees="0.466" />
+            <Eccentricity Value="0.0094" />
+            <LongitudeOfAscendingNode Degrees="181.4" />
+            <ArgumentOfPeriapsis Degrees="219.106" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+            <Tilt Degrees="0.1" />
+        </Rotation>
+
+        <MeanRadius Km="1560.8" />
+        <Mass Yg="47.9984" />
+    </PlanetaryBody>
+
+    <PlanetaryBody Id="Callisto">
+        <ParentBody Ref="Jupiter"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="1882700" />
+            <Inclination Degrees="0.192" />
+            <Eccentricity Value="0.0074" />
+            <LongitudeOfAscendingNode Degrees="21.6" />
+            <ArgumentOfPeriapsis Degrees="298.848" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="2410.3" />
+        <Mass Yg="107.5938" />
+    </PlanetaryBody>
+
+    <MinorBody Id="Amalthea">
+        <ParentBody Ref="Jupiter"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="181400" />
+            <Inclination Degrees="0.374" />
+            <Eccentricity Value="0.0032" />
+            <LongitudeOfAscendingNode Degrees="85.1" />
+            <ArgumentOfPeriapsis Degrees="54.1" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="83.5" />
+        <SphereOfInfluence Km="120" /> <!-- Wrong! Just here so we can collide with and land on it -->
+        <Mass Zg="2.08" />
+        <Color R="1.0" G="0.2" B="0.1" />
+    </MinorBody>
+
+    <MinorBody Id="Himalia">
+        <ParentBody Ref="Jupiter"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="11461000" />
+            <Inclination Degrees="27.5" />
+            <Eccentricity Value="0.162" />
+            <LongitudeOfAscendingNode Degrees="25.3" />
+            <ArgumentOfPeriapsis Degrees="187.48" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <Mass Zg="4.2" />
+        <MeanRadius Km="85" />
+        <Color R="1.0" G="0.82" B="0.57" />
+    </MinorBody>
+
+    <MinorBody Id="Elara">
+        <ParentBody Ref="Jupiter"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="11740000" />
+            <Inclination Degrees="26.6" />
+            <Eccentricity Value="0.217" />
+            <LongitudeOfAscendingNode Degrees="141.4" />
+            <ArgumentOfPeriapsis Degrees="218.02" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="43" />
+    </MinorBody>
+
+    <MinorBody Id="Pasiphae">
+        <ParentBody Ref="Jupiter"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="23509000" />
+            <Inclination Degrees="151.4" />
+            <Eccentricity Value="0.409" />
+            <LongitudeOfAscendingNode Degrees="45.9" />
+            <ArgumentOfPeriapsis Degrees="192.82" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <Mass Eg="172" />
+        <MeanRadius Km="30" />
+    </MinorBody>
+
+    <MinorBody Id="Sinope">
+        <ParentBody Ref="Jupiter"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="23760000" />
+            <Inclination Degrees="158.1" />
+            <Eccentricity Value="0.250" />
+            <LongitudeOfAscendingNode Degrees="298.5" />
+            <ArgumentOfPeriapsis Degrees="158.42" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="19" />
+    </MinorBody>
+
+    <MinorBody Id="Lysithea">
+        <ParentBody Ref="Jupiter"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="11717000" />
+            <Inclination Degrees="28.3" />
+            <Eccentricity Value="0.110" />
+            <LongitudeOfAscendingNode Degrees="116.7" />
+            <ArgumentOfPeriapsis Degrees="91.41" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="18" />
+    </MinorBody>
+
+    <Texture Id="Pan_Diffuse" Path="Textures/Pan_Diffuse.ktx2" Category="Terrain" Stream="true"/>
+    <Texture Id="Pan_Normal" Path="Textures/Pan_Normal.ktx2" Category="TerrainHeight" Stream="true"/>
+    <Height Id="Pan_Height" Path="Textures/Pan_Height.ktx2" Category="TerrainHeight">
+        <Minimum Km="-3.336"/>
+        <Maximum Km="6.27"/>
+    </Height>
+    <Texture Id="PanGroundDiffuse" Path="Textures/Planets/Pan/Ice/Ice_Albedo.dds" Category="Terrain"/>
+    <Texture Id="PanGroundNormal" Path="Textures/Planets/Pan/Ice/Ice_Normal.dds" Category="Terrain"/>
+    <Texture Id="PanGroundAoRoughMetal" Path="Textures/Planets/Pan/Ice/Ice_AoRoughMetal.dds" Category="Terrain"/>
+    <Texture Id="PanGroundDisplacement" Path="Textures/Planets/Pan/Ice/Ice_Displacement.dds" Category="Terrain"/>
+    <TerrainMaterial Id="Pan.Terrain.BiomeMaterials.BiomeMaterial.GroundMaterial">
+        <Diffuse Ref="PanGroundDiffuse"/>
+        <Normal Ref="PanGroundNormal"/>
+        <AoRoughMetal Ref="PanGroundAoRoughMetal"/>
+        <Displacement Ref="PanGroundDisplacement"/>
+
+        <TextureTiling Value="0.04" />
+        <HeightTiling Value="0.0000155" />
+
+        <HeightDeformity Value="0.3" />
+
+        <DiffuseScale Value="0.6" />
+        <NormalScale Value="1.0" />
+        <DisplacementScale Value="0.8" />
+
+    </TerrainMaterial>
+    <TerrainMaterial Id="Pan.Terrain.BiomeMaterials.BiomeMaterial.SlopeMaterial">
+        <Diffuse Ref="LunaCliffsDiffuse"/>
+        <Normal Ref="LunaCliffsNormal"/>
+        <AoRoughMetal Ref="LunaCliffsAoRoughMetal"/>
+        <Displacement Ref="LunaCliffsDisplacement"/>
+
+        <TextureTiling Value="0.04" />
+        <HeightTiling Value="0.0000155" />
+
+        <HeightDeformity Value="0.3" />
+
+        <DiffuseScale Value="1.0" />
+        <NormalScale Value="1.0" />
+        <DisplacementScale Value="1.0" />
+    </TerrainMaterial>
+    <Texture Id="Pan_Scattering" Path="Textures/Pan_Scattering.ktx2" Category="Terrain"/>
+    <PlanetaryBody Id="Pan">
+        <ParentBody Ref="Saturn"/>
+        <Orbit>
+            <SemiMajorAxis Km="133584" />
+            <Inclination Degrees="0.0001" />
+            <LongitudeOfAscendingNode Degrees="0.0" />
+            <Eccentricity Value="0.0" />
+            <ArgumentOfPeriapsis Degrees="130.822" /> <!-- TODO: correct values from JPL horizons ephemerides -->
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+        <MeanRadius Km="13.7" />
+        <Mass Pg="4300" />
+        <SphereOfInfluence Km="50" /> <!-- Wrong! Just here so we can collide with and land on it -->
+        <Diffuse Ref="Pan_Diffuse"/>
+        <Normal Ref="Pan_Normal"/>
+        <Scattering Ref="Pan_Scattering">
+            <MeanAlbedo Value="0.52" />
+            <MeanDiffuseLuminosity Value="0.420" />  <!-- Temporary, mean luminosity of the diffuse texture -->
+        </Scattering>
+        <Surge Ref="Default_Surge">
+            <MeanSlopeRoughness Degrees="5" />
+        </Surge>
+        <Height Ref="Pan_Height"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+
+        <Biomes>
+            <BiomeIDMap Ref="PhobosBiomeID"/>
+            <BiomeControlMap Ref="PhobosBiomeControl"/>
+
+            <Biomes>
+                <Biome IdMapIndex="0" Key="Surface" />
+            </Biomes>
+        </Biomes>
+
+        <Terrain>
+            <ProceduralModifiers>
+                <Modifiers>
+                    <Simplex Key="SmallPerturbations">
+                        <Frequency Value="1.501" />
+                        <Lacunarity Value="2.0" />
+                        <Persistence Value="0.5" />
+                        <Amplitude Value="150" />
+                        <AmplitudeHeightCurve>
+                            <SplinePoints>
+                                <SplinePoint>
+                                    <Key Value="0.0" />
+                                    <Value Value="0.5" />
+                                    <InTangent Value="1.0" />
+                                    <OutTangent Value="1.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="1.0" />
+                                    <Value Value="1.0" />
+                                    <InTangent Value="1.0" />
+                                    <OutTangent Value="1.0" />
+                                </SplinePoint>
+                            </SplinePoints>
+                        </AmplitudeHeightCurve>
+                        <Seed Value="1" />
+                        <Octaves Value="6" />
+                        <Order Value="0" />
+                    </Simplex>
+
+                    <SimpleCraters Key="TestSmallCraters">
+                        <Frequency Value="1.251" />
+                        <Amplitude Value="200" />
+                        <Seed Value="1" />
+                        <Order Value="6" />
+
+                        <CraterRadiusScale Value="0.497" />
+                        <RadiusNoiseFrequency Value="7.0" />
+                        <RadiusNoiseAmplitude Value="0.15" />
+                        <RadiusNoisePersistence Value="0.34" />
+                        <RadiusNoiseOctaves Value="1" />
+
+                        <CraterSizeVariation Value="1.0" />
+
+                        <CraterShapeCurve>
+                            <SplinePoints>
+                                <SplinePoint>
+                                    <Key Value="0.0" />
+                                    <Value Value="0.171" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.186" />
+                                    <Value Value="0.171" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.254" />
+                                    <Value Value="0.281" />
+                                    <InTangent Value="3.251" />
+                                    <OutTangent Value="2.845" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.366" />
+                                    <Value Value="0.554" />
+                                    <InTangent Value="0.149" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.497" />
+                                    <Value Value="0.503" />
+                                    <InTangent Value="-0.143" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="1.0" />
+                                    <Value Value="0.5" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                            </SplinePoints>
+                        </CraterShapeCurve>
+
+                        <AmplitudeHeightCurve>
+                            <SplinePoints>
+                                <SplinePoint>
+                                    <Key Value="0.0" />
+                                    <Value Value="1" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.204" />
+                                    <Value Value="1.0" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.290" />
+                                    <Value Value="0.0" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="1.0" />
+                                    <Value Value="1.0" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                            </SplinePoints>
+                        </AmplitudeHeightCurve>
+                    </SimpleCraters>
+
+                    <SimpleCraters Key="TestSmallCraters2">
+                        <Frequency Value="5.7" />
+                        <Amplitude Value="61" />
+                        <Seed Value="1" />
+                        <Order Value="12" />
+
+                        <CraterRadiusScale Value="1" />
+                        <RadiusNoiseFrequency Value="7.0" />
+                        <RadiusNoiseAmplitude Value="0.15" />
+                        <RadiusNoisePersistence Value="0.34" />
+                        <RadiusNoiseOctaves Value="1" />
+
+                        <CraterSizeVariation Value="1.0" />
+
+                        <CraterShapeCurve>
+                            <SplinePoints>
+                                <SplinePoint>
+                                    <Key Value="0.0" />
+                                    <Value Value="0.171" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.186" />
+                                    <Value Value="0.171" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.254" />
+                                    <Value Value="0.281" />
+                                    <InTangent Value="3.251" />
+                                    <OutTangent Value="2.845" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.366" />
+                                    <Value Value="0.554" />
+                                    <InTangent Value="0.149" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.497" />
+                                    <Value Value="0.503" />
+                                    <InTangent Value="-0.143" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="1.0" />
+                                    <Value Value="0.5" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                            </SplinePoints>
+                        </CraterShapeCurve>
+
+                        <AmplitudeHeightCurve>
+                            <SplinePoints>
+                                <SplinePoint>
+                                    <Key Value="0.0" />
+                                    <Value Value="1" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.204" />
+                                    <Value Value="1.0" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.530" />
+                                    <Value Value="0.0" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="1.0" />
+                                    <Value Value="1.0" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                            </SplinePoints>
+                        </AmplitudeHeightCurve>
+                    </SimpleCraters>
+
+                    <SimpleCratersEjecta Key="EjectaCraters">
+                        <Frequency Value="4.2" />
+                        <Amplitude Value="75" />
+                        <Seed Value="1" />
+                        <Order Value="8" />
+
+                        <CraterRadiusScale Value="0.36" />
+                        <RadiusNoiseFrequency Value="5.25" />
+                        <RadiusNoiseAmplitude Value="0.18" />
+                        <RadiusNoisePersistence Value="0.34" />
+                        <RadiusNoiseOctaves Value="1" />
+
+                        <CraterSizeVariation Value="1.5" />
+
+                        <EjectaChance Value="0.02" />
+                        <RadialNoisePower Value="4.0" />
+                        <RadialNoiseFrequency Value="2.5" />
+
+                        <CraterShapeCurve>
+                            <SplinePoints>
+                                <SplinePoint>
+                                    <Key Value="0.0" />
+                                    <Value Value="0.171" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.186" />
+                                    <Value Value="0.171" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.254" />
+                                    <Value Value="0.281" />
+                                    <InTangent Value="3.251" />
+                                    <OutTangent Value="2.845" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.366" />
+                                    <Value Value="0.554" />
+                                    <InTangent Value="0.149" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.497" />
+                                    <Value Value="0.503" />
+                                    <InTangent Value="-0.143" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="1.0" />
+                                    <Value Value="0.5" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                            </SplinePoints>
+                        </CraterShapeCurve>
+
+                        <AmplitudeHeightCurve>
+                            <SplinePoints>
+                                <SplinePoint>
+                                    <Key Value="0.0" />
+                                    <Value Value="0.6" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.323" />
+                                    <Value Value="0.6" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.425" />
+                                    <Value Value="0.35" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="1.0" />
+                                    <Value Value="0.35" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                            </SplinePoints>
+                        </AmplitudeHeightCurve>
+
+                        <RadialNoiseCurve>
+                            <SplinePoints>
+                                <SplinePoint>
+                                    <Key Value="0.0" />
+                                    <Value Value="0.0" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.053" />
+                                    <Value Value="0.25" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.347" />
+                                    <Value Value="0.0" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="1.0" />
+                                    <Value Value="0.35" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                            </SplinePoints>
+                        </RadialNoiseCurve>
+                    </SimpleCratersEjecta>
+
+                    <Erosion Key="PanErosion">
+                        <Frequency Value="14.2" />
+                        <Amplitude Value="44" />
+                        <Lacunarity Value="2" />
+                        <GradientFalloff Value="1.158" />
+                        <Curvature Value="0.01988" />
+                        <Seed Value="1" />
+                        <Octaves Value="5" />
+                        <Order Value="1" />
+                        <GenerateColor Value="false" />
+
+                        <AmplitudeHeightCurve>
+                            <SplinePoints>
+                                <SplinePoint>
+                                    <Key Value="0.0" />
+                                    <Value Value="1" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.088" />
+                                    <Value Value="1" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="0.354" />
+                                    <Value Value="0.0" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                                <SplinePoint>
+                                    <Key Value="1.0" />
+                                    <Value Value="0.0" />
+                                    <InTangent Value="0.0" />
+                                    <OutTangent Value="0.0" />
+                                </SplinePoint>
+                            </SplinePoints>
+                        </AmplitudeHeightCurve>
+                    </Erosion>
+                </Modifiers>
+            </ProceduralModifiers>
+
+            <BiomeMaterials>
+                <!-- Define any properties such as biome blending strength here -->
+                <!-- Order matters! The order these appear corresponds to the ID in the ID map, starting from 0 -->
+                <BlendStrength Value="2.25" />
+                <DetailFadeInEnd Km="2" />
+                <DetailFadeInStart Km="100" />
+                <Materials>
+                    <!-- Base terrain -->
+                    <BiomeMaterial>
+                        <Biome KeyRef="Surface" />
+
+                        <SlopeBlendStrength Value="0.01" />
+                        <SlopeBlendContrast Value="1.0" />
+                        <SlopeBlendBias Value="0.00" />
+
+                        <GroundMaterial Ref="Pan.Terrain.BiomeMaterials.BiomeMaterial.GroundMaterial"/>
+
+                        <SlopeMaterial Ref="Pan.Terrain.BiomeMaterials.BiomeMaterial.SlopeMaterial"/>
+
+                        
+
+                    <!-- more modifiers here -->
+
+                    </BiomeMaterial>
+                </Materials>
+            </BiomeMaterials>
+        </Terrain>
+    </PlanetaryBody>
+
+    <Texture Id="Mimas_Diffuse" Path="Textures/Mimas_Diffuse.ktx2" Category="Terrain"/>
+    <PlanetaryBody Id="Mimas">
+        <ParentBody Ref="Saturn"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="185539" />
+            <Inclination Degrees="1.6" />
+            <Eccentricity Value="0.0202" />
+            <LongitudeOfAscendingNode Degrees="342.7" />
+            <ArgumentOfPeriapsis Degrees="130.822" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="198.2" />
+        <Mass Zg="37.5094" />
+        <Diffuse Ref="Mimas_Diffuse"/>
+    </PlanetaryBody>
+
+    <PlanetaryBody Id="Enceladus">
+        <ParentBody Ref="Saturn"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="237948" />
+            <Inclination Degrees="0.009" />
+            <Eccentricity Value="0.0047" />
+            <LongitudeOfAscendingNode Degrees="143.7" />
+            <ArgumentOfPeriapsis Degrees="203.459" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="252.1" />
+        <Mass Zg="108.05" />
+    </PlanetaryBody>
+
+    <PlanetaryBody Id="Tethys">
+        <ParentBody Ref="Saturn"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="294619" />
+            <Inclination Degrees="1.12" />
+            <Eccentricity Value="0.0001" />
+            <LongitudeOfAscendingNode Degrees="285.3" />
+            <ArgumentOfPeriapsis Degrees="5.576" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="531.1" />
+        <Mass Zg="617.6" />
+    </PlanetaryBody>
+
+    <PlanetaryBody Id="Dione">
+        <ParentBody Ref="Saturn"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="377396" />
+            <Inclination Degrees="0.02" />
+            <Eccentricity Value="0.0022" />
+            <LongitudeOfAscendingNode Degrees="168.8" />
+            <ArgumentOfPeriapsis Degrees="90.771" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="561.4" />
+        <Mass Yg="1.09572" />
+    </PlanetaryBody>
+
+    <PlanetaryBody Id="Rhea">
+        <ParentBody Ref="Saturn"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="527108" />
+            <Inclination Degrees="0.35" />
+            <Eccentricity Value="0.0010" />
+            <LongitudeOfAscendingNode Degrees="227.9" />
+            <ArgumentOfPeriapsis Degrees="359.856" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="763.8" />
+        <Mass Yg="2.309" />
+    </PlanetaryBody>
+
+    <Texture Id="Titan_Diffuse" Path="Textures/Titan_Diffuse.ktx2" Category="Terrain" Stream="true"/>
+    <AtmosphericBody Id="Titan">
+        <ParentBody Ref="Saturn"/>
+        <Orbit>
+            <SemiMajorAxis Km="1221870" />
+            <Inclination Degrees="0.348" />
+            <Eccentricity Value="0.0288" />
+            <LongitudeOfAscendingNode Degrees="187.3" />
+            <ArgumentOfPeriapsis Degrees="28.060" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <HeightmapCollection Ref="Default"/>
+
+        <MeshCollection Ref="Default"/>
+        <MeanRadius Km="2575.5" />
+        <Mass Yg="134.553" />
+        <Diffuse Ref="Titan_Diffuse"/>
+        <Atmosphere>
+            <Visual>
+                <RayleighScattering>
+                    <Coefficients R="0.10978052645012698" G="0.10787130002933647" B="0.1890134301676055" />
+                    <ScaleHeight Km="40" />
+                </RayleighScattering>
+                <MieScattering>
+                    <Coefficients R="6.743806227624956E-05" G="0.00026975224910499824" B="0.0014740034075936717" />
+                    <ScaleHeight Km="45" />
+                    <PhaseFunctionAsymmetry X="0" Y="0" Z="0" />
+                    <AbsorptionMultiplier Value="100" />
+                </MieScattering>
+                <Ozone>
+                    <Coefficients R="2.9026752316166213E-11" G="2.7065485469193217E-11" B="9.178729440026801E-11" />
+                    <Altitude Km="300" />
+                    <Extent Km="20" />
+                </Ozone>
+                <StartHeight Km="0" />
+            </Visual>
+            <Physical>
+                <SeaLevelPressure Bar="1.467"/>
+                <Mixture Ref="TitanAtmosphere"/>
+                <!-- Huygens probe (Fulchignoni et al. 2005): tropopause at 44 km, stratopause near 250 km. -->
+                <TemperatureProfile>
+                    <Point Km="0" K="93.65"/>
+                    <Point Km="5" K="88"/>
+                    <Point Km="10" K="83"/>
+                    <Point Km="20" K="77"/>
+                    <Point Km="30" K="72.5"/>
+                    <Point Km="44" K="70.4"/>
+                    <Point Km="60" K="75"/>
+                    <Point Km="100" K="135"/>
+                    <Point Km="150" K="160"/>
+                    <Point Km="200" K="175"/>
+                    <Point Km="250" K="186"/>
+                    <Point Km="300" K="180"/>
+                    <Point Km="400" K="165"/>
+                    <Point Km="500" K="152"/>
+                    <Point Km="1000" K="170"/>
+                </TemperatureProfile>
+            </Physical>
+        </Atmosphere>
+        <Clouds>
+            <OrbitTransitionStartAltitude Km="150" />
+            <OrbitTransitionEndAltitude Km="250" />
+            <MaxShadowsAltitude Au="1" />
+            <VolumetricsFlickerReductionDistance Km="100" />
+
+            <Layers>
+                <Layer Key="TitanPlaceholderClouds">
+                    <RotationSpeed X="0" Y="0" Z="-20" />
+                    <VolumetricCloud>
+                        <Texture Ref="VenusCloud"/>
+                        <Detail>
+                            <DetailSelector Ref="VenusCloud"/>
+                            <Texture Ref="CloudDetail2048"/>
+                            <Size Km="1800" />
+                        </Detail>
+                        <Color R="0.37010676" G="0.311664" B="0.23049353" />
+                        <Raymarching>
+                            <Step Scale="0.006">
+                                <Size M="140" />
+                                <MaxSize Km="1.5" />
+                            </Step>
+                            <LightDistance M="2800" />
+                            <LightSamples Value="8" />
+                        </Raymarching>
+                        <Noise>
+                            <ScrollSpeed Value="5" />
+                        </Noise>
+                        <CloudTypes>
+                            <CloudType Name="Stratus">
+                                <StartAltitude M="20000" />
+                                <Height M="2400" />
+                                <Density Value="0.002" />
+                                <NoiseScale M="9200" />
+                                <EdgeSharpness Value="0" />
+                                <MultipleScatteringBrightness Value="0.699999988079071" />
+                                <CloudShape InterpolateShapes="true">
+                                    <ShapeCurve>
+                                        <SplinePoints>
+                                            <SplinePoint>
+                                                <Key Value="0" />
+                                                <Value Value="0" />
+                                                <InTangent Value="1.633945" />
+                                                <OutTangent Value="1.633945" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="0.1140957" />
+                                                <Value Value="0.8506892" />
+                                                <InTangent Value="0.06669102" />
+                                                <OutTangent Value="0.261398" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="0.3686106" />
+                                                <Value Value="0.9575245" />
+                                                <InTangent Value="0" />
+                                                <OutTangent Value="0" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="1" />
+                                                <Value Value="0" />
+                                                <InTangent Value="-0.369256" />
+                                                <OutTangent Value="-0.5550035" />
+                                            </SplinePoint>
+                                        </SplinePoints>
+                                    </ShapeCurve>
+                                    <DensityCurve>
+                                        <SplinePoints>
+                                            <SplinePoint>
+                                                <Key Value="0.008334144949913025" />
+                                                <Value Value="0.14174401760101318" />
+                                                <InTangent Value="1" />
+                                                <OutTangent Value="-0.04319142550230026" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="1" />
+                                                <Value Value="1" />
+                                                <InTangent Value="-0.03819240629673004" />
+                                                <OutTangent Value="1" />
+                                            </SplinePoint>
+                                        </SplinePoints>
+                                    </DensityCurve>
+                                </CloudShape>
+                            </CloudType>
+                            <CloudType Name="Cumulus">
+                                <StartAltitude M="20000" />
+                                <Height M="12800" />
+                                <Density Value="0.006000000052154064" />
+                                <NoiseScale M="9200" />
+                                <EdgeSharpness Value="0.9800000190734863" />
+                                <MultipleScatteringBrightness Value="1" />
+                                <CloudShape InterpolateShapes="true">
+                                    <ShapeCurve>
+                                        <SplinePoints>
+                                            <SplinePoint>
+                                                <Key Value="0" />
+                                                <Value Value="0" />
+                                                <InTangent Value="1.633945" />
+                                                <OutTangent Value="1.633945" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="0.08695792" />
+                                                <Value Value="0.976166" />
+                                                <InTangent Value="0.06669102" />
+                                                <OutTangent Value="0.04846065" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="1" />
+                                                <Value Value="0" />
+                                                <InTangent Value="-0.7966601" />
+                                                <OutTangent Value="-0.5550035" />
+                                            </SplinePoint>
+                                        </SplinePoints>
+                                    </ShapeCurve>
+                                    <DensityCurve>
+                                        <SplinePoints>
+                                            <SplinePoint>
+                                                <Key Value="0" />
+                                                <Value Value="0" />
+                                                <InTangent Value="1" />
+                                                <OutTangent Value="1" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="1" />
+                                                <Value Value="1" />
+                                                <InTangent Value="1" />
+                                                <OutTangent Value="1" />
+                                            </SplinePoint>
+                                        </SplinePoints>
+                                    </DensityCurve>
+                                </CloudShape>
+                            </CloudType>
+                            <CloudType Name="Cumulus Congestus 1">
+                                <StartAltitude M="20000" />
+                                <Height M="22800" />
+                                <Density Value="0.003000000026077032" />
+                                <NoiseScale M="9200" />
+                                <EdgeSharpness Value="0.9800000190734863" />
+                                <MultipleScatteringBrightness Value="1" />
+                                <CloudShape InterpolateShapes="true">
+                                    <ShapeCurve>
+                                        <SplinePoints>
+                                            <SplinePoint>
+                                                <Key Value="0" />
+                                                <Value Value="0" />
+                                                <InTangent Value="1.633945" />
+                                                <OutTangent Value="1.633945" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="0.08695792" />
+                                                <Value Value="0.976166" />
+                                                <InTangent Value="0.06669102" />
+                                                <OutTangent Value="0.04846065" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="0.4343985" />
+                                                <Value Value="0.6765829" />
+                                                <InTangent Value="-1.224023" />
+                                                <OutTangent Value="-1.224023" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="0.8816288" />
+                                                <Value Value="0.3897246" />
+                                                <InTangent Value="-1.164106" />
+                                                <OutTangent Value="-1.164106" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="1" />
+                                                <Value Value="0" />
+                                                <InTangent Value="-0.7966601" />
+                                                <OutTangent Value="-0.5550035" />
+                                            </SplinePoint>
+                                        </SplinePoints>
+                                    </ShapeCurve>
+                                    <DensityCurve>
+                                        <SplinePoints>
+                                            <SplinePoint>
+                                                <Key Value="0" />
+                                                <Value Value="0" />
+                                                <InTangent Value="1" />
+                                                <OutTangent Value="1" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="1" />
+                                                <Value Value="1" />
+                                                <InTangent Value="1" />
+                                                <OutTangent Value="1" />
+                                            </SplinePoint>
+                                        </SplinePoints>
+                                    </DensityCurve>
+                                </CloudShape>
+                            </CloudType>
+                            <CloudType Name="Cumulus Congestus 2">
+                                <StartAltitude M="20000" />
+                                <Height M="34800" />
+                                <Density Value="0.0020000000949949026" />
+                                <NoiseScale M="9200" />
+                                <EdgeSharpness Value="0.9800000190734863" />
+                                <MultipleScatteringBrightness Value="1" />
+                                <CloudShape InterpolateShapes="false">
+                                    <ShapeCurve>
+                                        <SplinePoints>
+                                            <SplinePoint>
+                                                <Key Value="0" />
+                                                <Value Value="0" />
+                                                <InTangent Value="1.633945" />
+                                                <OutTangent Value="1.633945" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="0.09431168" />
+                                                <Value Value="0.9640306" />
+                                                <InTangent Value="0.06669102" />
+                                                <OutTangent Value="-0.8954304" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="0.2904161" />
+                                                <Value Value="0.8003764" />
+                                                <InTangent Value="0.2357683" />
+                                                <OutTangent Value="0.2357683" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="0.59456" />
+                                                <Value Value="0.7429472" />
+                                                <InTangent Value="-0.001872113" />
+                                                <OutTangent Value="-0.001872113" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="0.734686" />
+                                                <Value Value="0.7428927" />
+                                                <InTangent Value="-3.4198" />
+                                                <OutTangent Value="-1.176937" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="1" />
+                                                <Value Value="0" />
+                                                <InTangent Value="-0.8304251" />
+                                                <OutTangent Value="-0.5550035" />
+                                            </SplinePoint>
+                                        </SplinePoints>
+                                    </ShapeCurve>
+                                    <DensityCurve>
+                                        <SplinePoints>
+                                            <SplinePoint>
+                                                <Key Value="0" />
+                                                <Value Value="0" />
+                                                <InTangent Value="1" />
+                                                <OutTangent Value="1" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="1" />
+                                                <Value Value="1" />
+                                                <InTangent Value="1" />
+                                                <OutTangent Value="1" />
+                                            </SplinePoint>
+                                        </SplinePoints>
+                                    </DensityCurve>
+                                </CloudShape>
+                            </CloudType>
+                            <CloudType Name="Cumulus Congestus 3">
+                                <StartAltitude M="20000" />
+                                <Height M="34800" />
+                                <Density Value="0.0020000000949949026" />
+                                <NoiseScale M="9200" />
+                                <EdgeSharpness Value="0.9800000190734863" />
+                                <MultipleScatteringBrightness Value="1" />
+                                <CloudShape InterpolateShapes="false">
+                                    <ShapeCurve>
+                                        <SplinePoints>
+                                            <SplinePoint>
+                                                <Key Value="0" />
+                                                <Value Value="0" />
+                                                <InTangent Value="1.633945" />
+                                                <OutTangent Value="1.633945" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="0.09431168" />
+                                                <Value Value="0.9640306" />
+                                                <InTangent Value="0.06669102" />
+                                                <OutTangent Value="-0.8954304" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="0.2904161" />
+                                                <Value Value="0.8003764" />
+                                                <InTangent Value="0.2357683" />
+                                                <OutTangent Value="0.2357683" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="0.734686" />
+                                                <Value Value="0.7428927" />
+                                                <InTangent Value="-3.4198" />
+                                                <OutTangent Value="-1.176937" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="1" />
+                                                <Value Value="0" />
+                                                <InTangent Value="-0.8304251" />
+                                                <OutTangent Value="-0.5550035" />
+                                            </SplinePoint>
+                                        </SplinePoints>
+                                    </ShapeCurve>
+                                    <DensityCurve>
+                                        <SplinePoints>
+                                            <SplinePoint>
+                                                <Key Value="0" />
+                                                <Value Value="0" />
+                                                <InTangent Value="1" />
+                                                <OutTangent Value="1" />
+                                            </SplinePoint>
+                                            <SplinePoint>
+                                                <Key Value="1" />
+                                                <Value Value="1" />
+                                                <InTangent Value="1" />
+                                                <OutTangent Value="1" />
+                                            </SplinePoint>
+                                        </SplinePoints>
+                                    </DensityCurve>
+                                </CloudShape>
+                            </CloudType>
+                        </CloudTypes>
+                    </VolumetricCloud>
+                    <TwoDimensionalCloud>
+                        <Texture Ref="VenusCloud"/>
+                        <UseAlphaOnly Value="true" />
+                        <Color R="0.45551604" G="0.38998407" B="0.30151597" />
+                        <Lambertian Value="0.65" />
+                    </TwoDimensionalCloud>
+                    <MatchGroundColor Value="false" />
+                </Layer>
+            </Layers>
+        </Clouds>
+    </AtmosphericBody>
+
+    <MinorBody Id="Iapetus">
+        <ParentBody Ref="Saturn"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="3560820" />
+            <Inclination Degrees="14.72" />
+            <Eccentricity Value="0.0293" />
+            <LongitudeOfAscendingNode Degrees="15.47" />
+            <ArgumentOfPeriapsis Degrees="271.608" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="734.5" />
+        <Mass Yg="1.8059" />
+    </MinorBody>
+
+    <MinorBody Id="Miranda">
+        <ParentBody Ref="Uranus"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="129390" />
+            <Inclination Degrees="4.338" />
+            <Eccentricity Value="0.0013" />
+            <LongitudeOfAscendingNode Degrees="326.438" />
+            <ArgumentOfPeriapsis Degrees="285.431" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="235.8" />
+        <Mass Zg="62.93" />
+    </MinorBody>
+
+    <MinorBody Id="Ariel">
+        <ParentBody Ref="Uranus"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="191020" />
+            <Inclination Degrees="0.260" />
+            <Eccentricity Value="0.0012" />
+            <LongitudeOfAscendingNode Degrees="74.392" />
+            <ArgumentOfPeriapsis Degrees="326.528" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="578.9" />
+        <Mass Yg="1.2331" />
+    </MinorBody>
+
+    <MinorBody Id="Umbriel">
+        <ParentBody Ref="Uranus"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="266300" />
+            <Inclination Degrees="0.128" />
+            <Eccentricity Value="0.0039" />
+            <LongitudeOfAscendingNode Degrees="170.606" />
+            <ArgumentOfPeriapsis Degrees="270.572" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="584.7" />
+        <Mass Yg="1.2885" />
+    </MinorBody>
+
+    <MinorBody Id="Titania">
+        <ParentBody Ref="Uranus"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="435910" />
+            <Inclination Degrees="0.340" />
+            <Eccentricity Value="0.0011" />
+            <LongitudeOfAscendingNode Degrees="314.608" />
+            <ArgumentOfPeriapsis Degrees="284.419" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="788.9" />
+        <Mass Yg="3.455" />
+    </MinorBody>
+
+    <MinorBody Id="Oberon">
+        <ParentBody Ref="Uranus"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Km="583520" />
+            <Inclination Degrees="0.058" />
+            <Eccentricity Value="0.0014" />
+            <LongitudeOfAscendingNode Degrees="79.709" />
+            <ArgumentOfPeriapsis Degrees="271.885" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <MeanRadius Km="761.4" />
+        <Mass Yg="3.1104" />
+    </MinorBody>
+
+    <MinorBody Id="Charon">
+        <ParentBody Ref="Pluto"/>
+        <Orbit>
+            <SemiMajorAxis Km="19571" />
+            <Inclination Degrees="0.001" />
+            <Eccentricity Value="0.0022" />
+            <LongitudeOfAscendingNode Degrees="0.0" />
+            <ArgumentOfPeriapsis Degrees="0.0" />
+        </Orbit>
+        <Rotation>
+            <IsTidallyLocked Value="true" />
+        </Rotation>
+
+        <HeightmapCollection Ref="Default"/>
+
+        <MeshCollection Ref="Default"/>
+        <MeanRadius Km="606" />
+        <Mass Yg="1.5897" />
+    </MinorBody>
+
+    <Texture Id="Eris_Diffuse" Path="Textures/Eris_Diffuse.ktx2" Category="Terrain"/>
+    <MinorBody Id="Eris">
+        <ParentBody Ref="Sol"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Au="67.78" />
+            <Inclination Degrees="44.187" />
+            <Eccentricity Value="0.436" />
+            <LongitudeOfAscendingNode Degrees="35.951" />
+            <ArgumentOfPeriapsis Degrees="151.950" />
+        </Orbit>
+
+        <MeanRadius Km="1163" />
+        <Mass Yg="16.466" />
+        <Diffuse Ref="Eris_Diffuse"/>
+    </MinorBody>
+
+    <MinorBody Id="Haumea">
+        <ParentBody Ref="Sol"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Au="43.34" />
+            <Inclination Degrees="28.19" />
+            <Eccentricity Value="0.195" />
+            <LongitudeOfAscendingNode Degrees="121.77" />
+            <ArgumentOfPeriapsis Degrees="239.61" />
+        </Orbit>
+
+        <MeanRadius Km="816" />
+        <Mass Yg="3.95244" />
+    </MinorBody>
+
+    <!-- Rubin Observatory's dwarf planet candidate, announced 2026-10-27. Barycentric elements from JPL Horizons, epoch JD 2461200.5.
+         Its size is not measured: H 3.19 at an assumed albedo of 0.10 gives about 970 km across. -->
+    <MinorBody Id="2026_ED138">
+        <ParentBody Ref="Sol"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Au="43.09" />
+            <Inclination Degrees="24.43" />
+            <Eccentricity Value="0.1387" />
+            <LongitudeOfAscendingNode Degrees="322.61" />
+            <ArgumentOfPeriapsis Degrees="168.70" />
+        </Orbit>
+
+        <MeanRadius Km="485" />
+    </MinorBody>
+
+    <MinorBody Id="Sedna">
+        <ParentBody Ref="Sol"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Au="506" />
+            <Inclination Degrees="11.93" />
+            <Eccentricity Value="0.8496" />
+            <LongitudeOfAscendingNode Degrees="144.248" />
+            <ArgumentOfPeriapsis Degrees="311.352" />
+        </Orbit>
+
+        <MeanRadius Km="995" />
+    </MinorBody>
+
+    <Asteroid Id="ScottManleyAsteroid">
+        <ParentBody Ref="Sol"/>
+        <HeightmapCollection Ref="Default"/>
+        <MeshCollection Ref="Asteroid"/>
+        <Orbit>
+            <SemiMajorAxis Au="2.9321432"/>
+            <Inclination Degrees="1.30163"/>
+            <LongitudeOfAscendingNode Degrees="333.87360"/>
+            <Eccentricity Value="0.0640155"/>
+            <ArgumentOfPeriapsis Degrees="142.13492"/>
+        </Orbit>
+
+        <MeanRadius Km="2.3"/>
+        <Color R="1" G="1" B="1"/>
+    </Asteroid>
+</Assets>

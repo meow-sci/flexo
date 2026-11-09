@@ -59,9 +59,14 @@ export interface SubPartPlacement extends Transform {
  * {@link Connector.flags} array is the default connect-to-anything mode and
  * emits no <Flags>. See docs/ksa-part-connector-notes.md for what each means.
  */
-export type ConnectorFlag = 'Internal' | 'ToSurface' | 'FromSurface';
+export type ConnectorFlag = 'Internal' | 'ToSurface' | 'FromSurface' | 'Edge';
 
-export const CONNECTOR_FLAGS: readonly ConnectorFlag[] = ['Internal', 'ToSurface', 'FromSurface'];
+export const CONNECTOR_FLAGS: readonly ConnectorFlag[] = [
+  'Internal',
+  'ToSurface',
+  'FromSurface',
+  'Edge',
+];
 
 /**
  * What is allowed to FLOW across a connector, serialized as the whitespace-separated
@@ -493,7 +498,7 @@ export interface EditorTagDef {
 /**
  * KSA's editor-tag registry in the game's authored order (= the order of category
  * buttons in the part picker). Mirrors `CoreEditorTagsGameData.xml` as of build
- * **2026.10.10.5554**. This is a static snapshot, not a live parse: flexo only uses it for
+ * **2026.11 build 5801**. This is a static snapshot, not a live parse: flexo only uses it for
  * freeform-entry autocomplete, so a modder-defined tag simply isn't suggested (it can
  * still be typed). Keep in sync with the game file on a registry change.
  */
@@ -506,11 +511,12 @@ export const EDITOR_TAG_DEFS: readonly EditorTagDef[] = [
   { id: 'Electrical', notaCategory: false },
   { id: 'Coupling', notaCategory: false },
   { id: 'Structural', notaCategory: false },
+  { id: 'Panels', notaCategory: false },
   { id: 'Landing', notaCategory: false },
   { id: 'Interstage', notaCategory: true },
-  { id: 'Passage', notaCategory: false },
   { id: 'Cargo', notaCategory: false },
   { id: 'Lights', notaCategory: false },
+  { id: 'Life Support', notaCategory: false },
   { id: 'Interstellar', notaCategory: false },
   { id: 'Radial', notaCategory: true },
   { id: 'NoFaceSnapping', notaCategory: true },
@@ -588,7 +594,7 @@ export interface Tank {
  * KSA `ConsumerRole` [Flags] enum as its XmlSerializer text form (flags are
  * space-separated). `Engine` is the schema default.
  */
-export type TankRoleAffinity = 'None' | 'Engine' | 'Thruster' | 'Engine Thruster';
+export type TankRoleAffinity = string;
 
 /**
  * Battery storage (multiple allowed). Serialized as <Battery><MaximumCapacity J/>.
@@ -598,6 +604,10 @@ export type TankRoleAffinity = 'None' | 'Engine' | 'Thruster' | 'Engine Thruster
  * (a 500 J cell is 0.139 Wh, which the game itself renders as "0.14 Wh").
  */
 export interface Battery {
+  /** Enables the in-game charge indicator. */
+  hasStatusLight?: boolean;
+  /** Authored component Key; omitted means the XML type default. */
+  ksaId?: string;
   capacityWh: number;
 }
 
@@ -607,6 +617,8 @@ export interface Battery {
  * generator produces continuously, regardless of orientation or sun exposure.
  */
 export interface Generator {
+  /** Authored component Key; omitted means the XML type default. */
+  ksaId?: string;
   outputWatts: number;
 }
 
@@ -617,6 +629,8 @@ export interface Generator {
  * so imported built-in panels keep facing the right way.
  */
 export interface SolarPanel {
+  /** Authored component Key; omitted means the XML type default. */
+  ksaId?: string;
   outputWatts: number;
   transform: Transform;
 }
@@ -640,6 +654,8 @@ export interface SolarPanel {
  * `analysis/HOW_LIGHT_PARTS_WORK.md`.
  */
 export interface PowerConsumer {
+  /** Authored component Key; omitted means the XML type default. */
+  ksaId?: string;
   consumedWatts: number;
   /** `LightSwitch` — makes this consumer a flight-toggleable light switch. */
   lightSwitch: boolean;
@@ -669,6 +685,7 @@ export interface Decoupler {
  * <DockingPort><ConnectorId Value/><LatchingKineticEnergy J/><PushoffImpulse Ns/></DockingPort>.
  */
 export interface DockingPort {
+  ksaId?: string;
   connectorId: string;
   /** Magnetic latching kinetic-energy budget in joules (<LatchingKineticEnergy J/>; KSA default 50). */
   latchingKineticEnergyJ: number;
@@ -697,6 +714,7 @@ export interface DockingPort {
  * See scope/connectors-coordinates-iva.md.
  */
 export interface EvaDoor {
+  ksaId?: string;
   /** `<EVADoor SeatId>` — the {@link IvaSeat.ksaId} this hatch opens onto; null ⇒ omitted. */
   seatId: string | null;
 }
@@ -825,7 +843,7 @@ export interface KnownReaction {
 
 /**
  * Static snapshot of the combustor-drivable reactions shipped in Core's
- * `Reactions.xml` (build 5554) — fallback suggestions when the live catalog is absent.
+ * `Reactions.xml` (build 5801) — fallback suggestions when the live catalog is absent.
  * Thermal reactions are offered only for ThermalCore authoring.
  */
 export const KNOWN_REACTIONS: readonly KnownReaction[] = [
@@ -849,7 +867,6 @@ export const KNOWN_REACTIONS: readonly KnownReaction[] = [
   { id: 'ThermalNH3', name: 'Ammonia', kind: 'Thermal', category: 'Thermal' },
   { id: 'ThermalCO2', name: 'Carbon Dioxide', kind: 'Thermal', category: 'Thermal' },
   { id: 'ThermalN2', name: 'Nitrogen', kind: 'Thermal', category: 'Thermal' },
-  { id: 'FusionH2', name: 'Hydrogen Plasma', kind: 'Thermal', category: 'Thermal' },
   { id: 'APCP', name: 'APCP', kind: 'Fixed', category: 'Solid' },
   { id: 'DoubleBase', name: 'Double-Base', kind: 'Fixed', category: 'Solid' },
 ];
@@ -1175,6 +1192,8 @@ export interface RocketController {
  * GimbalReference.cs.
  */
 export interface Gimbal {
+  /** Authored local key when distinct from the placement key. */
+  key?: string;
   /** Placement instanceId this gimbal sits on (the `<SubPart Id>` wrapper). */
   subPartInstanceId: string;
   /** `<Gimbal><Transform>` pivot and axes in the owning SubPart's assembly frame. */
@@ -1437,6 +1456,8 @@ export interface PartGameData {
    * empty marker with no fields, so this is a plain on/off flag.
    */
   controllable: boolean;
+  /** Authored Control component key, when explicitly named. */
+  controlKey?: string;
   batteries: Battery[];
   generators: Generator[];
   solarPanels: SolarPanel[];
@@ -1481,6 +1502,8 @@ export interface PartGameData {
   unknownAttrs: Record<string, string>;
   /** Unmodeled `<PartGameData>` child elements, preserved verbatim (see {@link RawXmlNode}). */
   unknownChildren: RawXmlNode[];
+  /** Unmodeled items in the Components array. */
+  unknownComponents: RawXmlNode[];
 }
 
 /**
@@ -1523,6 +1546,8 @@ export interface SubPartGameData {
   unknownAttrs: Record<string, string>;
   /** Unmodeled `<SubPartGameData>` child elements, preserved verbatim (see {@link RawXmlNode}). */
   unknownChildren: RawXmlNode[];
+  /** Unmodeled items in the Components array. */
+  unknownComponents: RawXmlNode[];
 }
 
 /** True when a SubPart's data is empty and the entry can be pruned. */
@@ -1544,6 +1569,7 @@ export function isSubPartGameDataEmpty(spd: SubPartGameData): boolean {
     spd.solidNozzles.length === 0 &&
     spd.solidGrainSegments.length === 0 &&
     spd.unknownChildren.length === 0 &&
+    spd.unknownComponents.length === 0 &&
     Object.keys(spd.unknownAttrs).length === 0
   );
 }
@@ -1637,6 +1663,7 @@ export function createEmptyGameData(): PartGameData {
     gimbals: [],
     unknownAttrs: {},
     unknownChildren: [],
+    unknownComponents: [],
   };
 }
 
@@ -1661,6 +1688,7 @@ export function createSubPartGameData(subPartTemplateId: string): SubPartGameDat
     solidGrainSegments: [],
     unknownAttrs: {},
     unknownChildren: [],
+    unknownComponents: [],
   };
 }
 

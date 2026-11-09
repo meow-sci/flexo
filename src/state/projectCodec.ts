@@ -122,7 +122,8 @@ export const PROJECT_EXPORT_FORMAT = 'flexo-project';
 // required CLight.l naming ANY ordinary layer; a v9 payload's lights would decode onto a
 // layer that no longer has that meaning.
 // v11: multi-part — pts: CompactPartEntry[] (nm/pid/ie/vw + per-part body); ap = active index; top-level pid/tg/g/… keys removed (plans/MULTI_PART_PLAN.md)
-export const PROJECT_EXPORT_VERSION = 11;
+// v12: current KSA XML replaces the stored raw and typed game-data contract.
+export const PROJECT_EXPORT_VERSION = 12;
 
 /**
  * COMPACT PROJECT CODEC — the single wire format for everything that serializes a
@@ -378,33 +379,46 @@ function decLayerColor(raw: unknown): LayerColor | undefined {
 interface CSolarPanel {
   w: number;
   tf?: CTransform;
+  k?: string;
 }
 
 function encSolarPanel(sp: SolarPanel): CSolarPanel {
   const o: CSolarPanel = { w: round(sp.outputWatts) };
+  if (sp.ksaId) o.k = sp.ksaId;
   if (!isIdentityTransform(sp.transform)) o.tf = encTransform(sp.transform);
   return o;
 }
 
 function decSolarPanel(c: CSolarPanel): SolarPanel {
-  return { outputWatts: num(c.w), transform: decTransform(c.tf) };
+  return {
+    outputWatts: num(c.w),
+    transform: decTransform(c.tf),
+    ...(c.k ? { ksaId: str(c.k) } : {}),
+  };
 }
 
 interface CPowerConsumer {
   w: number; // consumedWatts
   ls?: 1; // lightSwitch; present ⇒ true
   la?: 1; // lightIsActive; present ⇒ true
+  k?: string;
 }
 
 function encPowerConsumer(pc: PowerConsumer): CPowerConsumer {
   const o: CPowerConsumer = { w: round(pc.consumedWatts) };
+  if (pc.ksaId) o.k = pc.ksaId;
   if (pc.lightSwitch) o.ls = 1;
   if (pc.lightIsActive) o.la = 1;
   return o;
 }
 
 function decPowerConsumer(c: CPowerConsumer): PowerConsumer {
-  return { consumedWatts: num(c.w), lightSwitch: !!c.ls, lightIsActive: !!c.la };
+  return {
+    consumedWatts: num(c.w),
+    lightSwitch: !!c.ls,
+    lightIsActive: !!c.la,
+    ...(c.k ? { ksaId: str(c.k) } : {}),
+  };
 }
 
 interface CGameData {
@@ -417,13 +431,14 @@ interface CGameData {
   xdm?: number[]; // extraDiametersM (adapter size classes; omitted when empty)
   crt?: number; // crashTolerancePa (<Part CrashTolerance>; omitted when null = derived in-game)
   co?: 1; // controllable (<Control/>); present ⇒ true
-  bt?: number[]; // batteries → capacityWh[]
-  gn?: number[]; // generators → outputWatts[]
+  ck?: string; // Control component key
+  bt?: { w: number; k?: string; sl?: 1 }[]; // batteries
+  gn?: { w: number; k?: string }[]; // generators
   sp?: CSolarPanel[]; // solarPanels
   pc?: CPowerConsumer; // powerConsumer (one per part)
   dc?: { c: string; f: number; k?: string }; // decoupler
-  dp?: { c: string; ke: number; pi: number }; // dockingPort
-  ed?: { s?: string }; // evaDoor — presence = the hatch; s = SeatId when authored
+  dp?: { c: string; ke: number; pi: number; k?: string }; // dockingPort
+  ed?: { s?: string; k?: string }; // evaDoor — presence = the hatch; s = SeatId when authored
   ct?: CController[]; // rocketControllers
   ro?: CRocket[]; // part-level rockets (gas generators)
   thermal?: CThermalCore[];
@@ -439,7 +454,8 @@ interface CGameData {
   sg?: CSolidGrain[]; // part-level solid grain segments
   cfw?: CFeedWiring[]; // consumerFeedWiring
   ua?: Record<string, string>; // unmodeled <PartGameData> attrs (passthrough)
-  uc?: RawXmlNode[]; // unmodeled <PartGameData> child elements (passthrough)
+  uc?: RawXmlNode[]; // unmodeled Part row children
+  ux?: RawXmlNode[]; // unmodeled Components items
 }
 
 function encGameData(g: PartGameData): CGameData {
@@ -453,8 +469,18 @@ function encGameData(g: PartGameData): CGameData {
   if (g.extraDiametersM.length) o.xdm = g.extraDiametersM.map(round);
   if (g.crashTolerancePa != null) o.crt = round(g.crashTolerancePa);
   if (g.controllable) o.co = 1;
-  if (g.batteries.length) o.bt = g.batteries.map((b) => round(b.capacityWh));
-  if (g.generators.length) o.gn = g.generators.map((x) => round(x.outputWatts));
+  if (g.controlKey) o.ck = g.controlKey;
+  if (g.batteries.length)
+    o.bt = g.batteries.map((b) => ({
+      w: round(b.capacityWh),
+      ...(b.ksaId ? { k: b.ksaId } : {}),
+      ...(b.hasStatusLight ? { sl: 1 as const } : {}),
+    }));
+  if (g.generators.length)
+    o.gn = g.generators.map((x) => ({
+      w: round(x.outputWatts),
+      ...(x.ksaId ? { k: x.ksaId } : {}),
+    }));
   if (g.solarPanels.length) o.sp = g.solarPanels.map(encSolarPanel);
   if (g.powerConsumer) o.pc = encPowerConsumer(g.powerConsumer);
   if (g.decoupler) {
@@ -466,11 +492,13 @@ function encGameData(g: PartGameData): CGameData {
       c: g.dockingPort.connectorId,
       ke: round(g.dockingPort.latchingKineticEnergyJ),
       pi: round(g.dockingPort.pushoffImpulseNs),
+      ...(g.dockingPort.ksaId ? { k: g.dockingPort.ksaId } : {}),
     };
   }
   if (g.evaDoor) {
     o.ed = {};
     if (g.evaDoor.seatId) o.ed.s = g.evaDoor.seatId;
+    if (g.evaDoor.ksaId) o.ed.k = g.evaDoor.ksaId;
   }
   if (g.rocketControllers.length) o.ct = g.rocketControllers.map(encController);
   if (g.rockets.length) o.ro = g.rockets.map(encRocket);
@@ -488,6 +516,7 @@ function encGameData(g: PartGameData): CGameData {
   if (g.consumerFeedWiring.length) o.cfw = g.consumerFeedWiring.map(encFeedWiring);
   if (Object.keys(g.unknownAttrs).length) o.ua = g.unknownAttrs;
   if (g.unknownChildren.length) o.uc = g.unknownChildren;
+  if (g.unknownComponents.length) o.ux = g.unknownComponents;
   return o;
 }
 
@@ -503,20 +532,32 @@ function decGameData(c: CGameData | undefined): PartGameData {
   g.extraDiametersM = arr<number>(c.xdm).map(num);
   g.crashTolerancePa = typeof c.crt === 'number' ? c.crt : null;
   g.controllable = !!c.co;
-  g.batteries = arr<number>(c.bt).map((wh): Battery => ({ capacityWh: num(wh) }));
-  g.generators = arr<number>(c.gn).map((w): Generator => ({ outputWatts: num(w) }));
+  if (c.ck) g.controlKey = str(c.ck);
+  g.batteries = arr<{ w: number; k?: string; sl?: 1 }>(c.bt).map(
+    (b): Battery => ({
+      capacityWh: num(b.w),
+      ...(b.k ? { ksaId: str(b.k) } : {}),
+      ...(b.sl ? { hasStatusLight: true } : {}),
+    }),
+  );
+  g.generators = arr<{ w: number; k?: string }>(c.gn).map(
+    (g): Generator => ({ outputWatts: num(g.w), ...(g.k ? { ksaId: str(g.k) } : {}) }),
+  );
   g.solarPanels = arr<CSolarPanel>(c.sp).map(decSolarPanel);
   g.powerConsumer = c.pc ? decPowerConsumer(c.pc) : null;
   g.decoupler = c.dc ? { connectorId: str(c.dc.c), force: num(c.dc.f) } : null;
   if (g.decoupler && c.dc?.k) g.decoupler.ksaId = str(c.dc.k);
   g.dockingPort = c.dp
     ? {
+        ...(c.dp.k ? { ksaId: str(c.dp.k) } : {}),
         connectorId: str(c.dp.c),
         latchingKineticEnergyJ: num(c.dp.ke),
         pushoffImpulseNs: num(c.dp.pi),
       }
     : null;
-  g.evaDoor = c.ed ? { seatId: c.ed.s ? str(c.ed.s) : null } : null;
+  g.evaDoor = c.ed
+    ? { seatId: c.ed.s ? str(c.ed.s) : null, ...(c.ed.k ? { ksaId: str(c.ed.k) } : {}) }
+    : null;
   g.rocketControllers = arr<CController>(c.ct).map(decController);
   g.rockets = arr<CRocket>(c.ro).map(decRocket);
   g.combustors = arr<CCombustor>(c.cb).map(decCombustor);
@@ -533,6 +574,7 @@ function decGameData(c: CGameData | undefined): PartGameData {
   g.consumerFeedWiring = arr<CFeedWiring>(c.cfw).map(decFeedWiring);
   g.unknownAttrs = decRawAttrs(c.ua);
   g.unknownChildren = decRawNodes(c.uc);
+  g.unknownComponents = decRawNodes(c.ux);
   return g;
 }
 
@@ -658,13 +700,6 @@ function encTank(t: Tank): CTank {
   return o;
 }
 
-const TANK_ROLE_AFFINITIES: ReadonlySet<string> = new Set([
-  'None',
-  'Engine',
-  'Thruster',
-  'Engine Thruster',
-]);
-
 function decTank(c: CTank): Tank {
   return {
     id: str(c.id),
@@ -677,7 +712,8 @@ function decTank(c: CTank): Tank {
     wallThicknessMm: num(c.w),
     magneticTrap: !!c.mt,
     roleAffinity:
-      c.ra != null && TANK_ROLE_AFFINITIES.has(str(c.ra))
+      c.ra != null &&
+      /^(?:None|(?:Engine|Thruster|Air|Water)(?: (?:Engine|Thruster|Air|Water))*)$/.test(str(c.ra))
         ? (str(c.ra) as TankRoleAffinity)
         : 'Engine',
   };
@@ -1086,6 +1122,7 @@ function decController(c: CController): RocketController {
 
 interface CGimbal {
   i: string; // subPartInstanceId
+  k?: string; // authored gimbal key
   tf?: CTransform; // pivot and axes (omit identity)
   y?: number; // maxAngleYDeg (omit 0)
   z?: number; // maxAngleZDeg (omit 0)
@@ -1094,6 +1131,7 @@ interface CGimbal {
 
 function encGimbal(g: Gimbal): CGimbal {
   const o: CGimbal = { i: g.subPartInstanceId };
+  if (g.key) o.k = g.key;
   if (!isIdentityTransform(g.transform)) o.tf = encTransform(g.transform);
   if (g.maxAngleYDeg) o.y = round(g.maxAngleYDeg);
   if (g.maxAngleZDeg) o.z = round(g.maxAngleZDeg);
@@ -1104,6 +1142,7 @@ function encGimbal(g: Gimbal): CGimbal {
 function decGimbal(c: CGimbal): Gimbal {
   return {
     subPartInstanceId: str(c.i),
+    ...(c.k ? { key: str(c.k) } : {}),
     transform: decTransform(c.tf),
     maxAngleYDeg: num(c.y),
     maxAngleZDeg: num(c.z),
@@ -1129,7 +1168,8 @@ interface CSubPartGameData {
   sn?: CSolidNozzle[]; // solid-motor nozzles
   sg?: CSolidGrain[]; // solid grain segments
   ua?: Record<string, string>; // unmodeled <SubPartGameData> attrs (passthrough)
-  uc?: RawXmlNode[]; // unmodeled <SubPartGameData> child elements (passthrough)
+  uc?: RawXmlNode[]; // unmodeled SubPart row children
+  ux?: RawXmlNode[]; // unmodeled Components items
 }
 
 function encSubPartGameData(s: SubPartGameData): CSubPartGameData {
@@ -1151,6 +1191,7 @@ function encSubPartGameData(s: SubPartGameData): CSubPartGameData {
   if (s.solidGrainSegments.length) o.sg = s.solidGrainSegments.map(encSolidGrain);
   if (Object.keys(s.unknownAttrs).length) o.ua = s.unknownAttrs;
   if (s.unknownChildren.length) o.uc = s.unknownChildren;
+  if (s.unknownComponents.length) o.ux = s.unknownComponents;
   return o;
 }
 
@@ -1173,6 +1214,7 @@ function decSubPartGameData(c: CSubPartGameData): SubPartGameData {
   s.solidGrainSegments = arr<CSolidGrain>(c.sg).map(decSolidGrain);
   s.unknownAttrs = decRawAttrs(c.ua);
   s.unknownChildren = decRawNodes(c.uc);
+  s.unknownComponents = decRawNodes(c.ux);
   return s;
 }
 

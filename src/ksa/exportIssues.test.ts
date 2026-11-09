@@ -287,6 +287,15 @@ describe('collectProjectExportIssues — cross-part blockers', () => {
     expect(projectCodes(...parts)).not.toContain('part-id-collision');
   });
 
+  it('treats Part IDs and placement keys as case-insensitive', () => {
+    const a = cleanPart();
+    const b = cleanPart();
+    b.partId = a.partId.toUpperCase();
+    expect(projectCodes(named('a', a), named('b', b))).toContain('duplicate-part-id');
+    a.placements.push(placed('Another', a.placements[0].instanceId.toUpperCase()));
+    expect(codes(a)).toContain('duplicate-instance-ids');
+  });
+
   it('blocks Part Ids that DIFFER but sanitize to one export namespace', () => {
     const a = cleanPart();
     a.partId = 'my-part';

@@ -1,0 +1,794 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<Assets>
+  <KeyframeAnimation Id="CoreServiceModuleA_Prefab_SetA1SingleA_Anim" Path="Animations/CoreServiceModuleA_Prefab_SetA1SingleA_Anim.glb" />
+  <Part Id="CoreServiceModuleA_Prefab_SetA1SingleA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Cargo" />
+    </EditorTags>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector1" Modify="Patch">
+        <Capabilities>DecouplerJoint</Capabilities>
+      </Connector>
+
+      <Connector Key="_connector9" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector11" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector13" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector15" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector17" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector18" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector5" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector10" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector12" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector14" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector16" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector19" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+    </Connectors>
+    <Components Modify="Extend">
+      <Decoupler Force="1000">
+        <Connector KeyRef="_connector1" />
+      </Decoupler>
+      <Habitat Key="ServiceBay" />
+
+      <KeyframeAnimationModule Key="CoreServiceModuleA_Prefab_SetA1SingleA_Anim">
+        <KeyframeAnimation Ref="CoreServiceModuleA_Prefab_SetA1SingleA_Anim" />
+      </KeyframeAnimationModule>
+    </Components>
+
+    <InertMasses Modify="Extend">
+      <HollowOpenSemiEllipsoidMass>
+        <LocationAsmb X="-0.7277" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Length M="0.6633" />
+        <Radius M="1.5" />
+        <WallThickness Mm="4" />
+      </HollowOpenSemiEllipsoidMass>
+      <HollowOpenSemiEllipsoidMass>
+        <LocationAsmb X="0.6551" />
+        <Paf2Asmb Z="3.1416" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Length M="0.2137" />
+        <Radius M="1.25" />
+        <WallThickness Mm="4" />
+      </HollowOpenSemiEllipsoidMass>
+      <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.0644" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Height M="0.5058" />
+        <RadiusBase M="1.38" />
+        <RadiusTop M="1.289" />
+        <WallThickness Mm="5.5" />
+      </HollowOpenTruncatedConeMass>
+      <HollowOpenCylinderMass>
+        <LocationAsmb X="0.1885" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Length M="0.5058" />
+        <OuterRadius M="0.75" />
+        <WallThickness Mm="5.5" />
+      </HollowOpenCylinderMass>
+    </InertMasses>
+    <SymmetryGroups Modify="Extend">
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector9" />
+          <Connector KeyRef="_connector11" />
+          <Connector KeyRef="_connector13" />
+          <Connector KeyRef="_connector15" />
+          <Connector KeyRef="_connector17" />
+          <Connector KeyRef="_connector18" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector5" />
+          <Connector KeyRef="_connector10" />
+          <Connector KeyRef="_connector12" />
+          <Connector KeyRef="_connector14" />
+          <Connector KeyRef="_connector16" />
+          <Connector KeyRef="_connector19" />
+        </Connectors>
+      </SymmetryGroup>
+    </SymmetryGroups>
+  </Part>
+
+  <KeyframeAnimation Id="CoreServiceModuleA_Prefab_SetA2DoubleA_Anim" Path="Animations/CoreServiceModuleA_Prefab_SetA2DoubleA_Anim.glb" />
+  <Part Id="CoreServiceModuleA_Prefab_SetA2DoubleA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Cargo" />
+    </EditorTags>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector3" Modify="Patch">
+        <Capabilities>DecouplerJoint</Capabilities>
+      </Connector>
+
+      <Connector Key="_connector23" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector24" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector28" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector32" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector36" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector40" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector21" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector27" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector31" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector35" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector39" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector43" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector20" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector26" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector30" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector34" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector38" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector42" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector22" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector25" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector29" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector33" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector37" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector41" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+    </Connectors>
+    <Components Modify="Extend">
+      <Decoupler Force="1000">
+        <Connector KeyRef="_connector3" />
+      </Decoupler>
+      <Habitat Key="ServiceBay" />
+
+      <KeyframeAnimationModule Key="CoreServiceModuleA_Prefab_SetA2DoubleA_Anim">
+        <KeyframeAnimation Ref="CoreServiceModuleA_Prefab_SetA2DoubleA_Anim" />
+      </KeyframeAnimationModule>
+    </Components>
+
+    <InertMasses Modify="Extend">
+      <HollowOpenSemiEllipsoidMass>
+        <LocationAsmb X="-0.9566" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Length M="0.6625" />
+        <Radius M="1.5" />
+        <WallThickness Mm="4" />
+      </HollowOpenSemiEllipsoidMass>
+      <HollowOpenSemiEllipsoidMass>
+        <LocationAsmb X="0.8695" />
+        <Paf2Asmb Z="3.1416" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Length M="0.2127" />
+        <Radius M="1.25" />
+        <WallThickness Mm="4" />
+      </HollowOpenSemiEllipsoidMass>
+      <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.2941" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Height M="0.9508" />
+        <RadiusBase M="1.409" />
+        <RadiusTop M="1.279" />
+        <WallThickness Mm="5" />
+      </HollowOpenTruncatedConeMass>
+      <HollowOpenCylinderMass>
+        <LocationAsmb X="0.1814" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Length M="0.9508" />
+        <OuterRadius M="0.75" />
+        <WallThickness Mm="5" />
+      </HollowOpenCylinderMass>
+    </InertMasses>
+    <SymmetryGroups Modify="Extend">
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector23" />
+          <Connector KeyRef="_connector24" />
+          <Connector KeyRef="_connector28" />
+          <Connector KeyRef="_connector32" />
+          <Connector KeyRef="_connector36" />
+          <Connector KeyRef="_connector40" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector21" />
+          <Connector KeyRef="_connector27" />
+          <Connector KeyRef="_connector31" />
+          <Connector KeyRef="_connector35" />
+          <Connector KeyRef="_connector39" />
+          <Connector KeyRef="_connector43" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector20" />
+          <Connector KeyRef="_connector26" />
+          <Connector KeyRef="_connector30" />
+          <Connector KeyRef="_connector34" />
+          <Connector KeyRef="_connector38" />
+          <Connector KeyRef="_connector42" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector22" />
+          <Connector KeyRef="_connector25" />
+          <Connector KeyRef="_connector29" />
+          <Connector KeyRef="_connector33" />
+          <Connector KeyRef="_connector37" />
+          <Connector KeyRef="_connector41" />
+        </Connectors>
+      </SymmetryGroup>
+    </SymmetryGroups>
+  </Part>
+
+  <KeyframeAnimation Id="CoreServiceModuleA_Prefab_SetA3TripleA_Anim" Path="Animations/CoreServiceModuleA_Prefab_SetA3TripleA_Anim.glb" />
+  <Part Id="CoreServiceModuleA_Prefab_SetA3TripleA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Cargo" />
+    </EditorTags>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector5" Modify="Patch">
+        <Capabilities>DecouplerJoint</Capabilities>
+      </Connector>
+
+      <Connector Key="_connector48" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector54" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector60" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector66" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector72" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector75" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector44" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector53" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector59" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector65" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector71" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector76" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector47" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector50" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector56" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector62" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector68" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector79" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector46" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector51" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector57" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector63" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector69" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector78" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector45" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector52" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector58" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector64" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector70" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector77" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector49" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector55" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector61" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector67" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector73" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector74" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+    </Connectors>
+    <Components Modify="Extend">
+      <Decoupler Force="1000">
+        <Connector KeyRef="_connector5" />
+      </Decoupler>
+      <Habitat Key="ServiceBay" />
+
+      <KeyframeAnimationModule Key="CoreServiceModuleA_Prefab_SetA3TripleA_Anim">
+        <KeyframeAnimation Ref="CoreServiceModuleA_Prefab_SetA3TripleA_Anim" />
+      </KeyframeAnimationModule>
+    </Components>
+
+    <InertMasses Modify="Extend">
+      <HollowOpenSemiEllipsoidMass>
+        <LocationAsmb X="-1.1839" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Length M="0.6621" />
+        <Radius M="1.5" />
+        <WallThickness Mm="4" />
+      </HollowOpenSemiEllipsoidMass>
+      <HollowOpenSemiEllipsoidMass>
+        <LocationAsmb X="1.1107" />
+        <Paf2Asmb Z="3.1416" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Length M="0.2283" />
+        <Radius M="1.25" />
+        <WallThickness Mm="4" />
+      </HollowOpenSemiEllipsoidMass>
+      <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.5218" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Height M="1.4042" />
+        <RadiusBase M="1.428" />
+        <RadiusTop M="1.275" />
+        <WallThickness Mm="5" />
+      </HollowOpenTruncatedConeMass>
+      <HollowOpenCylinderMass>
+        <LocationAsmb X="0.1803" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Length M="1.4042" />
+        <OuterRadius M="0.75" />
+        <WallThickness Mm="5" />
+      </HollowOpenCylinderMass>
+    </InertMasses>
+    <SymmetryGroups Modify="Extend">
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector48" />
+          <Connector KeyRef="_connector54" />
+          <Connector KeyRef="_connector60" />
+          <Connector KeyRef="_connector66" />
+          <Connector KeyRef="_connector72" />
+          <Connector KeyRef="_connector75" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector44" />
+          <Connector KeyRef="_connector53" />
+          <Connector KeyRef="_connector59" />
+          <Connector KeyRef="_connector65" />
+          <Connector KeyRef="_connector71" />
+          <Connector KeyRef="_connector76" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector47" />
+          <Connector KeyRef="_connector50" />
+          <Connector KeyRef="_connector56" />
+          <Connector KeyRef="_connector62" />
+          <Connector KeyRef="_connector68" />
+          <Connector KeyRef="_connector79" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector46" />
+          <Connector KeyRef="_connector51" />
+          <Connector KeyRef="_connector57" />
+          <Connector KeyRef="_connector63" />
+          <Connector KeyRef="_connector69" />
+          <Connector KeyRef="_connector78" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector45" />
+          <Connector KeyRef="_connector52" />
+          <Connector KeyRef="_connector58" />
+          <Connector KeyRef="_connector64" />
+          <Connector KeyRef="_connector70" />
+          <Connector KeyRef="_connector77" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector49" />
+          <Connector KeyRef="_connector55" />
+          <Connector KeyRef="_connector61" />
+          <Connector KeyRef="_connector67" />
+          <Connector KeyRef="_connector73" />
+          <Connector KeyRef="_connector74" />
+        </Connectors>
+      </SymmetryGroup>
+    </SymmetryGroups>
+  </Part>
+
+  <KeyframeAnimation Id="CoreServiceModuleA_Prefab_SetA4QuadA_Anim" Path="Animations/CoreServiceModuleA_Prefab_SetA4QuadA_Anim.glb" />
+  <Part Id="CoreServiceModuleA_Prefab_SetA4QuadA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Cargo" />
+    </EditorTags>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector7" Modify="Patch">
+        <Capabilities>DecouplerJoint</Capabilities>
+      </Connector>
+
+      <Connector Key="_connector80" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector88" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector96" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector104" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector112" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector120" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector86" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector89" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector97" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector105" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector113" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector121" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector87" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector95" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector103" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector111" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector119" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector127" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector81" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector94" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector102" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector110" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector118" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector126" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector82" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector93" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector101" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector109" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector117" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector125" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector83" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector92" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector100" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector108" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector116" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector124" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector84" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector91" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector99" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector107" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector115" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector123" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector85" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector90" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector98" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector106" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector114" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector122" Modify="Patch">
+        <Flags>Internal</Flags>
+      </Connector>
+    </Connectors>
+    <Components Modify="Extend">
+      <Decoupler Force="1000">
+        <Connector KeyRef="_connector7" />
+      </Decoupler>
+      <Habitat Key="ServiceBay" />
+
+      <KeyframeAnimationModule Key="CoreServiceModuleA_Prefab_SetA4QuadA_Anim">
+        <KeyframeAnimation Ref="CoreServiceModuleA_Prefab_SetA4QuadA_Anim" />
+      </KeyframeAnimationModule>
+    </Components>
+
+    <InertMasses Modify="Extend">
+      <HollowOpenSemiEllipsoidMass>
+        <LocationAsmb X="-1.1839" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Length M="0.2079" />
+        <Radius M="1.5" />
+        <WallThickness Mm="4" />
+      </HollowOpenSemiEllipsoidMass>
+      <HollowOpenSemiEllipsoidMass>
+        <LocationAsmb X="1.1107" />
+        <Paf2Asmb Z="3.1416" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Length M="0.2284" />
+        <Radius M="1.25" />
+        <WallThickness Mm="4" />
+      </HollowOpenSemiEllipsoidMass>
+      <HollowOpenTruncatedConeMass>
+        <LocationAsmb X="-0.976" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Height M="1.8583" />
+        <RadiusBase M="1.477" />
+        <RadiusTop M="1.275" />
+        <WallThickness Mm="4.5" />
+      </HollowOpenTruncatedConeMass>
+      <HollowOpenCylinderMass>
+        <LocationAsmb X="-0.0468" />
+        <Material Ref="Aluminum.2014" Phase="Solid" />
+        <Length M="1.8583" />
+        <OuterRadius M="0.75" />
+        <WallThickness Mm="4.5" />
+      </HollowOpenCylinderMass>
+    </InertMasses>
+    <SymmetryGroups Modify="Extend">
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector80" />
+          <Connector KeyRef="_connector88" />
+          <Connector KeyRef="_connector96" />
+          <Connector KeyRef="_connector104" />
+          <Connector KeyRef="_connector112" />
+          <Connector KeyRef="_connector120" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector86" />
+          <Connector KeyRef="_connector89" />
+          <Connector KeyRef="_connector97" />
+          <Connector KeyRef="_connector105" />
+          <Connector KeyRef="_connector113" />
+          <Connector KeyRef="_connector121" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector87" />
+          <Connector KeyRef="_connector95" />
+          <Connector KeyRef="_connector103" />
+          <Connector KeyRef="_connector111" />
+          <Connector KeyRef="_connector119" />
+          <Connector KeyRef="_connector127" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector81" />
+          <Connector KeyRef="_connector94" />
+          <Connector KeyRef="_connector102" />
+          <Connector KeyRef="_connector110" />
+          <Connector KeyRef="_connector118" />
+          <Connector KeyRef="_connector126" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector82" />
+          <Connector KeyRef="_connector93" />
+          <Connector KeyRef="_connector101" />
+          <Connector KeyRef="_connector109" />
+          <Connector KeyRef="_connector117" />
+          <Connector KeyRef="_connector125" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector83" />
+          <Connector KeyRef="_connector92" />
+          <Connector KeyRef="_connector100" />
+          <Connector KeyRef="_connector108" />
+          <Connector KeyRef="_connector116" />
+          <Connector KeyRef="_connector124" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector84" />
+          <Connector KeyRef="_connector91" />
+          <Connector KeyRef="_connector99" />
+          <Connector KeyRef="_connector107" />
+          <Connector KeyRef="_connector115" />
+          <Connector KeyRef="_connector123" />
+        </Connectors>
+      </SymmetryGroup>
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector85" />
+          <Connector KeyRef="_connector90" />
+          <Connector KeyRef="_connector98" />
+          <Connector KeyRef="_connector106" />
+          <Connector KeyRef="_connector114" />
+          <Connector KeyRef="_connector122" />
+        </Connectors>
+      </SymmetryGroup>
+    </SymmetryGroups>
+  </Part>
+</Assets>

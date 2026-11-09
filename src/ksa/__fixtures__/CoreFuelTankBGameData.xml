@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Assets>
+  <Part Id="CoreFuelTankB_Prefab_BaypartTankA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Fuel Tanks" />
+    </EditorTags>
+
+    <Connectors Modify="Extend">
+      <Connector Key="_connector1" Modify="Patch">
+          <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+
+    <Components Modify="Extend">
+      <Tank>
+          <SphericalTank>
+              <LocationAsmb Y="0.1384" />
+              <Material Ref="Aluminum.2014" Phase="Solid" />
+              <!-- true geometric radius: <OuterRadius M="0.25" /> -->
+              <OuterRadius M="0.3969" />
+              <WallThickness Mm="4" />
+              <RoleAffinity>Thruster</RoleAffinity>
+          </SphericalTank>
+      </Tank>
+    </Components>
+  </Part>
+
+  <Part Id="CoreFuelTankB_Prefab_BaypartTankB" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Fuel Tanks" />
+    </EditorTags>
+
+    <Connectors Modify="Extend">
+      <Connector Key="_connector3" Modify="Patch">
+          <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+
+    <Components Modify="Extend">
+      <Tank>
+          <CylindricalTank>
+              <LocationAsmb Y="0.1384" />
+              <Material Ref="Aluminum.2014" Phase="Solid" />
+              <Length M="0.90276" />
+              <!-- true geometric radius: <OuterRadius M="0.25" /> -->
+              <OuterRadius M="0.5" />
+              <WallThickness Mm="4" />
+              <RoleAffinity>Thruster</RoleAffinity>
+          </CylindricalTank>
+      </Tank>
+    </Components>
+  </Part>
+
+  <Part Id="CoreFuelTankB_Prefab_BaypartTankC" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Fuel Tanks" />
+    </EditorTags>
+
+    <Connectors Modify="Extend">
+      <Connector Key="_connector2" Modify="Patch">
+          <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+
+    <Components Modify="Extend">
+      <Tank Key="Tank1">
+          <SphericalTank>
+              <LocationAsmb Y="0.19878" Z="0.184124" />
+              <Material Ref="Aluminum.2014" Phase="Solid" />
+              <!-- true geometric radius: <OuterRadius M="0.175" /> -->
+              <OuterRadius M="0.2778" />
+              <WallThickness Mm="4" />
+              <RoleAffinity>Thruster</RoleAffinity>
+          </SphericalTank>
+      </Tank>
+
+      <Tank Key="Tank2">
+          <SphericalTank>
+              <LocationAsmb Y="0.19878" Z="-0.184124" />
+              <Material Ref="Aluminum.2014" Phase="Solid" />
+              <!-- true geometric radius: <OuterRadius M="0.175" /> -->
+              <OuterRadius M="0.2778" />
+              <WallThickness Mm="4" />
+              <RoleAffinity>Thruster</RoleAffinity>
+          </SphericalTank>
+      </Tank>
+    </Components>
+  </Part>
+
+  <Part Id="CoreFuelTankB_Prefab_BaypartTankD" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Fuel Tanks" />
+    </EditorTags>
+
+    <Connectors Modify="Extend">
+      <Connector Key="_connector4" Modify="Patch">
+          <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+
+    <Components Modify="Extend">
+      <Tank Key="Tank1">
+          <CylindricalTank>
+              <LocationAsmb Y="0.1985" Z="0.18429" />
+              <Material Ref="Aluminum.2014" Phase="Solid" />
+              <Length M="0.90276" />
+              <!-- true geometric radius: <OuterRadius M="0.175" /> -->
+              <OuterRadius M="0.35" />
+              <WallThickness Mm="4" />
+              <RoleAffinity>Thruster</RoleAffinity>
+          </CylindricalTank>
+      </Tank>
+
+      <Tank Key="Tank2">
+          <CylindricalTank>
+              <LocationAsmb Y="0.1985" Z="-0.18429" />
+              <Material Ref="Aluminum.2014" Phase="Solid" />
+              <Length M="0.90276" />
+              <!-- true geometric radius: <OuterRadius M="0.175" /> -->
+              <OuterRadius M="0.35" />
+              <WallThickness Mm="4" />
+              <RoleAffinity>Thruster</RoleAffinity>
+          </CylindricalTank>
+      </Tank>
+    </Components>
+  </Part>
+</Assets>

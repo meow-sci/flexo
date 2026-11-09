@@ -1,0 +1,119 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<Assets>
+    <SubPart Id="CorePassageA_Subpart_HatchCFrameA" Modify="Patch">
+        <Components Modify="Extend">
+            <EVADoor SeatId="CoreCommandB_SmallLander_Seat" />
+        </Components>
+    </SubPart>
+
+    <Part Id="CoreCommandB_Prefab_SmallLanderA" Modify="Patch">
+        <EditorTags Modify="Extend">
+            <EditorTag Ref="Capsules" />
+        </EditorTags>
+        <Diameters Modify="Extend">
+            <Diameter M="1"/>
+        </Diameters>
+        <InertMasses Modify="Extend">
+            <CustomMass>
+                <LocationAsmb X="0" />
+                <Mass Kg="900" />
+                <MassSpecificInertia Ixx="0.27" Iyy="0.55" Izz="0.55" />
+            </CustomMass>
+        </InertMasses>
+        <Components Modify="Extend">
+            <!-- Three days for one kitten, half the medium capsule's six kitten-days at the same sizes and pressures.
+                 Habitable volume is the capsule's share of its collision hull (1.4 of 4.99 m³) applied to this hull's 6.29 m³. -->
+            <Habitat Key="Cabin">
+                <HabitableVolume M3="1.76" />
+                <StorageVolume M3="0.021" />
+                <LocationAsmb X="0" />
+            </Habitat>
+            <Tank Key="OxygenBottle">
+                <SphericalTank>
+                    <LocationAsmb X="0" />
+                    <Material Ref="Aluminum.2014" Phase="Solid" />
+                    <OuterRadius M="0.1389" />
+                    <WallThickness Mm="6.6" />
+                    <RoleAffinity>Air</RoleAffinity>
+                </SphericalTank>
+            </Tank>
+            <Tank Key="WaterTank">
+                <SphericalTank>
+                    <LocationAsmb X="0" />
+                    <Material Ref="Aluminum.2014" Phase="Solid" />
+                    <OuterRadius M="0.1329" />
+                    <WallThickness Mm="1" />
+                    <RoleAffinity>Water</RoleAffinity>
+                </SphericalTank>
+            </Tank>
+            <!-- NASA OCHMO-TB-020 Rev G gives the Apollo LM 4 g/cm² median shielding against the CM's 11. Kept in that ratio to the
+                 medium capsule's 5 g/cm² hull, with no liner: a solar storm sends the kitten back to the orbiter, as Apollo's flight rules did. -->
+            <RadiationShield Key="Hull" HullGPerCm2="1.8" />
+            <IVASeat Key="CoreCommandB_SmallLander_Seat">
+                <Position X="-0.5" Y="0" Z="0.2" />
+                <ForwardAxis Z="-1" />
+                <UpAxis X="1" />
+            </IVASeat>
+            <Light Key="WindowA">
+                <Type>Point</Type>
+                <Transform>
+                    <Position X="-0.05" Y="0" Z="-0.82" />
+                </Transform>
+                <Range Value="1.5" />
+                <Intensity Value="2.0" />
+                <Color R="1.0" G="1.0" B="1.0" />
+            </Light>
+            <Light Key="WindowB">
+                <Type>Point</Type>
+                <Transform>
+                    <Position X="-0.63" Y="0" Z="-0.64" />
+                </Transform>
+                <Range Value="1.5" />
+                <Intensity Value="2.0" />
+                <Color R="1.0" G="1.0" B="1.0" />
+            </Light>
+            <Light Key="WindowC">
+                <Type>Point</Type>
+                <Transform>
+                    <Position X="0.78" Y="-0.08" Z="-0.6" />
+                </Transform>
+                <Range Value="1.5" />
+                <Intensity Value="2.0" />
+                <Color R="1.0" G="1.0" B="1.0" />
+            </Light>
+            <Battery>
+                <MaximumCapacity J="10000" />
+            </Battery>
+            <PowerConsumer LightSwitch="true" LightIsActive="true">
+                <Consumed W="10" />
+            </PowerConsumer>
+            <Control />
+        </Components>
+        <Grabs Modify="Extend">
+            <Grab Key="rung1">
+                <Position X="-0.74" Y="0" Z="1.22" />
+                <Normal Z="1" />
+            </Grab>
+            <Grab Key="rung2">
+                <Position X="-0.49" Y="0" Z="1.22" />
+                <Normal Z="1" />
+            </Grab>
+            <Grab Key="rung3">
+                <Position X="-0.24" Y="0" Z="1.22" />
+                <Normal Z="1" />
+            </Grab>
+            <Grab Key="rung4">
+                <Position X="-0.01" Y="0" Z="1.22" />
+                <Normal Z="1" />
+            </Grab>
+            <Grab Key="rung5">
+                <Position X="0.2" Y="0" Z="1.22" />
+                <Normal Z="1" />
+            </Grab>
+            <Grab Key="rung6">
+                <Position X="0.39" Y="0" Z="1.22" />
+                <Normal Z="1" />
+            </Grab>
+        </Grabs>
+    </Part>
+</Assets>

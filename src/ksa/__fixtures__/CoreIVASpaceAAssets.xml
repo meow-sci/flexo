@@ -1,0 +1,1945 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Assets>
+    <MeshAtlas Id="CoreIVASpaceA_MeshAtlas" Path="Meshes/CoreIVASpaceA_MeshAtlas.glb" />
+
+    <Texture Id="CoreIVASpaceA_TextureAtlas_Diffuse" Path="Textures/CoreIVASpaceA_TextureAtlas_Diffuse.ktx2" Category="Vessel" />
+    <Texture Id="CoreIVASpaceA_TextureAtlas_Normal" Path="Textures/CoreIVASpaceA_TextureAtlas_Normal.ktx2" Category="Vessel" />
+    <Texture Id="CoreIVASpaceA_TextureAtlas_PBR" Path="Textures/CoreIVASpaceA_TextureAtlas_PBR.ktx2" Category="Vessel" />
+    <PbrMaterial Id="CoreIVASpaceA_Material">
+        <Diffuse Ref="CoreIVASpaceA_TextureAtlas_Diffuse" />
+        <Normal Ref="CoreIVASpaceA_TextureAtlas_Normal" />
+        <AoRoughMetal Ref="CoreIVASpaceA_TextureAtlas_PBR" />
+    </PbrMaterial>
+
+    <SubPart Id="CoreIVASpaceA_Subpart_TempHatchesA">
+        <Components>
+            <PartModel Key="CoreIVASpaceA_Subpart_TempHatchesA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVASpaceA_Subpart_TempHatchesA" />
+                <Material Ref="CoreIVASpaceA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVASpaceA_Subpart_MediumCapsuleAWindowGlass">
+        <Components>
+            <PartModelGlass Key="CoreIVASpaceA_Subpart_MediumCapsuleAWindowGlass_Model">
+                <Mesh Ref="CoreIVASpaceA_Subpart_MediumCapsuleAWindowGlass" />
+                <Material Ref="CoreIVASpaceA_Material" />
+                <RayTracing>true</RayTracing>
+            </PartModelGlass>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVASpaceA_Subpart_MediumCapsuleARayBlocker">
+        <Components>
+            <PartModel Key="CoreIVASpaceA_Subpart_MediumCapsuleARayBlocker_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVASpaceA_Subpart_MediumCapsuleARayBlocker" />
+                <Material Ref="CoreIVASpaceA_Material" />
+                <RayTracing>ShadowProxy</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <SubPart Id="CoreIVASpaceA_Subpart_MediumCapsuleA">
+        <Components>
+            <PartModel Key="CoreIVASpaceA_Subpart_MediumCapsuleA_Model">
+                <Internal>true</Internal>
+                <Mesh Ref="CoreIVASpaceA_Subpart_MediumCapsuleA" />
+                <Material Ref="CoreIVASpaceA_Material" />
+                <RayTracing>Enabled</RayTracing>
+            </PartModel>
+        </Components>
+    </SubPart>
+
+    <Part Id="CoreIVASpaceA_Prefab_MediumCapsuleA">
+        <SubParts>
+            <SubPart Key="CoreIVASpaceA_Subpart_TempHatchesA" Ref="CoreIVASpaceA_Subpart_TempHatchesA" />
+            <SubPart Key="CoreIVASpaceA_Subpart_MediumCapsuleAWindowGlass" Ref="CoreIVASpaceA_Subpart_MediumCapsuleAWindowGlass" />
+            <SubPart Key="CoreIVASpaceA_Subpart_MediumCapsuleARayBlocker" Ref="CoreIVASpaceA_Subpart_MediumCapsuleARayBlocker" />
+            <SubPart Key="CoreIVASpaceA_Subpart_MediumCapsuleA" Ref="CoreIVASpaceA_Subpart_MediumCapsuleA" />
+            <SubPart Key="CoreIVAPropA_Subpart_ZiptieA8" Ref="CoreIVAPropA_Subpart_ZiptieA">
+                <Transform>
+                    <Position X="-0.06557" Y="0.70719" Z="0.02993" />
+                    <Rotation X="-2.28152" Y="1.47973" Z="2.13891" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ZiptieA7" Ref="CoreIVAPropA_Subpart_ZiptieA">
+                <Transform>
+                    <Position X="-0.02439" Y="0.10373" Z="-0.73383" />
+                    <Rotation Z="0.78540" />
+                    <Scale X="0.70307" Y="0.70307" Z="0.70307" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ZiptieA6" Ref="CoreIVAPropA_Subpart_ZiptieA">
+                <Transform>
+                    <Position X="-0.02285" Y="0.10462" Z="-0.79486" />
+                    <Scale X="0.70307" Y="0.70307" Z="0.70307" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ZiptieA5" Ref="CoreIVAPropA_Subpart_ZiptieA">
+                <Transform>
+                    <Position X="-0.47444" Y="-0.87714" Z="-0.39977" />
+                    <Rotation X="-0.37935" Y="-0.10862" Z="0.11197" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ZiptieA4" Ref="CoreIVAPropA_Subpart_ZiptieA">
+                <Transform>
+                    <Position X="0.11307" Y="-0.68957" Z="-0.28733" />
+                    <Rotation Y="-0.13090" Z="0.26180" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ZiptieA3" Ref="CoreIVAPropA_Subpart_ZiptieA">
+                <Transform>
+                    <Position X="-0.47583" Y="0.87720" Z="-0.39913" />
+                    <Rotation X="-0.39543" Y="0.00037" Z="3.00842" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ZiptieA2" Ref="CoreIVAPropA_Subpart_ZiptieA">
+                <Transform>
+                    <Position X="0.11479" Y="0.68705" Z="-0.28833" />
+                    <Rotation X="0.03096" Y="0.10617" Z="2.69208" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WrittenNoteE1" Ref="CoreIVAPropA_Subpart_WrittenNoteE">
+                <Transform>
+                    <Position X="0.17222" Y="-0.05963" Z="-0.23262" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WrittenNoteD1" Ref="CoreIVAPropA_Subpart_WrittenNoteD">
+                <Transform>
+                    <Position X="0.17235" Y="0.05949" Z="-0.21396" />
+                    <Rotation X="-0.39951" Y="-0.00268" Z="-0.00634" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WrittenNoteC1" Ref="CoreIVAPropA_Subpart_WrittenNoteC">
+                <Transform>
+                    <Position X="0.17337" Y="0.09612" Z="-0.30526" />
+                    <Rotation X="0.33116" Y="-0.01143" Z="-0.00393" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WrittenNoteB1" Ref="CoreIVAPropA_Subpart_WrittenNoteB">
+                <Transform>
+                    <Position X="0.16417" Y="-0.33614" Z="-0.25779" />
+                    <Rotation X="-0.23862" Y="-0.01564" Z="-0.25555" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WrittenNoteA1" Ref="CoreIVAPropA_Subpart_WrittenNoteA">
+                <Transform>
+                    <Position X="0.17178" Y="-0.01028" Z="-0.33207" />
+                    <Rotation Y="-0.05316" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WiringBundleC7" Ref="CoreIVAPropA_Subpart_WiringBundleC">
+                <Transform>
+                    <Position X="0.18146" Y="-0.04718" Z="-0.72464" />
+                    <Rotation X="3.06534" Y="1.04551" Z="-0.08807" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WiringBundleC6" Ref="CoreIVAPropA_Subpart_WiringBundleC">
+                <Transform>
+                    <Position X="0.24275" Y="-0.40488" Z="-0.34913" />
+                    <Rotation Y="-1.30900" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WiringBundleC5" Ref="CoreIVAPropA_Subpart_WiringBundleC">
+                <Transform>
+                    <Position X="0.24227" Y="-0.26322" Z="-0.36185" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WiringBundleC4" Ref="CoreIVAPropA_Subpart_WiringBundleC">
+                <Transform>
+                    <Position X="0.31809" Y="-0.16004" Z="-0.39022" />
+                    <Rotation X="1.57080" Y="1.04720" Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WiringBundleC3" Ref="CoreIVAPropA_Subpart_WiringBundleC">
+                <Transform>
+                    <Position X="0.27757" Y="0.22153" Z="-0.28370" />
+                    <Rotation X="3.14159" Y="0.65450" Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WiringBundleC2" Ref="CoreIVAPropA_Subpart_WiringBundleC">
+                <Transform>
+                    <Position X="0.27757" Y="0.17374" Z="-0.35445" />
+                    <Rotation Y="-0.65450" Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WiringBundleC1" Ref="CoreIVAPropA_Subpart_WiringBundleC">
+                <Transform>
+                    <Position X="0.18737" Y="0.04746" Z="-0.72759" />
+                    <Rotation X="3.14159" Y="-1.04720" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WiringBundleB4" Ref="CoreIVAPropA_Subpart_WiringBundleB">
+                <Transform>
+                    <Position X="-0.22964" Y="-0.10236" Z="-0.89842" />
+                    <Rotation X="-1.12897" Y="-0.46242" Z="-1.77876" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WiringBundleB3" Ref="CoreIVAPropA_Subpart_WiringBundleB">
+                <Transform>
+                    <Position X="-0.22960" Y="0.10190" Z="-0.89851" />
+                    <Rotation X="0.68110" Y="1.05573" Z="0.74984" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WiringBundleB2" Ref="CoreIVAPropA_Subpart_WiringBundleB">
+                <Transform>
+                    <Position X="0.02593" Y="-0.10236" Z="-0.79256" />
+                    <Rotation X="1.17222" Y="0.16731" Z="1.50078" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WiringBundleB1" Ref="CoreIVAPropA_Subpart_WiringBundleB">
+                <Transform>
+                    <Position X="0.02597" Y="0.10190" Z="-0.79265" />
+                    <Rotation X="-1.17505" Y="0.12088" Z="-1.52046" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WiringBundleA2" Ref="CoreIVAPropA_Subpart_WiringBundleA">
+                <Transform>
+                    <Position X="0.24969" Y="0.27374" Z="-0.38584" />
+                    <Rotation X="-0.92044" Y="-0.07954" Z="0.10407" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_WiringBundleA1" Ref="CoreIVAPropA_Subpart_WiringBundleA">
+                <Transform>
+                    <Position X="0.25517" Y="-0.27016" Z="-0.38857" />
+                    <Rotation X="-0.20049" Y="-0.79115" Z="1.41289" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_UtilityBagA1" Ref="CoreIVAPropA_Subpart_UtilityBagA">
+                <Transform>
+                    <Position X="-0.08468" Y="0.00404" Z="0.27572" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ToothbrushA1" Ref="CoreIVAPropA_Subpart_ToothbrushA">
+                <Transform>
+                    <Position X="-0.08100" Y="0.66507" Z="-0.00016" />
+                    <Rotation X="-0.12979" Y="-0.01704" Z="-1.70059" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ThrottleARightStick2" Ref="CoreIVAPropA_Subpart_ThrottleARightStick">
+                <Transform>
+                    <Position X="-0.42561" Y="-0.11760" Z="0.03749" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ThrottleARightStick1" Ref="CoreIVAPropA_Subpart_ThrottleARightStick">
+                <Transform>
+                    <Position X="-0.42561" Y="0.71180" Z="0.03749" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ThrottleALeftStick2" Ref="CoreIVAPropA_Subpart_ThrottleALeftStick">
+                <Transform>
+                    <Position X="-0.42564" Y="-0.17744" Z="0.03772" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ThrottleALeftStick1" Ref="CoreIVAPropA_Subpart_ThrottleALeftStick">
+                <Transform>
+                    <Position X="-0.42564" Y="0.65196" Z="0.03772" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ThrottleABase2" Ref="CoreIVAPropA_Subpart_ThrottleABase">
+                <Transform>
+                    <Position X="-0.43066" Y="-0.14727" Z="0.10858" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ThrottleABase1" Ref="CoreIVAPropA_Subpart_ThrottleABase">
+                <Transform>
+                    <Position X="-0.43066" Y="0.68213" Z="0.10858" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_TapeC2" Ref="CoreIVAPropA_Subpart_TapeC">
+                <Transform>
+                    <Position X="-0.14478" Y="0.71615" Z="-0.17112" />
+                    <Rotation X="-0.67364" Y="-0.26850" Z="1.21419" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_TapeC1" Ref="CoreIVAPropA_Subpart_TapeC">
+                <Transform>
+                    <Position X="-0.23060" Y="0.74180" Z="-0.15368" />
+                    <Rotation X="0.83011" Y="-0.14548" Z="1.27966" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_TapeB6" Ref="CoreIVAPropA_Subpart_TapeB">
+                <Transform>
+                    <Position X="-0.05416" Y="0.68017" Z="-0.09176" />
+                    <Rotation X="-2.24986" Y="-0.08755" Z="1.44152" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_TapeB5" Ref="CoreIVAPropA_Subpart_TapeB">
+                <Transform>
+                    <Position X="-0.04015" Y="0.68315" Z="0.02320" />
+                    <Rotation X="-1.43990" Y="-0.26771" Z="1.22078" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_TapeB4" Ref="CoreIVAPropA_Subpart_TapeB">
+                <Transform>
+                    <Position X="-0.14071" Y="0.71715" Z="-0.16983" />
+                    <Rotation X="0.65565" Y="-0.26037" Z="1.21951" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_TapeB3" Ref="CoreIVAPropA_Subpart_TapeB">
+                <Transform>
+                    <Position X="-0.23841" Y="0.74485" Z="-0.15392" />
+                    <Rotation X="-0.51548" Y="-0.10180" Z="1.28011" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_TapeB2" Ref="CoreIVAPropA_Subpart_TapeB">
+                <Transform>
+                    <Position X="-0.13931" Y="0.72301" Z="0.04996" />
+                    <Rotation X="-1.43990" Y="-0.26771" Z="1.22078" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_TapeB1" Ref="CoreIVAPropA_Subpart_TapeB">
+                <Transform>
+                    <Position X="-0.02896" Y="0.67726" Z="0.03452" />
+                    <Rotation X="-2.26702" Y="-0.10056" Z="1.24563" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_TapeA2" Ref="CoreIVAPropA_Subpart_TapeA">
+                <Transform>
+                    <Position X="-0.13881" Y="0.70323" Z="-0.08464" />
+                    <Rotation X="-1.54729" Y="-0.07487" Z="1.17156" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_TapeA1" Ref="CoreIVAPropA_Subpart_TapeA">
+                <Transform>
+                    <Position X="-0.05318" Y="0.67897" Z="-0.08615" />
+                    <Rotation X="-0.51636" Y="0.09491" Z="1.31130" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_SwitchGuardC9" Ref="CoreIVAPropA_Subpart_SwitchGuardC">
+                <Transform>
+                    <Position X="-0.42373" Y="-0.12519" Z="-0.84408" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_SwitchGuardC8" Ref="CoreIVAPropA_Subpart_SwitchGuardC">
+                <Transform>
+                    <Position X="-0.42373" Y="-0.06289" Z="-0.84408" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_SwitchGuardC7" Ref="CoreIVAPropA_Subpart_SwitchGuardC">
+                <Transform>
+                    <Position X="-0.42373" Y="0.00040" Z="-0.84408" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_SwitchGuardC6" Ref="CoreIVAPropA_Subpart_SwitchGuardC">
+                <Transform>
+                    <Position X="-0.42373" Y="0.12417" Z="-0.84408" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_SwitchGuardC5" Ref="CoreIVAPropA_Subpart_SwitchGuardC">
+                <Transform>
+                    <Position X="-0.42373" Y="0.06408" Z="-0.84408" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_SwitchGuardC4" Ref="CoreIVAPropA_Subpart_SwitchGuardC">
+                <Transform>
+                    <Position X="-0.12914" Y="0.06229" Z="-0.80267" />
+                    <Rotation Y="-0.34907" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_SwitchGuardC3" Ref="CoreIVAPropA_Subpart_SwitchGuardC">
+                <Transform>
+                    <Position X="0.06474" Y="0.06221" Z="-0.73210" />
+                    <Rotation Y="-0.34907" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_SwitchGuardC2" Ref="CoreIVAPropA_Subpart_SwitchGuardC">
+                <Transform>
+                    <Position X="0.06474" Y="-0.06232" Z="-0.73210" />
+                    <Rotation Y="-0.34907" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_SwitchGuardC1" Ref="CoreIVAPropA_Subpart_SwitchGuardC">
+                <Transform>
+                    <Position X="-0.12914" Y="-0.06232" Z="-0.80267" />
+                    <Rotation Y="-0.34907" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_SwitchGuardB2" Ref="CoreIVAPropA_Subpart_SwitchGuardB">
+                <Transform>
+                    <Position X="0.06499" Y="0.15348" Z="-0.05066" />
+                    <Rotation X="3.14159" Y="-0.78540" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_SwitchGuardB1" Ref="CoreIVAPropA_Subpart_SwitchGuardB">
+                <Transform>
+                    <Position X="0.06499" Y="-0.14996" Z="-0.05066" />
+                    <Rotation X="3.14159" Y="-0.78540" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_SwitchGuardA2" Ref="CoreIVAPropA_Subpart_SwitchGuardA">
+                <Transform>
+                    <Position X="0.07189" Y="-0.61940" Z="-0.14243" />
+                    <Rotation Y="-1.57055" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_SwitchGuardA1" Ref="CoreIVAPropA_Subpart_SwitchGuardA">
+                <Transform>
+                    <Position X="0.07189" Y="0.61937" Z="-0.14243" />
+                    <Rotation Y="-1.57055" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB9" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.23461" Y="0.55295" Z="0.19864" />
+                    <Rotation X="3.14159" Y="1.57080" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB8" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.22099" Y="0.22050" Z="-0.42047" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB7" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.22115" Y="0.18970" Z="-0.42869" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB6" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.22099" Y="0.22010" Z="-0.45717" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB56" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.89212" Y="-0.17231" Z="0.41797" />
+                    <Rotation X="-1.57080" Y="-1.17810" Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB55" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.89212" Y="0.17371" Z="0.41739" />
+                    <Rotation X="-1.57080" Y="-0.39270" Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB54" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.32310" Y="-0.41797" Z="0.17231" />
+                    <Rotation X="-1.57080" Y="0.39270" Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB53" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.32310" Y="-0.32021" Z="0.31914" />
+                    <Rotation X="-1.57080" Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB52" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.32310" Y="0.17231" Z="0.41797" />
+                    <Rotation X="-1.57080" Y="-1.17810" Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB51" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.32310" Y="0.31914" Z="0.32021" />
+                    <Rotation Y="-1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB50" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.32310" Y="0.41739" Z="0.17371" />
+                    <Rotation X="1.57080" Y="-1.17810" Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB5" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.22115" Y="0.18970" Z="-0.48853" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB49" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.32310" Y="0.41797" Z="-0.17231" />
+                    <Rotation X="1.57080" Y="-0.39270" Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB48" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.32310" Y="0.32021" Z="-0.31914" />
+                    <Rotation X="1.57080" Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB47" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.32310" Y="0.17371" Z="-0.41739" />
+                    <Rotation X="1.57080" Y="0.39270" Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB46" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.32310" Y="-0.17231" Z="-0.41797" />
+                    <Rotation X="1.57080" Y="1.17810" Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB45" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.32310" Y="-0.31914" Z="-0.32021" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB44" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.32310" Y="-0.41739" Z="-0.17371" />
+                    <Rotation X="-1.57080" Y="1.17810" Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB43" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.89212" Y="0.41797" Z="0.17231" />
+                    <Rotation X="-1.57080" Y="0.39270" Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB42" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.89212" Y="0.32021" Z="0.31914" />
+                    <Rotation X="-1.57080" Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB41" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.89212" Y="-0.00076" Z="-0.45209" />
+                    <Rotation X="1.57080" Y="0.78540" Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB40" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.89212" Y="-0.31914" Z="0.32021" />
+                    <Rotation Y="-1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB4" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.22115" Y="-0.18968" Z="-0.48853" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB39" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.89212" Y="-0.41739" Z="0.17371" />
+                    <Rotation X="1.57080" Y="-1.17810" Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB38" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.89212" Y="-0.41797" Z="-0.17231" />
+                    <Rotation X="1.57080" Y="-0.39270" Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB37" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.89212" Y="-0.32021" Z="-0.31914" />
+                    <Rotation X="1.57080" Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB36" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.89212" Y="-0.17371" Z="-0.41739" />
+                    <Rotation X="1.57080" Y="0.39270" Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB35" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.89212" Y="0.17231" Z="-0.41797" />
+                    <Rotation X="1.57080" Y="1.17810" Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB34" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.89212" Y="0.31914" Z="-0.32021" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB33" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.89212" Y="0.41739" Z="-0.17371" />
+                    <Rotation X="-1.57080" Y="1.17810" Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB32" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.30141" Y="-0.62815" Z="0.19913" />
+                    <Rotation Y="1.57059" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB31" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.25376" Y="-0.62899" Z="0.19913" />
+                    <Rotation Y="1.57059" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB30" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.20623" Y="-0.62956" Z="0.19913" />
+                    <Rotation Y="1.57059" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB3" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.22115" Y="-0.18968" Z="-0.42869" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB29" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.15661" Y="-0.62954" Z="0.19913" />
+                    <Rotation Y="1.57059" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB28" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.10956" Y="-0.62933" Z="0.19913" />
+                    <Rotation Y="1.57059" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB27" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.06121" Y="-0.62932" Z="0.19974" />
+                    <Rotation Y="1.57059" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB26" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.01319" Y="-0.62922" Z="0.19974" />
+                    <Rotation Y="1.57059" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB25" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.05124" Y="-0.61596" Z="0.19862" />
+                    <Rotation Y="1.57069" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB24" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.09745" Y="-0.60005" Z="0.19862" />
+                    <Rotation Y="1.57069" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB23" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.14199" Y="-0.58471" Z="0.19862" />
+                    <Rotation Y="1.57069" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB22" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.18882" Y="-0.56859" Z="0.19862" />
+                    <Rotation Y="1.57069" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB21" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.23423" Y="-0.55295" Z="0.19862" />
+                    <Rotation Y="1.57069" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB20" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.30200" Y="0.62926" Z="0.20007" />
+                    <Rotation Y="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB2" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.22099" Y="-0.22009" Z="-0.45717" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB19" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.25404" Y="0.62926" Z="0.20007" />
+                    <Rotation Y="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB18" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.20541" Y="0.62926" Z="0.20007" />
+                    <Rotation Y="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB17" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.15680" Y="0.62926" Z="0.20007" />
+                    <Rotation Y="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB16" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.10988" Y="0.62926" Z="0.20007" />
+                    <Rotation Y="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB15" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.06058" Y="0.62926" Z="0.20007" />
+                    <Rotation Y="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB14" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="-0.01301" Y="0.62983" Z="0.20007" />
+                    <Rotation Y="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB13" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.05162" Y="0.61601" Z="0.19864" />
+                    <Rotation X="3.14159" Y="1.57080" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB12" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.09793" Y="0.60009" Z="0.19864" />
+                    <Rotation X="3.14159" Y="1.57080" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB11" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.14236" Y="0.58473" Z="0.19864" />
+                    <Rotation X="3.14159" Y="1.57080" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB10" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.18899" Y="0.56861" Z="0.19864" />
+                    <Rotation X="3.14159" Y="1.57080" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewB1" Ref="CoreIVAPropA_Subpart_ScrewB">
+                <Transform>
+                    <Position X="0.22099" Y="-0.22051" Z="-0.42047" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA9" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.18183" Y="0.16200" Z="-0.43454" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA8" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.18183" Y="0.13850" Z="-0.43454" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA7" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.18311" Y="0.13850" Z="-0.47116" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA6" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.18183" Y="0.13850" Z="-0.43454" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA5" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.18311" Y="0.13850" Z="-0.47116" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA4" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.18311" Y="-0.13851" Z="-0.47116" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA34" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="-0.15617" Y="0.03943" Z="0.12290" />
+                    <Rotation Y="-1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA33" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="-0.15617" Y="0.06323" Z="0.12290" />
+                    <Rotation Y="-1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA32" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="-0.15617" Y="-0.03547" Z="0.12290" />
+                    <Rotation Y="-1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA31" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="-0.15617" Y="-0.06038" Z="0.12290" />
+                    <Rotation Y="-1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA30" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.15724" Y="-0.11642" Z="-0.11153" />
+                    <Rotation Y="0.78540" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA3" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.18183" Y="-0.13851" Z="-0.43454" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA29" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.15724" Y="-0.09189" Z="-0.11153" />
+                    <Rotation Y="0.78540" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA28" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.15724" Y="0.09189" Z="-0.11153" />
+                    <Rotation Y="0.78540" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA27" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.15724" Y="0.11704" Z="-0.11153" />
+                    <Rotation Y="0.78540" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA26" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.17306" Y="0.16215" Z="-0.15055" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA25" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.17306" Y="0.13849" Z="-0.15055" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA24" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.17306" Y="-0.13842" Z="-0.15055" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA23" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.17306" Y="-0.16180" Z="-0.15055" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA22" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.18945" Y="-0.28001" Z="0.04996" />
+                    <Rotation X="-1.59441" Y="1.57029" Z="-1.85621" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA21" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.10907" Y="-0.57999" Z="0.04999" />
+                    <Rotation X="-1.59441" Y="1.57029" Z="-1.85621" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA20" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.10901" Y="-0.58021" Z="-0.32086" />
+                    <Rotation X="-1.59441" Y="1.57029" Z="-1.85621" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA2" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.18183" Y="-0.16198" Z="-0.43454" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA19" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.19103" Y="-0.27410" Z="-0.32105" />
+                    <Rotation X="-1.59441" Y="1.57029" Z="-1.85621" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA18" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.19322" Y="-0.24732" Z="-0.33026" />
+                    <Rotation Y="1.57078" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA17" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.18634" Y="-0.19510" Z="-0.33026" />
+                    <Rotation Y="1.57078" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA16" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.18945" Y="0.28010" Z="0.05010" />
+                    <Rotation Y="1.57055" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA15" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.10919" Y="0.57964" Z="0.05039" />
+                    <Rotation Y="1.57055" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA14" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.10919" Y="0.57964" Z="-0.32076" />
+                    <Rotation Y="1.57055" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA13" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.19113" Y="0.27425" Z="-0.32076" />
+                    <Rotation Y="1.57055" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA12" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.19323" Y="0.24718" Z="-0.33018" />
+                    <Rotation Y="1.57078" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA11" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.18639" Y="0.19522" Z="-0.33018" />
+                    <Rotation Y="1.57078" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA10" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.18309" Y="0.16200" Z="-0.47118" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ScrewA1" Ref="CoreIVAPropA_Subpart_ScrewA">
+                <Transform>
+                    <Position X="0.18309" Y="-0.16198" Z="-0.47118" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_PhotoH1" Ref="CoreIVAPropA_Subpart_PhotoH">
+                <Transform>
+                    <Position X="-0.22241" Y="0.73096" Z="-0.10283" />
+                    <Rotation X="0.38915" Y="-0.00974" Z="1.23219" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_PhotoG1" Ref="CoreIVAPropA_Subpart_PhotoG">
+                <Transform>
+                    <Position X="-0.21629" Y="0.71108" Z="-0.05258" />
+                    <Rotation X="-0.53874" Y="-0.22606" Z="1.31128" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_PhotoF1" Ref="CoreIVAPropA_Subpart_PhotoF">
+                <Transform>
+                    <Position X="-0.02983" Y="0.66805" Z="0.08890" />
+                    <Rotation X="-0.12979" Y="0.01704" Z="1.30789" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_PhotoE1" Ref="CoreIVAPropA_Subpart_PhotoE">
+                <Transform>
+                    <Position X="-0.13797" Y="0.69922" Z="-0.02226" />
+                    <Rotation Y="-0.05451" Z="1.30900" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_PhotoD1" Ref="CoreIVAPropA_Subpart_PhotoD">
+                <Transform>
+                    <Position X="-0.15187" Y="0.70737" Z="-0.11734" />
+                    <Rotation X="-0.13090" Y="-0.26180" Z="1.17810" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_PhotoC1" Ref="CoreIVAPropA_Subpart_PhotoC">
+                <Transform>
+                    <Position X="-0.02857" Y="0.67142" Z="-0.03453" />
+                    <Rotation X="0.12979" Y="0.01704" Z="1.31010" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_PhotoB1" Ref="CoreIVAPropA_Subpart_PhotoB">
+                <Transform>
+                    <Position X="-0.23283" Y="0.72667" Z="0.00737" />
+                    <Rotation X="-0.13090" Z="1.17810" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_PhotoA1" Ref="CoreIVAPropA_Subpart_PhotoA">
+                <Transform>
+                    <Position X="-0.13626" Y="0.70566" Z="0.09084" />
+                    <Rotation X="0.14155" Y="-0.38916" Z="1.25498" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_MergedLightA1" Ref="CoreIVAPropA_Subpart_MergedLightA">
+                <Transform>
+                    <Position X="-0.27769" Z="-0.84008" />
+                    <Rotation X="3.14159" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_JoystickA2" Ref="CoreIVAPropA_Subpart_JoystickA">
+                <Transform>
+                    <Position X="-0.36756" Y="-0.67737" Z="0.01184" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_JoystickA1" Ref="CoreIVAPropA_Subpart_JoystickA">
+                <Transform>
+                    <Position X="-0.36756" Y="0.14579" Z="0.01184" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_InternalLeverABase2" Ref="CoreIVAPropA_Subpart_InternalLeverABase">
+                <Transform>
+                    <Position X="-0.07157" Y="-0.70230" Z="-0.22874" />
+                    <Rotation X="0.05047" Y="0.12083" Z="-2.87562" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_InternalLeverABase1" Ref="CoreIVAPropA_Subpart_InternalLeverABase">
+                <Transform>
+                    <Position X="-0.07157" Y="0.70230" Z="-0.22874" />
+                    <Rotation X="0.01718" Y="-0.12977" Z="-0.26292" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_InternalLeverA2" Ref="CoreIVAPropA_Subpart_InternalLeverA">
+                <Transform>
+                    <Position X="-0.18716" Y="-0.67710" Z="-0.24491" />
+                    <Rotation X="-3.14159" Y="-0.12083" Z="0.26597" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_InternalLeverA1" Ref="CoreIVAPropA_Subpart_InternalLeverA">
+                <Transform>
+                    <Position X="-0.18716" Y="0.67709" Z="-0.24491" />
+                    <Rotation X="0.01718" Y="-0.12977" Z="-0.26292" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_HingeACap4" Ref="CoreIVAPropA_Subpart_HingeACap">
+                <Transform>
+                    <Position X="-0.15155" Y="0.07777" Z="0.14465" />
+                    <Rotation Z="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_HingeACap3" Ref="CoreIVAPropA_Subpart_HingeACap">
+                <Transform>
+                    <Position X="-0.15155" Y="-0.07434" Z="0.14465" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_HingeACap2" Ref="CoreIVAPropA_Subpart_HingeACap">
+                <Transform>
+                    <Position X="0.16856" Y="0.17613" Z="-0.12911" />
+                    <Rotation Z="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_HingeACap1" Ref="CoreIVAPropA_Subpart_HingeACap">
+                <Transform>
+                    <Position X="0.16856" Y="-0.17609" Z="-0.12911" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_HingeAAxle1" Ref="CoreIVAPropA_Subpart_HingeAAxle">
+                <Transform>
+                    <Position X="0.16856" Z="-0.12911" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_HingeA6" Ref="CoreIVAPropA_Subpart_HingeA">
+                <Transform>
+                    <Position X="-0.15336" Y="0.05157" Z="0.13168" />
+                    <Rotation Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_HingeA5" Ref="CoreIVAPropA_Subpart_HingeA">
+                <Transform>
+                    <Position X="-0.15336" Y="-0.04778" Z="0.13168" />
+                    <Rotation Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_HingeA4" Ref="CoreIVAPropA_Subpart_HingeA">
+                <Transform>
+                    <Position X="0.16106" Y="-0.10371" Z="-0.11966" />
+                    <Rotation X="-3.14159" Y="-0.78540" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_HingeA3" Ref="CoreIVAPropA_Subpart_HingeA">
+                <Transform>
+                    <Position X="0.16106" Y="0.10455" Z="-0.11966" />
+                    <Rotation X="-3.14159" Y="-0.78540" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_HingeA2" Ref="CoreIVAPropA_Subpart_HingeA">
+                <Transform>
+                    <Position X="0.17011" Y="0.14986" Z="-0.14152" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_HingeA1" Ref="CoreIVAPropA_Subpart_HingeA">
+                <Transform>
+                    <Position X="0.17011" Y="-0.15000" Z="-0.14152" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA9" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.60731" Y="-0.54115" Z="0.44549" />
+                    <Rotation Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA8" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.57379" Y="-0.12547" Z="0.44682" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA7" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.64160" Y="-0.12547" Z="0.44682" />
+                    <Rotation Z="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA6" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.60731" Y="-0.16018" Z="0.44682" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA5" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.60731" Y="-0.09081" Z="0.44682" />
+                    <Rotation Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA44" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.57379" Y="0.12628" Z="0.44517" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA43" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.64160" Y="0.12628" Z="0.44517" />
+                    <Rotation Z="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA42" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.60731" Y="0.09157" Z="0.44517" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA41" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.60731" Y="0.16093" Z="0.44517" />
+                    <Rotation Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA40" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.82768" Y="0.12628" Z="0.44517" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA4" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.15775" Y="0.61033" Z="0.44675" />
+                    <Rotation Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA39" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.89550" Y="0.12628" Z="0.44517" />
+                    <Rotation Z="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA38" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.86121" Y="0.09157" Z="0.44517" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA37" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.86121" Y="0.16093" Z="0.44517" />
+                    <Rotation Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA36" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.82768" Y="-0.12587" Z="0.44517" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA35" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.89550" Y="-0.12587" Z="0.44517" />
+                    <Rotation Z="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA34" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.86121" Y="-0.16058" Z="0.44517" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA33" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.86121" Y="-0.09121" Z="0.44517" />
+                    <Rotation Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA32" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.12422" Y="-0.12575" Z="0.44675" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA31" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.19204" Y="-0.12575" Z="0.44675" />
+                    <Rotation Z="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA30" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.15775" Y="-0.16046" Z="0.44675" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA3" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.15775" Y="0.54096" Z="0.44675" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA29" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.15775" Y="-0.09110" Z="0.44675" />
+                    <Rotation Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA28" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.12422" Y="0.12605" Z="0.44675" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA27" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.19204" Y="0.12605" Z="0.44675" />
+                    <Rotation Z="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA26" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.15775" Y="0.09135" Z="0.44675" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA25" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.15775" Y="0.16071" Z="0.44675" />
+                    <Rotation Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA24" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="0.29562" Y="0.16105" Z="0.44438" />
+                    <Rotation Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA23" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="0.29562" Y="0.09168" Z="0.44438" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA22" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="0.26133" Y="0.12639" Z="0.44438" />
+                    <Rotation Z="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA21" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="0.32914" Y="0.12639" Z="0.44438" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA20" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="0.32914" Y="-0.12722" Z="0.44438" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA2" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.19204" Y="0.57567" Z="0.44675" />
+                    <Rotation Z="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA19" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="0.26133" Y="-0.12722" Z="0.44438" />
+                    <Rotation Z="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA18" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="0.29562" Y="-0.16193" Z="0.44438" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA17" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="0.29562" Y="-0.09256" Z="0.44438" />
+                    <Rotation Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA16" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.15834" Y="-0.54115" Z="0.44549" />
+                    <Rotation Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA15" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.15834" Y="-0.61051" Z="0.44549" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA14" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.19263" Y="-0.57581" Z="0.44549" />
+                    <Rotation Z="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA13" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.12482" Y="-0.57581" Z="0.44549" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA12" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.57379" Y="-0.57581" Z="0.44549" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA11" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.64160" Y="-0.57581" Z="0.44549" />
+                    <Rotation Z="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA10" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.60731" Y="-0.61051" Z="0.44549" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAJoinA1" Ref="CoreIVAPropA_Subpart_FloorAJoinA">
+                <Transform>
+                    <Position X="-0.12422" Y="0.57567" Z="0.44675" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateG2" Ref="CoreIVAPropA_Subpart_FloorAGrateG">
+                <Transform>
+                    <Position X="0.09950" Y="0.37270" Z="0.44691" />
+                    <Rotation X="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateG1" Ref="CoreIVAPropA_Subpart_FloorAGrateG">
+                <Transform>
+                    <Position X="0.09950" Y="-0.37266" Z="0.44691" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateE6" Ref="CoreIVAPropA_Subpart_FloorAGrateE">
+                <Transform>
+                    <Position X="-0.74629" Y="-0.12590" Z="0.44692" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateE5" Ref="CoreIVAPropA_Subpart_FloorAGrateE">
+                <Transform>
+                    <Position X="-0.74629" Y="0.12590" Z="0.44692" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateE4" Ref="CoreIVAPropA_Subpart_FloorAGrateE">
+                <Transform>
+                    <Position X="-0.86128" Z="0.44692" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateE3" Ref="CoreIVAPropA_Subpart_FloorAGrateE">
+                <Transform>
+                    <Position X="-0.60806" Z="0.44692" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateE2" Ref="CoreIVAPropA_Subpart_FloorAGrateE">
+                <Transform>
+                    <Position X="0.29368" Z="0.44692" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateE1" Ref="CoreIVAPropA_Subpart_FloorAGrateE">
+                <Transform>
+                    <Position X="-0.15669" Z="0.44692" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateD8" Ref="CoreIVAPropA_Subpart_FloorAGrateD">
+                <Transform>
+                    <Position X="-0.15911" Y="0.36050" Z="0.44689" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateD7" Ref="CoreIVAPropA_Subpart_FloorAGrateD">
+                <Transform>
+                    <Position X="-0.15911" Y="-0.36052" Z="0.44689" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateD6" Ref="CoreIVAPropA_Subpart_FloorAGrateD">
+                <Transform>
+                    <Position X="-0.60681" Y="0.36050" Z="0.44689" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateD5" Ref="CoreIVAPropA_Subpart_FloorAGrateD">
+                <Transform>
+                    <Position X="-0.60681" Y="-0.36052" Z="0.44689" />
+                    <Rotation Z="-1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateD4" Ref="CoreIVAPropA_Subpart_FloorAGrateD">
+                <Transform>
+                    <Position X="-0.39317" Y="-0.12620" Z="0.44689" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateD3" Ref="CoreIVAPropA_Subpart_FloorAGrateD">
+                <Transform>
+                    <Position X="0.06055" Y="-0.12620" Z="0.44689" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateD2" Ref="CoreIVAPropA_Subpart_FloorAGrateD">
+                <Transform>
+                    <Position X="0.06055" Y="0.12616" Z="0.44689" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateD1" Ref="CoreIVAPropA_Subpart_FloorAGrateD">
+                <Transform>
+                    <Position X="-0.39317" Y="0.12616" Z="0.44689" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateC2" Ref="CoreIVAPropA_Subpart_FloorAGrateC">
+                <Transform>
+                    <Position X="-0.38300" Y="0.35130" Z="0.43754" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateC1" Ref="CoreIVAPropA_Subpart_FloorAGrateC">
+                <Transform>
+                    <Position X="-0.38300" Y="-0.35131" Z="0.43754" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateB2" Ref="CoreIVAPropA_Subpart_FloorAGrateB">
+                <Transform>
+                    <Position X="0.06533" Y="-0.35130" Z="0.43819" />
+                    <Rotation X="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateB1" Ref="CoreIVAPropA_Subpart_FloorAGrateB">
+                <Transform>
+                    <Position X="0.06533" Y="0.35133" Z="0.43819" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateA5" Ref="CoreIVAPropA_Subpart_FloorAGrateA">
+                <Transform>
+                    <Position X="0.16630" Y="0.00072" Z="0.43601" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateA4" Ref="CoreIVAPropA_Subpart_FloorAGrateA">
+                <Transform>
+                    <Position X="-0.03252" Y="0.00072" Z="0.43601" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateA3" Ref="CoreIVAPropA_Subpart_FloorAGrateA">
+                <Transform>
+                    <Position X="-0.28044" Y="0.00072" Z="0.43601" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateA2" Ref="CoreIVAPropA_Subpart_FloorAGrateA">
+                <Transform>
+                    <Position X="-0.47918" Y="0.00072" Z="0.43601" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorAGrateA1" Ref="CoreIVAPropA_Subpart_FloorAGrateA">
+                <Transform>
+                    <Position X="-0.73350" Y="0.00072" Z="0.43601" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorACubeA9" Ref="CoreIVAPropA_Subpart_FloorACubeA">
+                <Transform>
+                    <Position X="-0.86107" Y="-0.12587" Z="0.44517" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorACubeA8" Ref="CoreIVAPropA_Subpart_FloorACubeA">
+                <Transform>
+                    <Position X="-0.15761" Y="-0.12575" Z="0.44675" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorACubeA7" Ref="CoreIVAPropA_Subpart_FloorACubeA">
+                <Transform>
+                    <Position X="-0.15761" Y="0.12605" Z="0.44675" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorACubeA6" Ref="CoreIVAPropA_Subpart_FloorACubeA">
+                <Transform>
+                    <Position X="0.29576" Y="0.12639" Z="0.44438" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorACubeA5" Ref="CoreIVAPropA_Subpart_FloorACubeA">
+                <Transform>
+                    <Position X="0.29576" Y="-0.12722" Z="0.44438" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorACubeA4" Ref="CoreIVAPropA_Subpart_FloorACubeA">
+                <Transform>
+                    <Position X="-0.15820" Y="-0.57581" Z="0.44549" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorACubeA3" Ref="CoreIVAPropA_Subpart_FloorACubeA">
+                <Transform>
+                    <Position X="-0.60717" Y="-0.57581" Z="0.44549" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorACubeA2" Ref="CoreIVAPropA_Subpart_FloorACubeA">
+                <Transform>
+                    <Position X="-0.60717" Y="-0.12547" Z="0.44682" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorACubeA11" Ref="CoreIVAPropA_Subpart_FloorACubeA">
+                <Transform>
+                    <Position X="-0.60717" Y="0.12628" Z="0.44517" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorACubeA10" Ref="CoreIVAPropA_Subpart_FloorACubeA">
+                <Transform>
+                    <Position X="-0.86107" Y="0.12628" Z="0.44517" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_FloorACubeA1" Ref="CoreIVAPropA_Subpart_FloorACubeA">
+                <Transform>
+                    <Position X="-0.15761" Y="0.57567" Z="0.44675" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_DialBBase1" Ref="CoreIVAPropA_Subpart_DialBBase">
+                <Transform>
+                    <Position X="-0.26613" Z="0.00673" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_DialB1" Ref="CoreIVAPropA_Subpart_DialB">
+                <Transform>
+                    <Position X="-0.26613" Z="-0.01524" />
+                    <Rotation Z="1.57080" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_DialABase1" Ref="CoreIVAPropA_Subpart_DialABase">
+                <Transform>
+                    <Position X="-0.59421" Z="0.00902" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_DialA1" Ref="CoreIVAPropA_Subpart_DialA">
+                <Transform>
+                    <Position X="-0.59421" Z="-0.01926" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_DeanSardineB2" Ref="CoreIVAPropA_Subpart_DeanSardineB">
+                <Transform>
+                    <Position X="-0.04569" Y="-0.00226" Z="0.16829" />
+                    <Rotation Z="-0.48874" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_DeanSardineB1" Ref="CoreIVAPropA_Subpart_DeanSardineB">
+                <Transform>
+                    <Position X="-0.07793" Y="0.03603" Z="0.14593" />
+                    <Rotation Z="1.62519" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_DeanSardineA2" Ref="CoreIVAPropA_Subpart_DeanSardineA">
+                <Transform>
+                    <Position X="-0.10084" Y="-0.02038" Z="0.15866" />
+                    <Rotation X="0.01667" Y="0.01439" Z="-2.31299" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_DeanSardineA1" Ref="CoreIVAPropA_Subpart_DeanSardineA">
+                <Transform>
+                    <Position X="-0.12901" Y="0.02284" Z="0.12759" />
+                    <Rotation Y="0.04199" Z="2.74889" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ConsoleRunnersA1" Ref="CoreIVAPropA_Subpart_ConsoleRunnersA">
+                <Transform>
+                    <Position X="0.19038" Z="-0.53626" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ConsoleAPanelF1" Ref="CoreIVAPropA_Subpart_ConsoleAPanelF">
+                <Transform>
+                    <Position X="0.20281" Z="-0.57623" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ConsoleAPanelE1" Ref="CoreIVAPropA_Subpart_ConsoleAPanelE">
+                <Transform>
+                    <Position X="0.08748" Z="-0.00527" />
+                    <Rotation Y="-0.78540" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ConsoleAPanelD1" Ref="CoreIVAPropA_Subpart_ConsoleAPanelD">
+                <Transform>
+                    <Position X="0.20140" Z="-0.28979" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ConsoleAPanelC2" Ref="CoreIVAPropA_Subpart_ConsoleAPanelC">
+                <Transform>
+                    <Position X="0.16149" Y="-0.46090" Z="-0.13575" />
+                    <Rotation X="-3.14159" Z="-0.26180" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ConsoleAPanelC1" Ref="CoreIVAPropA_Subpart_ConsoleAPanelC">
+                <Transform>
+                    <Position X="0.16149" Y="0.46092" Z="-0.13575" />
+                    <Rotation Z="0.26180" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ConsoleAPanelB2" Ref="CoreIVAPropA_Subpart_ConsoleAPanelB">
+                <Transform>
+                    <Position X="0.21120" Y="-0.21790" Z="-0.13759" />
+                    <Rotation Z="0.13090" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ConsoleAPanelB1" Ref="CoreIVAPropA_Subpart_ConsoleAPanelB">
+                <Transform>
+                    <Position X="0.21120" Y="0.21789" Z="-0.13759" />
+                    <Rotation Z="-0.13090" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ConsoleAPanelA2" Ref="CoreIVAPropA_Subpart_ConsoleAPanelA">
+                <Transform>
+                    <Position X="0.07624" Z="-0.76243" />
+                    <Rotation Y="1.22173" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ConsoleAPanelA1" Ref="CoreIVAPropA_Subpart_ConsoleAPanelA">
+                <Transform>
+                    <Position X="-0.11916" Z="-0.83355" />
+                    <Rotation Y="1.22173" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ChairAHeadrest2" Ref="CoreIVAPropA_Subpart_ChairAHeadrest">
+                <Transform>
+                    <Position X="-0.74926" Y="-0.41754" Z="-0.34908" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ChairAHeadrest1" Ref="CoreIVAPropA_Subpart_ChairAHeadrest">
+                <Transform>
+                    <Position X="-0.74926" Y="0.41369" Z="-0.34908" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ChairAEjectionRunners2" Ref="CoreIVAPropA_Subpart_ChairAEjectionRunners">
+                <Transform>
+                    <Position X="-0.41367" Y="-0.41618" Z="0.40677" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ChairAEjectionRunners1" Ref="CoreIVAPropA_Subpart_ChairAEjectionRunners">
+                <Transform>
+                    <Position X="-0.41367" Y="0.41505" Z="0.40677" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ChairABase2" Ref="CoreIVAPropA_Subpart_ChairABase">
+                <Transform>
+                    <Position X="-0.48110" Y="-0.41618" Z="0.42941" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ChairABase1" Ref="CoreIVAPropA_Subpart_ChairABase">
+                <Transform>
+                    <Position X="-0.48110" Y="0.41505" Z="0.42941" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ChairA2" Ref="CoreIVAPropA_Subpart_ChairA">
+                <Transform>
+                    <Position X="-0.46404" Y="-0.41618" Z="0.09326" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_ChairA1" Ref="CoreIVAPropA_Subpart_ChairA">
+                <Transform>
+                    <Position X="-0.46404" Y="0.41505" Z="0.09326" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_CentralConsoleA1" Ref="CoreIVAPropA_Subpart_CentralConsoleA">
+                <Transform>
+                    <Position X="-0.42437" Z="0.22068" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_CableHolderA7" Ref="CoreIVAPropA_Subpart_CableHolderA">
+                <Transform>
+                    <Position X="-0.44045" Y="-0.88392" Z="-0.42191" />
+                    <Rotation X="0.13090" Y="-0.13090" Z="0.39270" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_CableHolderA6" Ref="CoreIVAPropA_Subpart_CableHolderA">
+                <Transform>
+                    <Position X="0.18000" Y="-0.66345" Z="-0.32069" />
+                    <Rotation X="-0.13090" Y="-0.13090" Z="0.39270" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_CableHolderA5" Ref="CoreIVAPropA_Subpart_CableHolderA">
+                <Transform>
+                    <Position X="-0.09303" Y="-0.76301" Z="-0.36666" />
+                    <Rotation Y="-0.13090" Z="0.39270" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_CableHolderA4" Ref="CoreIVAPropA_Subpart_CableHolderA">
+                <Transform>
+                    <Position X="0.18159" Y="0.66584" Z="-0.32125" />
+                    <Rotation Y="0.13090" Z="2.74889" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_CableHolderA3" Ref="CoreIVAPropA_Subpart_CableHolderA">
+                <Transform>
+                    <Position X="-0.44046" Y="0.88352" Z="-0.42313" />
+                    <Rotation X="0.13090" Y="0.13090" Z="2.74889" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_CableHolderA2" Ref="CoreIVAPropA_Subpart_CableHolderA">
+                <Transform>
+                    <Position X="-0.09193" Y="0.76104" Z="-0.37009" />
+                    <Rotation X="0.13090" Y="0.13090" Z="2.74889" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB9" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.06992" Y="-0.64582" Z="-0.39996" />
+                    <Rotation X="3.14159" Y="1.57080" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB8" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.10534" Y="-0.53761" Z="-0.37692" />
+                    <Rotation Y="1.57055" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB7" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.13143" Y="-0.41908" Z="-0.38659" />
+                    <Rotation Y="1.57078" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB6" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.14436" Y="-0.31422" Z="-0.43436" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB5" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.13789" Y="-0.23624" Z="-0.49855" />
+                    <Rotation X="3.14159" Y="1.43990" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB4" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.06153" Y="-0.15240" Z="-0.76935" />
+                    <Rotation X="3.14159" Y="1.17810" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB36" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="-0.15256" Y="-0.70074" Z="-0.23831" />
+                    <Rotation Y="1.57042" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB35" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="-0.00252" Y="-0.65970" Z="-0.21846" />
+                    <Rotation Y="1.57042" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB34" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="-0.15289" Y="0.69954" Z="-0.23831" />
+                    <Rotation Y="1.57042" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB33" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="-0.00252" Y="0.65974" Z="-0.21846" />
+                    <Rotation Y="1.57042" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB32" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.30805" Y="-0.49370" Z="-0.30187" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB31" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.30805" Y="-0.55470" Z="-0.16378" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB30" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.30805" Y="-0.57780" Z="-0.01446" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB3" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.08433" Y="-0.15271" Z="-0.70605" />
+                    <Rotation X="3.14159" Y="1.17810" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB29" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.30805" Y="0.57783" Z="-0.01446" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB28" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.30805" Y="0.55469" Z="-0.16378" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB27" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.30805" Y="0.49368" Z="-0.30187" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB26" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="-0.88397" Y="-0.49160" Z="-0.27762" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB25" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="-0.88397" Y="0.49160" Z="-0.27762" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB24" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="-0.88397" Y="-0.73340" Z="-0.28376" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB23" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="-0.88397" Y="0.73344" Z="-0.28376" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB22" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.02618" Y="0.72912" Z="-0.44729" />
+                    <Rotation X="2.48709" Y="1.38594" Z="-3.13730" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB21" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.06992" Y="0.64580" Z="-0.39996" />
+                    <Rotation X="3.14159" Y="1.57080" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB20" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.10534" Y="0.53760" Z="-0.37692" />
+                    <Rotation Y="1.57055" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB2" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.10125" Y="-0.15575" Z="-0.64148" />
+                    <Rotation X="3.14159" Y="1.30900" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB19" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.13140" Y="0.41800" Z="-0.38576" />
+                    <Rotation Y="1.57055" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB18" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.14436" Y="0.31461" Z="-0.43436" />
+                    <Rotation Y="1.57053" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB17" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.13776" Y="0.23669" Z="-0.49844" />
+                    <Rotation X="3.14159" Y="1.43990" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB16" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.12229" Y="0.18740" Z="-0.56695" />
+                    <Rotation X="3.14159" Y="1.30900" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB15" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.10125" Y="0.15580" Z="-0.64148" />
+                    <Rotation X="3.14159" Y="1.30900" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB14" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.08433" Y="0.15270" Z="-0.70605" />
+                    <Rotation X="3.14159" Y="1.17810" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB13" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.06153" Y="0.15235" Z="-0.76935" />
+                    <Rotation X="3.14159" Y="1.17810" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB12" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.03077" Y="0.17731" Z="-0.83588" />
+                    <Rotation X="3.01069" Y="0.78636" Z="3.11747" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB11" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.03141" Y="-0.17746" Z="-0.83475" />
+                    <Rotation X="-3.01069" Y="0.91630" Z="-3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB10" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.02384" Y="-0.72666" Z="-0.44685" />
+                    <Rotation X="3.14159" Y="1.43990" Z="2.35619" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltB1" Ref="CoreIVAPropA_Subpart_BoltB">
+                <Transform>
+                    <Position X="0.12229" Y="-0.18744" Z="-0.56695" />
+                    <Rotation X="3.14159" Y="1.30900" Z="3.14159" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltA4" Ref="CoreIVAPropA_Subpart_BoltA">
+                <Transform>
+                    <Position X="-0.43834" Y="-0.87790" Z="-0.45509" />
+                    <Rotation X="3.14159" Y="-1.43990" Z="-1.17380" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltA3" Ref="CoreIVAPropA_Subpart_BoltA">
+                <Transform>
+                    <Position X="-0.08878" Y="-0.76094" Z="-0.39901" />
+                    <Rotation X="-1.56224" Y="-0.09203" Z="-2.84601" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltA2" Ref="CoreIVAPropA_Subpart_BoltA">
+                <Transform>
+                    <Position X="-0.43834" Y="0.87787" Z="-0.45509" />
+                    <Rotation X="2.36049" Y="-1.38594" Z="1.96779" />
+                </Transform>
+            </SubPart>
+            <SubPart Key="CoreIVAPropA_Subpart_BoltA1" Ref="CoreIVAPropA_Subpart_BoltA">
+                <Transform>
+                    <Position X="-0.08954" Y="0.75555" Z="-0.40192" />
+                    <Rotation X="-1.70170" Z="-0.39270" />
+                </Transform>
+            </SubPart>
+        </SubParts>
+    </Part>
+
+</Assets>

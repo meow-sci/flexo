@@ -7,21 +7,33 @@ import {
   massDefinitionsFromElement,
   readDensityKgM3,
   readMassKg,
+  parseGameDataElement,
+  subPartGameDataFromDoc,
 } from './partXmlParser';
 import { serializeGameDataXml } from './partXmlSerializer';
-import { mergeGameData, parseGameDataFile, parsePartsFile, type CatalogPart } from './partCatalog';
+import { resolveContent } from './contentXml';
+import { catalogPartsFromContent } from './partCatalog';
 import { buildMultiCustomBundle, buildMultiModContent } from './modExport';
 import { createEmptyPart, createSubPartGameData, identityTransform } from './types';
-import { createMassDefinition, MASS_SHAPES } from './massDefinitions';
+import {
+  createMassDefinition,
+  MASS_SHAPES,
+  combinedMassSummary,
+  resolveMassDefinitionKg,
+} from './massDefinitions';
+import { buildProjectExport } from '../state/projectTransfer';
+import { encodeProject, decodeProject } from '../state/projectCodec';
 import type { CatalogSubPart } from './catalog';
-import { hasKsaAssets, KSA_ASSETS_DIR } from './ksaTestAssets';
+import { hasKsaAssets, KSA_ASSETS_DIR, readVendoredAsset } from './ksaTestAssets';
 
 function doc(xml: string): Document {
   return new DOMParser().parseFromString(xml, 'application/xml') as unknown as Document;
 }
 
 function parseMasses(xml: string) {
-  return massDefinitionsFromElement(doc(`<PartGameData>${xml}</PartGameData>`).documentElement);
+  return massDefinitionsFromElement(
+    doc(`<Part Id="Test"><InertMasses>${xml}</InertMasses></Part>`).documentElement,
+  );
 }
 
 function roundTripMasses(xml: string) {
@@ -36,11 +48,12 @@ const STOCK_SHAPES = [
   '<CustomMass><LocationAsmb Z="-0.49792"/><Mass Kg="50"/><MassSpecificInertia Ixx="0.0256970833" Iyy="0.0231508333" Izz="0.0099664166"/></CustomMass>',
   '<SolidCuboidMass><Mass Kg="52"/><LengthX M="0.6721"/><LengthY M="0.4828"/><LengthZ M="0.3549"/></SolidCuboidMass>',
   '<SolidSphereMass><Mass Kg="400"/><Radius M="0.25"/></SolidSphereMass>',
+  '<HollowSphereMass><LocationAsmb Y="0.19878" Z="0.184124"/><Material Ref="Aluminum.2014" Phase="Solid"/><Radius M="0.175"/><WallThickness Mm="2"/></HollowSphereMass>',
   '<SolidCylinderMass><Mass Kg="87"/><Length M="0.2468"/><Radius M="0.5"/></SolidCylinderMass>',
-  '<HollowOpenCylinderMass><Material Id="Aluminum.2014(s)"/><Length M="0.04"/><OuterRadius M="0.125"/><WallThickness Mm="6"/></HollowOpenCylinderMass>',
-  '<HollowOpenTruncatedConeMass><LocationAsmb X="-0.2253"/><Material Id="Aluminum.2014(s)"/><Height M="0.451"/><RadiusBase M="0.159"/><RadiusTop M="0.1"/><Sweep Degrees="180"/><WallThickness Mm="6"/></HollowOpenTruncatedConeMass>',
-  '<HollowOpenSemiEllipsoidMass><LocationAsmb X="-0.0995"/><Material Id="Aluminum.2014(s)"/><Length M="0.199"/><Radius M="0.2498"/><WallThickness Mm="6"/></HollowOpenSemiEllipsoidMass>',
-  '<HollowOpenOgiveMass><LocationAsmb X="-0.7044"/><Material Id="Aluminum.2014(s)"/><Height M="1.4088"/><Radius M="0.2498"/><WallThickness Mm="6"/></HollowOpenOgiveMass>',
+  '<HollowOpenCylinderMass><Material Ref="Aluminum.2014" Phase="Solid"/><Length M="0.04"/><OuterRadius M="0.125"/><WallThickness Mm="6"/></HollowOpenCylinderMass>',
+  '<HollowOpenTruncatedConeMass><LocationAsmb X="-0.2253"/><Material Ref="Aluminum.2014" Phase="Solid"/><Height M="0.451"/><RadiusBase M="0.159"/><RadiusTop M="0.1"/><Sweep Degrees="180"/><WallThickness Mm="6"/></HollowOpenTruncatedConeMass>',
+  '<HollowOpenSemiEllipsoidMass><LocationAsmb X="-0.0995"/><Material Ref="Aluminum.2014" Phase="Solid"/><Length M="0.199"/><Radius M="0.2498"/><WallThickness Mm="6"/></HollowOpenSemiEllipsoidMass>',
+  '<HollowOpenOgiveMass><LocationAsmb X="-0.7044"/><Material Ref="Aluminum.2014" Phase="Solid"/><Height M="1.4088"/><Radius M="0.2498"/><WallThickness Mm="6"/></HollowOpenOgiveMass>',
 ];
 
 describe('editable mass XML', () => {
@@ -71,7 +84,7 @@ describe('editable mass XML', () => {
     const { output, masses } = roundTripMasses(`
       <SolidCuboidMass Author="kept">
         <Mass Kg="2" G="500"/><Density TonnePerM3="1" KgPerM3="20"/>
-        <Material Id="Aluminum.2014(s)"/>
+        <Material Ref="Aluminum.2014" Phase="Solid"/>
         <LengthX Cm="10" Mm="5"/><LengthY M="0.2"/><LengthZ M="0.3"/>
         <LocationAsmb X="1" Y="2" Z="3"/><Paf2Asmb Y="0.25"/>
         <Opaque MassId="external"><Preserve Value="yes"/></Opaque>
@@ -91,6 +104,95 @@ describe('editable mass XML', () => {
     expect(output).toContain('<Mass Kg="2.5"/>');
     expect(output).toContain('<Density KgPerM3="1020"/>');
     expect(output).toContain('<Preserve Value="yes"/>');
+  });
+
+  it('imports both stock supply locker shells and preserves them in export and project data', () => {
+    const content = resolveContent([
+      {
+        file: 'CoreLifeSupportAAssets.xml',
+        doc: doc(readVendoredAsset('CoreLifeSupportAAssets.xml')),
+      },
+      {
+        file: 'CoreLifeSupportAGameData.xml',
+        doc: doc(readVendoredAsset('CoreLifeSupportAGameData.xml')),
+      },
+    ]);
+    const row = Array.from(content.doc.getElementsByTagName('Part')).find(
+      (el) => el.getAttribute('Id') === 'CoreLifeSupportA_Prefab_SupplyLockerA',
+    )!;
+    const masses = parseGameDataElement(row).gameData.massDefinitions;
+    expect(masses).toHaveLength(2);
+    for (const [index, mass] of masses.entries()) {
+      expect(mass).toMatchObject({
+        shape: 'HollowSphereMass',
+        materialId: 'Aluminum.2014(s)',
+        dimensions: { radiusM: 0.175, wallThicknessM: 0.002 },
+        locationAsmb: { x: 0, y: 0.19878, z: index ? -0.184124 : 0.184124 },
+      });
+      expect(resolveMassDefinitionKg(mass, new Map([['Aluminum.2014(s)', 2800]]))).toBeCloseTo(
+        ((4 * Math.PI) / 3) * (0.175 ** 3 - 0.173 ** 3) * 2800,
+        10,
+      );
+    }
+    const part = createEmptyPart();
+    part.partId = 'Test';
+    part.gameData.massDefinitions = masses;
+    const xml = serializeGameDataXml([{ part, remap: new Map() }], 'Test');
+    expect(doc(xml).getElementsByTagName('HollowSphereMass')).toHaveLength(2);
+    expect(gameDataFromAssets(xml, 'Test')!.gameData.massDefinitions).toEqual(masses);
+    const envelope = buildProjectExport(
+      [
+        {
+          name: 'Test',
+          part,
+          visible: true,
+          opacity: 1,
+          offset: { x: 0, y: 0, z: 0 },
+          includeInExport: true,
+        },
+      ],
+      'Test',
+    );
+    expect(decodeProject(encodeProject(envelope)).parts[0].data.gameData.massDefinitions).toEqual(
+      masses,
+    );
+  });
+
+  it('retains current unmodeled inert-mass items at both owner scopes', () => {
+    const data = doc(
+      `<Assets><Part Id="Test"><InertMasses><SolidSphereMass><Mass Kg="4"/><Radius M="1"/></SolidSphereMass><SolidConeMass><Mass Kg="5"/><Height M="2"/><Radius M="1"/></SolidConeMass></InertMasses></Part><SubPart Id="Template"><InertMasses><SolidConeMass><Mass Kg="6"/><Height M="2"/><Radius M="1"/></SolidConeMass></InertMasses></SubPart></Assets>`,
+    );
+    const part = createEmptyPart();
+    part.partId = 'Test';
+    part.gameData = parseGameDataElement(data.getElementsByTagName('Part')[0]).gameData;
+    part.subPartGameData = subPartGameDataFromDoc(data);
+    part.placements = [
+      {
+        ...identityTransform(),
+        instanceId: 'placement',
+        subPartTemplateId: 'Template',
+        layerId: 'default',
+      },
+    ];
+    expect(part.subPartGameData[0].massDefinitionsOverride).toBe(true);
+    expect(combinedMassSummary(part, new Map())).toMatchObject({
+      massKg: 4,
+      definitionCount: 3,
+      unresolvedCount: 2,
+    });
+    const xml = serializeGameDataXml([{ part, remap: new Map() }], 'Test');
+    const output = doc(xml);
+    expect(output.getElementsByTagName('InertMasses')).toHaveLength(2);
+    expect(output.getElementsByTagName('SolidConeMass')).toHaveLength(2);
+    expect(output.getElementsByTagName('SolidSphereMass')).toHaveLength(1);
+    expect(
+      parseGameDataElement(output.getElementsByTagName('Part')[0]).gameData.unknownChildren.map(
+        (n) => n.tag,
+      ),
+    ).toEqual(['SolidConeMass']);
+    expect(subPartGameDataFromDoc(output)[0].unknownChildren.map((n) => n.tag)).toEqual([
+      'SolidConeMass',
+    ]);
   });
 
   it('uses the actual defaults of a partially authored InertiaTemplate', () => {
@@ -117,25 +219,20 @@ describe('editable mass XML', () => {
 
   it('merges geometry and GameData mass at both owner scopes instead of dropping or doubling it', () => {
     const geometry = doc(`<Assets>
-      <SubPart Id="Template"><SolidSphereMass><Mass Kg="10"/><Radius M="0.1"/></SolidSphereMass></SubPart>
-      <Part Id="Test"><SolidCuboidMass><Mass Kg="20"/><LengthX M="1"/><LengthY M="1"/><LengthZ M="1"/></SolidCuboidMass>
-        <SubPart Id="placed" InstanceOf="Template"/>
+      <SubPart Id="Template"><InertMasses><SolidSphereMass><Mass Kg="10"/><Radius M="0.1"/></SolidSphereMass></InertMasses></SubPart>
+      <Part Id="Test"><InertMasses><SolidCuboidMass><Mass Kg="20"/><LengthX M="1"/><LengthY M="1"/><LengthZ M="1"/></SolidCuboidMass></InertMasses>
+        <SubParts><SubPart Key="placed" Ref="Template"/></SubParts>
       </Part></Assets>`);
     const game = doc(`<Assets>
-      <PartGameData Id="Test"><SolidCylinderMass><Mass Kg="30"/><Radius M="0.1"/><Length M="1"/></SolidCylinderMass></PartGameData>
-      <SubPartGameData Id="Template"><CustomMass><Mass Kg="40"/></CustomMass></SubPartGameData>
+      <Part Id="Test" Modify="Patch"><InertMasses Modify="Extend"><SolidCylinderMass><Mass Kg="30"/><Radius M="0.1"/><Length M="1"/></SolidCylinderMass></InertMasses></Part>
+      <SubPart Id="Template" Modify="Patch"><InertMasses Modify="Extend"><CustomMass><Mass Kg="40"/></CustomMass></InertMasses></SubPart>
     </Assets>`);
-    const parts: CatalogPart[] = [];
-    const geometrySubParts = new Map();
-    parsePartsFile(geometry, 'Geometry.xml', parts, geometrySubParts);
-    const parsed = {
-      parts: new Map(),
-      subParts: new Map(),
-      subPartColliders: new Map(),
-      subPartLights: new Map(),
-    };
-    parseGameDataFile(game, parsed);
-    mergeGameData(parts, parsed, geometrySubParts);
+    const parts = catalogPartsFromContent(
+      resolveContent([
+        { file: 'Geometry.xml', doc: geometry },
+        { file: 'Game.xml', doc: game },
+      ]),
+    );
     expect(parts[0].massDefinitions.map((mass) => mass.massKg)).toEqual([20, 30]);
     expect(parts[0].subPartGameData[0].massDefinitions.map((mass) => mass.massKg)).toEqual([
       10, 40,
@@ -169,6 +266,26 @@ describe('mass export variants', () => {
           meshNodeName: 'Mesh',
           materialId: 'Material',
           sourceFile: 'Core.xml',
+          raw: {
+            tag: 'SubPart',
+            attrs: { Id: 'Template' },
+            children: [
+              {
+                tag: 'InertMasses',
+                attrs: {},
+                children: [
+                  {
+                    tag: 'SolidSphereMass',
+                    attrs: {},
+                    children: [
+                      { tag: 'Mass', attrs: { Kg: '25' }, children: [] },
+                      { tag: 'Radius', attrs: { M: '0.1' }, children: [] },
+                    ],
+                  },
+                ],
+              },
+            ],
+          } as NonNullable<CatalogSubPart['raw']>,
           data: { gameData: inherited, colliders: [], lights: [] },
         },
       ],
@@ -228,7 +345,8 @@ describe.runIf(hasKsaAssets)('live stock mass forms', () => {
       const xml = doc(readFileSync(join(KSA_ASSETS_DIR, name), 'utf8').replace(/^\uFEFF/, ''));
       for (const shape of MASS_SHAPES) {
         for (const element of Array.from(xml.getElementsByTagName(shape))) {
-          const definitions = massDefinitionsFromElement(element.parentNode as Element);
+          const owner = element.parentNode?.parentNode as Element;
+          const definitions = massDefinitionsFromElement(owner);
           const matching = definitions.filter((definition) => definition.shape === shape);
           expect(matching.length).toBeGreaterThan(0);
           expect(

@@ -1,196 +1,359 @@
 <?xml version='1.0' encoding='utf-8' ?>
 <Assets>
-  <PartGameData Id="CoreElectricalA_Prefab_InlineBatteryBankA">
-    <SolidCylinderMass><Mass Kg="87"/><Length M="0.2468"/><Radius M="0.5"/></SolidCylinderMass>
-    <EditorTag Value="Electrical" />
-    <EditorTag Value="NoFaceSnapping" />
-    <Battery HasStatusLight="true">
-      <MaximumCapacity J="10000" />
-    </Battery>
-  </PartGameData>
+  <Part Id="CoreElectricalA_Prefab_InlineBattery1WBankV1A" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <SolidCylinderMass>
+        <Mass Kg="87"/>
+        <Length M="0.2468"/>
+        <Radius M="0.5"/>
+      </SolidCylinderMass>
+    </InertMasses>
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Electrical" />
+      <EditorTag Ref="NoFaceSnapping" />
+    </EditorTags>
+    <Components Modify="Extend">
+      <Battery HasStatusLight="true">
+        <MaximumCapacity J="10000" />
+      </Battery>
+    </Components>
+  </Part>
 
-  <PartGameData Id="CoreElectricalA_Prefab_InlineBatteryBankB">
-    <SolidCylinderMass><Mass Kg="452"/><Length M="0.32"/><Radius M="1"/></SolidCylinderMass>
-    <EditorTag Value="Electrical" />
-    <EditorTag Value="NoFaceSnapping" />
-    <Battery HasStatusLight="true">
-      <MaximumCapacity J="30000" />
-    </Battery>
-  </PartGameData>
+  <Part Id="CoreElectricalA_Prefab_InlineBattery2WBankV1A" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <SolidCylinderMass>
+        <Mass Kg="452"/>
+        <Length M="0.32"/>
+        <Radius M="1"/>
+      </SolidCylinderMass>
+    </InertMasses>
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Electrical" />
+      <EditorTag Ref="NoFaceSnapping" />
+    </EditorTags>
+    <Components Modify="Extend">
+      <Battery HasStatusLight="true">
+        <MaximumCapacity J="30000" />
+      </Battery>
+    </Components>
+  </Part>
 
-  <PartGameData Id="CoreElectricalA_Prefab_MagneticScoopA" DisplayName="MRS-1 Magnetic Scoop">
-    <SolidCylinderMass><Mass Kg="5000"/><Length M="0.32"/><Radius M="1"/></SolidCylinderMass>
-    <EditorTag Value="Interstellar" />
-    <EditorTag Value="NoFaceSnapping" />
-    <MagneticScoop Id="Scoop">
-      <CaptureRadius Km="1000" />
-      <Collects Id="H2(l)" />
-    </MagneticScoop>
-  </PartGameData>
+  <Part Id="CoreElectricalA_Prefab_MagneticScoopA" Modify="Patch" DisplayName="MRS-1 Magnetic Scoop">
+    <InertMasses Modify="Extend">
+      <SolidCylinderMass>
+        <Mass Kg="5000"/>
+        <Length M="0.32"/>
+        <Radius M="1"/>
+      </SolidCylinderMass>
+    </InertMasses>
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Interstellar" />
+      <EditorTag Ref="NoFaceSnapping" />
+    </EditorTags>
+    <Components Modify="Extend">
+      <MagneticScoop Key="Scoop">
+        <CaptureRadius Km="1000" />
+        <Collects Ref="H2" Phase="Liquid" />
+      </MagneticScoop>
+    </Components>
+  </Part>
 
-  <PartGameData Id="CoreElectricalA_Prefab_LightSmallA">
-    <SolidCuboidMass><Mass Kg="5"/><LengthX M="0.5"/><LengthY M="0.5"/><LengthZ M="0.5"/></SolidCuboidMass>
-    <EditorTag Value="Lights" />
-    <PowerConsumer LightSwitch="true">
-      <Consumed W="60" />
-    </PowerConsumer>
-    <Connector Id="_connector8">
-      <Flags>ToSurface</Flags>
-    </Connector>
-    <KeyframeAnimationModule Id="CoreElectricalA_Prefab_LightSmallA_Anim">
-      <KeyframeAnimation Path="Animations/CoreElectricalA_Prefab_LightSmallA_Anim.glb" Id="CoreElectricalA_Prefab_LightSmallA_Anim" />
-    </KeyframeAnimationModule>
+  <KeyframeAnimation Id="CoreElectricalA_Prefab_LightSmallA_Anim" Path="Animations/CoreElectricalA_Prefab_LightSmallA_Anim.glb" />
+  <Part Id="CoreElectricalA_Prefab_LightSmallA" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <SolidCuboidMass>
+        <Mass Kg="5"/>
+        <LengthX M="0.5"/>
+        <LengthY M="0.5"/>
+        <LengthZ M="0.5"/>
+      </SolidCuboidMass>
+    </InertMasses>
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Lights" />
+    </EditorTags>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector8" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+    <Components Modify="Extend">
+      <KeyframeAnimationModule Key="CoreElectricalA_Prefab_LightSmallA_Anim">
+        <KeyframeAnimation Ref="CoreElectricalA_Prefab_LightSmallA_Anim" />
+      </KeyframeAnimationModule>
 
-    <Collider Id="Collider1">
-      <Box Id="BoxCollider1">
-        <LocationAsmb X="0" Y="0" Z="0.1" />
-        <Collider2Asmb X="0" Y="0" Z="0" />
-        <LengthX M="0.5" />
-        <LengthY M="0.5" />
-        <LengthZ M="0.5" />
-      </Box>
-    </Collider>
-  </PartGameData>
+      <Collider Key="Collider1">
+        <Colliders>
+          <Box Key="BoxCollider1">
+            <LocationAsmb X="0" Y="0" Z="0.1" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.5" />
+            <LengthY M="0.5" />
+            <LengthZ M="0.5" />
+          </Box>
+        </Colliders>
+      </Collider>
+      <PowerConsumer LightSwitch="true">
+        <Consumed W="60" />
+      </PowerConsumer>
+    </Components>
+  </Part>
 
-  <PartGameData Id="CoreElectricalA_Prefab_LightSmallB">
-    <SolidCuboidMass><Mass Kg="6"/><LengthX M="0.35"/><LengthY M="0.8"/><LengthZ M="0.5"/></SolidCuboidMass>
-    <EditorTag Value="Lights" />
-    <PowerConsumer LightSwitch="true">
-      <Consumed W="120" />
-    </PowerConsumer>
-    <Connector Id="_connector7">
-      <Flags>ToSurface</Flags>
-    </Connector>
-    <KeyframeAnimationModule Id="CoreElectricalA_Prefab_LightSmallB_Anim">
-      <KeyframeAnimation Path="Animations/CoreElectricalA_Prefab_LightSmallB_Anim.glb" Id="CoreElectricalA_Prefab_LightSmallB_Anim" />
-    </KeyframeAnimationModule>
+  <KeyframeAnimation Id="CoreElectricalA_Prefab_LightSmallB_Anim" Path="Animations/CoreElectricalA_Prefab_LightSmallB_Anim.glb" />
+  <Part Id="CoreElectricalA_Prefab_LightSmallB" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <SolidCuboidMass>
+        <Mass Kg="6"/>
+        <LengthX M="0.35"/>
+        <LengthY M="0.8"/>
+        <LengthZ M="0.5"/>
+      </SolidCuboidMass>
+    </InertMasses>
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Lights" />
+    </EditorTags>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector7" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+    <Components Modify="Extend">
+      <KeyframeAnimationModule Key="CoreElectricalA_Prefab_LightSmallB_Anim">
+        <KeyframeAnimation Ref="CoreElectricalA_Prefab_LightSmallB_Anim" />
+      </KeyframeAnimationModule>
 
-    <Collider Id="Collider1">
-      <Box Id="BoxCollider1">
-        <LocationAsmb X="0.020" Y="0" Z="0.070" />
-        <Collider2Asmb X="0" Y="0" Z="0" />
-        <LengthX M="0.350000" />
-        <LengthY M="0.800000" />
-        <LengthZ M="0.500000" />
-      </Box>
-    </Collider>
-  </PartGameData>
+      <Collider Key="Collider1">
+        <Colliders>
+          <Box Key="BoxCollider1">
+            <LocationAsmb X="0.020" Y="0" Z="0.070" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.350000" />
+            <LengthY M="0.800000" />
+            <LengthZ M="0.500000" />
+          </Box>
+        </Colliders>
+      </Collider>
+      <PowerConsumer LightSwitch="true">
+        <Consumed W="120" />
+      </PowerConsumer>
+    </Components>
+  </Part>
 
-  <PartGameData Id="CoreElectricalA_Prefab_LightSmallC">
-    <SolidCuboidMass><Mass Kg="6"/><LengthX M="0.8902"/><LengthY M="0.5288"/><LengthZ M="0.3419"/></SolidCuboidMass>
-    <EditorTag Value="Lights" />
-    <PowerConsumer LightSwitch="true">
-      <Consumed W="100" />
-    </PowerConsumer>
-    <Connector Id="_connector9">
-      <Flags>ToSurface</Flags>
-    </Connector>
-    <KeyframeAnimationModule Id="CoreElectricalA_Prefab_LightSmallC_Anim">
-      <KeyframeAnimation Path="Animations/CoreElectricalA_Prefab_LightSmallC_Anim.glb" Id="CoreElectricalA_Prefab_LightSmallC_Anim" />
-    </KeyframeAnimationModule>
+  <KeyframeAnimation Id="CoreElectricalA_Prefab_LightSmallC_Anim" Path="Animations/CoreElectricalA_Prefab_LightSmallC_Anim.glb" />
+  <Part Id="CoreElectricalA_Prefab_LightSmallC" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <SolidCuboidMass>
+        <Mass Kg="6"/>
+        <LengthX M="0.8902"/>
+        <LengthY M="0.5288"/>
+        <LengthZ M="0.3419"/>
+      </SolidCuboidMass>
+    </InertMasses>
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Lights" />
+    </EditorTags>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector9" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+    <Components Modify="Extend">
+      <KeyframeAnimationModule Key="CoreElectricalA_Prefab_LightSmallC_Anim">
+        <KeyframeAnimation Ref="CoreElectricalA_Prefab_LightSmallC_Anim" />
+      </KeyframeAnimationModule>
 
-    <Collider Id="Collider1">
-      <Box Id="BoxCollider1">
-        <LocationAsmb X="-0.0278" Y="0" Z="0.0475" />
-        <Collider2Asmb X="1.5564" Y="0" Z="1.5708" />
-        <LengthX M="0.8902" />
-        <LengthY M="0.5288" />
-        <LengthZ M="0.3419" />
-      </Box>
-    </Collider>
-  </PartGameData>
+      <Collider Key="Collider1">
+        <Colliders>
+          <Box Key="BoxCollider1">
+            <LocationAsmb X="-0.0278" Y="0" Z="0.0475" />
+            <Collider2Asmb X="1.5564" Y="0" Z="1.5708" />
+            <LengthX M="0.8902" />
+            <LengthY M="0.5288" />
+            <LengthZ M="0.3419" />
+          </Box>
+        </Colliders>
+      </Collider>
+      <PowerConsumer LightSwitch="true">
+        <Consumed W="100" />
+      </PowerConsumer>
+    </Components>
+  </Part>
 
-  <SubPartGameData Id="CoreElectricalA_Subpart_SpotlightA">
-    <Light>
-      <Type>Spot</Type>
-      <Transform>
-        <Position X="0.38" Y="0.21" Z="0" />
-      </Transform>
-      <Range Value="5" />
-      <Intensity Value="10" />
-      <Color R="1" G="1" B="1" />
-      <InnerAngle Value="0.392599" />
-      <OuterAngle Value="0.785398" />
-    </Light>
-  </SubPartGameData>
+  <SubPart Id="CoreElectricalA_Subpart_SpotlightA" Modify="Patch">
+    <Components Modify="Extend">
+      <Light>
+        <Type>Spot</Type>
+        <Transform>
+          <Position X="0.38" Y="0.21" Z="0" />
+        </Transform>
+        <Range Value="5" />
+        <Intensity Value="10" />
+        <Color R="1" G="1" B="1" />
+        <InnerAngle Value="0.392599" />
+        <OuterAngle Value="0.785398" />
+      </Light>
+    </Components>
+  </SubPart>
 
-  <SubPartGameData Id="CoreElectricalA_Subpart_FloodlightA">
-    <Light>
-      <Type>Spot</Type>
-      <Transform>
-        <Position X="0.338" Y="0" Z="0" />
-      </Transform>
-      <Range Value="3" />
-      <Intensity Value="10" />
-      <Color R="1" G="1" B="1" />
-      <InnerAngle Value="0.23" />
-      <OuterAngle Value="1.57" />
-    </Light>
-  </SubPartGameData>
+  <SubPart Id="CoreElectricalA_Subpart_FloodlightA" Modify="Patch">
+    <Components Modify="Extend">
+      <Light>
+        <Type>Spot</Type>
+        <Transform>
+          <Position X="0.338" Y="0" Z="0" />
+        </Transform>
+        <Range Value="3" />
+        <Intensity Value="10" />
+        <Color R="1" G="1" B="1" />
+        <InnerAngle Value="0.23" />
+        <OuterAngle Value="1.57" />
+      </Light>
+    </Components>
+  </SubPart>
 
-  <PartGameData Id="CoreElectricalA_Prefab_RadialBatteryA">
-    <SolidCuboidMass><Mass Kg="11"/><LengthX M="0.4305"/><LengthY M="0.2652"/><LengthZ M="0.2099"/></SolidCuboidMass>
-    <EditorTag Value="Electrical" />
-    <Battery HasStatusLight="true">
-      <MaximumCapacity J="1000" />
-    </Battery>
-  </PartGameData>
+  <Part Id="CoreElectricalA_Prefab_RadialBatterySmallV1A" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <SolidCuboidMass>
+        <Mass Kg="11"/>
+        <LengthX M="0.4305"/>
+        <LengthY M="0.2652"/>
+        <LengthZ M="0.2099"/>
+      </SolidCuboidMass>
+    </InertMasses>
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Electrical" />
+    </EditorTags>
+    <Components Modify="Extend">
+      <Battery HasStatusLight="true">
+        <MaximumCapacity J="1000" />
+      </Battery>
+    </Components>
+  </Part>
 
-  <PartGameData Id="CoreElectricalA_Prefab_RadialBatteryB">
-    <SolidCuboidMass><Mass Kg="52"/><LengthX M="0.6721"/><LengthY M="0.4828"/><LengthZ M="0.3549"/></SolidCuboidMass>
-    <EditorTag Value="Electrical" />
-    <Battery HasStatusLight="true">
-      <MaximumCapacity J="5000" />
-    </Battery>
-  </PartGameData>
+  <Part Id="CoreElectricalA_Prefab_RadialBatteryMediumV1A" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <SolidCuboidMass>
+        <Mass Kg="52"/>
+        <LengthX M="0.6721"/>
+        <LengthY M="0.4828"/>
+        <LengthZ M="0.3549"/>
+      </SolidCuboidMass>
+    </InertMasses>
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Electrical" />
+    </EditorTags>
+    <Components Modify="Extend">
+      <Battery HasStatusLight="true">
+        <MaximumCapacity J="5000" />
+      </Battery>
+    </Components>
+  </Part>
 
-  <PartGameData Id="CoreElectricalA_Prefab_SolarPanelA">
-    <SolidCuboidMass><Mass Kg="2"/><LengthX M="0.7947"/><LengthY M="0.596"/><LengthZ M="0.0253"/></SolidCuboidMass>
-    <EditorTag Value="Electrical" />
-    <SolarPanel>
-      <Produced W="200" />
-      <Transform>
-        <Rotation Y="1.5708" />
-      </Transform>
-    </SolarPanel>
-    <Connector Id="_connector5">
-      <Flags>ToSurface</Flags>
-    </Connector>
-  </PartGameData>
+  <Part Id="CoreElectricalA_Prefab_SolarPanelFixedSmallV1A" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <SolidCuboidMass>
+        <Mass Kg="2"/>
+        <LengthX M="0.7947"/>
+        <LengthY M="0.596"/>
+        <LengthZ M="0.0253"/>
+      </SolidCuboidMass>
+    </InertMasses>
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Electrical" />
+    </EditorTags>
+    <Components Modify="Extend">
+      <SolarPanel>
+        <Produced W="200" />
+        <Transform>
+          <Rotation Y="1.5708" />
+        </Transform>
+      </SolarPanel>
+    </Components>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector5" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
-    <SolidCuboidMass><Mass Kg="4.75"/><LocationAsmb X="4.2255" Z="-0.034"/><LengthX M="1.1893"/><LengthY M="0.7987"/><LengthZ M="0.0253"/></SolidCuboidMass>
-    <SolidCuboidMass><Mass Kg="4.75"/><LocationAsmb X="3.3056" Z="-0.034"/><LengthX M="1.1893"/><LengthY M="0.7987"/><LengthZ M="0.0253"/></SolidCuboidMass>
-    <SolidCuboidMass><Mass Kg="4.75"/><LocationAsmb X="2.3909" Z="-0.034"/><LengthX M="1.1893"/><LengthY M="0.7987"/><LengthZ M="0.0253"/></SolidCuboidMass>
-    <SolidCuboidMass><Mass Kg="4.75"/><LocationAsmb X="1.4708" Z="-0.034"/><LengthX M="1.1893"/><LengthY M="0.7987"/><LengthZ M="0.0253"/></SolidCuboidMass>
-    <EditorTag Value="Electrical" />
-    <KeyframeAnimationModule Id="SolarPanelAnimation" ShowDeployRetract="true">
-      <KeyframeAnimation Path="Animations/CoreElectricalA_Prefab_SolarPanelB_Anim.glb" Id="CoreElectricalA_Prefab_SolarPanelB_Anim" />
-      <SolarTracking DegreesPerSecond="5" SubPart="CoreStructuralA_Subpart_DriveRotorB1">
-        <ExcludeSubPart>CoreStructuralA_Subpart_DriveHousingB1</ExcludeSubPart>
-      </SolarTracking>
-    </KeyframeAnimationModule>
-    <Connector Id="_connector6">
-      <Flags>ToSurface</Flags>
-    </Connector>
-  </PartGameData>
+  <KeyframeAnimation Id="CoreElectricalA_Prefab_SolarPanelB_Anim" Path="Animations/CoreElectricalA_Prefab_SolarPanelB_Anim.glb" />
+  <Part Id="CoreElectricalA_Prefab_SolarPanelTrackerMediumV1A" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <SolidCuboidMass>
+        <Mass Kg="4.75"/>
+        <LocationAsmb X="4.2255" Z="-0.034"/>
+        <LengthX M="1.1893"/>
+        <LengthY M="0.7987"/>
+        <LengthZ M="0.0253"/>
+      </SolidCuboidMass>
+      <SolidCuboidMass>
+        <Mass Kg="4.75"/>
+        <LocationAsmb X="3.3056" Z="-0.034"/>
+        <LengthX M="1.1893"/>
+        <LengthY M="0.7987"/>
+        <LengthZ M="0.0253"/>
+      </SolidCuboidMass>
+      <SolidCuboidMass>
+        <Mass Kg="4.75"/>
+        <LocationAsmb X="2.3909" Z="-0.034"/>
+        <LengthX M="1.1893"/>
+        <LengthY M="0.7987"/>
+        <LengthZ M="0.0253"/>
+      </SolidCuboidMass>
+      <SolidCuboidMass>
+        <Mass Kg="4.75"/>
+        <LocationAsmb X="1.4708" Z="-0.034"/>
+        <LengthX M="1.1893"/>
+        <LengthY M="0.7987"/>
+        <LengthZ M="0.0253"/>
+      </SolidCuboidMass>
+    </InertMasses>
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Electrical" />
+    </EditorTags>
+    <Components Modify="Extend">
+      <KeyframeAnimationModule Key="SolarPanelAnimation" ShowDeployRetract="true">
+        <KeyframeAnimation Ref="CoreElectricalA_Prefab_SolarPanelB_Anim" />
+        <SolarTracking DegreesPerSecond="5">
+          <Tracked KeyRef="CoreStructuralA_Subpart_DriveRotorB1" />
+          <ExcludeSubParts>
+            <ExcludeSubPart KeyRef="CoreStructuralA_Subpart_DriveHousingB1" />
+          </ExcludeSubParts>
+        </SolarTracking>
+      </KeyframeAnimationModule>
+    </Components>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector6" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+  </Part>
 
-  <SubPartGameData Id="CoreElectricalA_Subpart_SolarPanelB_CellA">
-    <SolarPanel>
-      <Produced W="100" />
-      <Transform>
-        <Rotation Y="1.5708" />
-      </Transform>
-    </SolarPanel>
-  </SubPartGameData>
+  <SubPart Id="CoreElectricalA_Subpart_SolarPanelB_CellA" Modify="Patch">
+    <Components Modify="Extend">
+      <SolarPanel>
+        <Produced W="100" />
+        <Transform>
+          <Rotation Y="1.5708" />
+        </Transform>
+      </SolarPanel>
+    </Components>
+  </SubPart>
 
-  <PartGameData Id="CoreElectricalA_Prefab_BayFuelcellSmall">
-    <SolidCylinderMass><Mass Kg="49"/><Length M="0.6"/><Radius M="0.1935"/></SolidCylinderMass>
-  </PartGameData>
+  <Part Id="CoreElectricalA_Prefab_BayFuelcellSmallA" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <SolidCylinderMass>
+        <Mass Kg="49"/>
+        <Length M="0.6"/>
+        <Radius M="0.1935"/>
+      </SolidCylinderMass>
+    </InertMasses>
+  </Part>
 
-  <PartGameData Id="LightPart">
-    <PowerConsumer LightSwitch="true">
-      <Consumed W="40" />
-    </PowerConsumer>
-  </PartGameData>
+  <Part Id="LightPart" Modify="Patch">
+    <Components Modify="Extend">
+      <PowerConsumer LightSwitch="true">
+        <Consumed W="40" />
+      </PowerConsumer>
+    </Components>
+  </Part>
 </Assets>

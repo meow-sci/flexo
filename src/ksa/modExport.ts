@@ -9,9 +9,8 @@ import type {
   ScalarChannel,
   TextureChannel,
 } from './types';
-import { isSubPartGameDataEmpty, meshKind } from './types';
-import type { MassDefinition, PartCollider } from './types';
-import { MASS_SHAPES } from './massDefinitions';
+import { meshKind } from './types';
+import type { RawXmlNode } from './types';
 import { serializeGameDataXml, serializePartsXml } from './partXmlSerializer';
 import {
   serializeAssets,
@@ -189,13 +188,13 @@ export function buildMultiModContent(
   for (const { entryId, name, ns, part } of parts) {
     // Unreachable: a duplicate `ns` among included parts is an export preflight BLOCKER
     // (collectProjectExportIssues). Throwing here rather than emitting keeps a bypassed
-    // preflight from shipping two parts whose variant SubParts silently merge in KSA.
-    if (seenNs.has(ns)) {
+    // preflight from shipping duplicate variant SubPart definitions.
+    if (seenNs.has(ns.toLowerCase())) {
       throw new Error(
         `flexo export: two parts share the export namespace '${ns}' — the preflight must block this`,
       );
     }
-    seenNs.add(ns);
+    seenNs.add(ns.toLowerCase());
     // Layered 'glassGlow' visors expand into glass + inset-glow SubPart pairs; the augmented
     // part is what BOTH the serializers below and the bundle builder consume.
     const { part: expanded, insetIds } = expandGlassGlow(part);
@@ -226,55 +225,11 @@ function sanitizeAssetToken(name: string): string {
   return name.replace(/[^A-Za-z0-9]+/g, '') || 'asset';
 }
 
-/**
- * A built-in SubPart and the fresh export variant flexo redeclares for it. The variant reuses
- * the SAME built-in Mesh + Material (no geometry/texture is duplicated) under a project-unique
- * id, so the part can carry its own SubPart GameData WITHOUT redefining (merging onto) the
- * shared built-in SubPart template. See {@link buildExportVariantMap}.
- */
+/** Independent copy of a resolved built-in SubPart, scoped to one exported Part. */
 export interface ExportVariant {
-  /** Built-in SubPart template id placed in the part, e.g. "CoreElectricalA_Subpart_SpotlightA". */
   originalId: string;
-  /** Project-unique export variant id referenced by placements + SubPartGameData, declared in Assets. */
   variantId: string;
-  /** Built-in <Mesh Id> the variant reuses (NOT redeclared). */
-  meshId: string;
-  /**
-   * Built-in `<Material Id>` the variant reuses. NEVER null: a `<PartModel>` with no `<Material>`
-   * is a hard startup crash (see {@link buildExportVariantMap}), so a material-less built-in is
-   * skipped rather than redeclared.
-   */
-  materialId: string;
-  /**
-   * The built-in template's OWN geometry `<Collider>`s, copied forward onto the variant.
-   * A variant is a FRESH `<SubPart Id>` that reuses only the built-in Mesh/Material — it
-   * does NOT inherit anything else the built-in `<SubPart>` declared, so without this the
-   * variant would silently lose the built-in collision volume (e.g. the solar-panel cells'
-   * `<Box>`). Empty for a template that authors none.
-   */
-  colliders: PartCollider[];
-  /** Mass from the catalog, carried only when it is not explicitly overridden. */
-  massDefinitions: MassDefinition[];
-  /**
-   * The `<Internal>` (interior-only) value the variant declares — {@link resolveInternal}'s
-   * result. `false` emits no element at all (KSA's default).
-   */
-  internal: boolean;
-  /**
-   * The built-in template's raw `<RayTracing>` token, carried forward verbatim (null = none
-   * authored). A variant inherits nothing but the Mesh/Material it names, so dropping this
-   * would turn e.g. a `ShadowProxy` occluder into a visible mesh.
-   */
-  rayTracing: string | null;
-  /**
-   * The built-in template's `<ShadowCaster>` bool, carried forward (null = none authored, which
-   * is KSA's `true` default). Same inheritance rule as {@link rayTracing}: dropping a built-in's
-   * explicit `false` (Core's medium-capsule windows) would make the variant start casting
-   * shadows. NOT part of the variant-minting gate — flexo never lets the user edit it, so it can
-   * never on its own be a REASON to redeclare a template, only a value carried along when a
-   * variant already exists.
-   */
-  shadowCaster: boolean | null;
+  row: RawXmlNode;
 }
 
 /**
@@ -305,43 +260,13 @@ export function resolveInternal(
  */
 function hasSubPartGameData(part: EditingPart, templateId: string): boolean {
   return (
-    part.subPartGameData.some(
-      (s) => s.subPartTemplateId === templateId && !isSubPartGameDataEmpty(s),
-    ) ||
+    part.subPartGameData.some((s) => s.subPartTemplateId === templateId) ||
     part.colliders.some((c) => c.ownerTemplateId === templateId) ||
     part.lights.some((l) => l.ownerTemplateId === templateId)
   );
 }
 
-/**
- * Builds the built-in-SubPart → export-variant map: one entry per DISTINCT placed built-in
- * template (deduped across placements) that needs redeclaring, because it is EITHER
- *   - carrying an `<Internal>` (interior-only) value the built-in doesn't have — the user flipped
- *     the flag for this template (see {@link resolveInternal}), OR
- *   - carrying flexo SubPart GameData (a <Light>, tank, etc.) — emitting that under the built-in
- *     id would MERGE onto the shared built-in template (KSA dedups GameData by id), corrupting
- *     every other use of that SubPart. The variant moves the GameData onto a fresh id instead.
- *
- * A template flexo changes NOTHING about gets no variant: the placement references the built-in id
- * and keeps the built-in's own `<Internal>`/`<RayTracing>`/`<ShadowCaster>` for free.
- *
- * **BUILT-IN TEMPLATES ONLY.** Custom meshes are skipped explicitly, by document lookup — NOT by
- * catalog absence. The catalog handed in is `$catalogIndex`, which merges `$customCatalog`
- * (`catalogStore.ts`), so custom meshes ARE present and a membership test silently let them
- * through. A variant of a custom mesh is pure harm: the whole mechanism exists to avoid merging
- * GameData onto a SHARED built-in template, and a custom SubPart id is already project-unique and
- * declared by this same export, so there is nothing to collide with. Worse, custom catalog entries
- * carry NO `materialId` (their material lives in `customMeshRenderCache`), so the variant emitted a
- * `<PartModel>` with no `<Material>` — an unconditional NRE in
- * `ThumbnailRenderResources.AddDraw` that crashes KSA at startup, before the main menu. Adding a
- * `<Light>` to a custom mesh was enough to trigger it. See plans/FIX_EMISSIVES_BUG.md.
- *
- * Variant ids are namespaced by the project {@link base} AND the per-part {@link ns} token
- * (deterministic, so re-exports are stable). The `ns` segment is what keeps two parts of one
- * project from minting the SAME variant id for a template they both place: KSA registers a
- * `<SubPartGameData Id>` once GLOBALLY, so a shared variant id would merge part A's GameData
- * onto part B's SubPart. Uniqueness of `ns` among included parts is a preflight blocker.
- */
+/** Copy a changed built-in template so gameplay never patches shared Core content. */
 export function buildExportVariantMap(
   part: EditingPart,
   catalog: ReadonlyMap<string, CatalogSubPart>,
@@ -357,47 +282,61 @@ export function buildExportVariantMap(
     if (out.has(templateId)) continue;
     if (customIds.has(templateId)) continue; // declared directly by this export — never a variant
     const entry = catalog.get(templateId);
-    if (!entry) continue; // unknown template — leave the reference as authored
+    if (!entry) {
+      if (hasSubPartGameData(part, templateId) || templateId in part.internalFlags) {
+        throw new Error(`flexo export: cannot isolate unknown SubPart '${templateId}'`);
+      }
+      continue;
+    }
     const wantInternal = resolveInternal(part, templateId, entry);
     const internalDiffers = wantInternal !== (entry.internal ?? false);
     if (!internalDiffers && !hasSubPartGameData(part, templateId)) continue;
-    // meshNodeName is the built-in <Mesh Id> (null only for the rare whole-atlas mesh). Without
-    // it we can't reference the geometry — leave the built-in reference as-is.
-    if (!entry.meshNodeName) {
-      console.warn(
-        `flexo export: built-in SubPart '${templateId}' has no mesh node — left as a direct reference`,
-      );
-      continue;
+    if (!entry.raw) {
+      throw new Error(`flexo export: built-in SubPart '${templateId}' has no resolved XML`);
     }
-    // Same rule for the material: a variant reuses the built-in's <Material Id>, and a
-    // <PartModel> with no <Material> crashes KSA at startup (AddDraw derefs it unguarded). No
-    // shipped Core SubPart omits one, so this is defensive — but redeclaring without it would
-    // trade a cosmetic limitation for a crash.
-    if (!entry.materialId) {
-      console.warn(
-        `flexo export: built-in SubPart '${templateId}' has no material — left as a direct reference (its SubPart GameData / Internal flag cannot be applied)`,
-      );
-      continue;
+    const row = structuredClone(entry.raw);
+    delete row.attrs.Id;
+    delete row.attrs.Parent;
+    delete row.attrs.Abstract;
+    delete row.attrs.Modify;
+    const data = part.subPartGameData.find((s) => s.subPartTemplateId === templateId);
+    const hasOwnedColliders = part.colliders.some((c) => c.ownerTemplateId === templateId);
+    const hasOwnedLights = part.lights.some((l) => l.ownerTemplateId === templateId);
+    const gameplayArrays = new Set([
+      'InertMasses',
+      'Rockets',
+      'RocketCores',
+      'RocketNozzles',
+      'RocketEngineControllers',
+      'RocketThrusterControllers',
+    ]);
+    const copiedUnknown = new Set(data?.unknownChildren.map((n) => n.tag) ?? []);
+    row.children = row.children.filter(
+      (child) => !data || (!gameplayArrays.has(child.tag) && !copiedUnknown.has(child.tag)),
+    );
+    const components = row.children.find((child) => child.tag === 'Components');
+    if (components) {
+      const renderTags = new Set(['PartModel', 'PartModelDynamic', 'PartModelGlass', 'MeshView']);
+      components.children = components.children.filter((node) => {
+        if (renderTags.has(node.tag)) return true;
+        if (data) return false;
+        if (node.tag === 'Collider' && hasOwnedColliders) return false;
+        if (node.tag === 'Light' && hasOwnedLights) return false;
+        return true;
+      });
+      if (internalDiffers) {
+        for (const node of components.children) {
+          if (node.tag !== 'PartModel') continue;
+          node.children = node.children.filter((child) => child.tag !== 'Internal');
+          if (wantInternal)
+            node.children.unshift({ tag: 'Internal', attrs: {}, children: [], text: 'true' });
+        }
+      }
     }
     out.set(templateId, {
       originalId: templateId,
       variantId: `flexo_${base}_${ns}_${templateId}`,
-      meshId: entry.meshNodeName,
-      materialId: entry.materialId,
-      colliders: entry.colliders ?? [],
-      massDefinitions: part.subPartGameData.some(
-        (data) =>
-          data.subPartTemplateId === templateId &&
-          (data.massDefinitionsOverride ||
-            data.unknownChildren.some((node) =>
-              (MASS_SHAPES as readonly string[]).includes(node.tag),
-            )),
-      )
-        ? []
-        : (entry.data?.gameData?.massDefinitions ?? []),
-      internal: wantInternal,
-      rayTracing: entry.rayTracing ?? null,
-      shadowCaster: entry.shadowCaster ?? null,
+      row,
     });
   }
   return out;
@@ -925,17 +864,10 @@ async function buildPartBundlePlan(
   const placed = new Set(part.placements.map((p) => p.subPartTemplateId));
   const meshes = part.customMeshes.filter((m) => placed.has(m.subPartId));
 
-  // Export variants (overridden <Internal> + built-in SubParts carrying GameData): reference-only
-  // SubParts reusing built-in Mesh/Material (no binaries).
+  // Independent built-in copies reuse Core assets and need no new binaries.
   const referenceSubParts: ReferenceSubPartPlan[] = [...variants.values()].map((v) => ({
     subPartId: v.variantId,
-    meshId: v.meshId,
-    materialId: v.materialId,
-    colliders: v.colliders,
-    massDefinitions: v.massDefinitions,
-    internal: v.internal,
-    rayTracing: v.rayTracing,
-    shadowCaster: v.shadowCaster,
+    row: v.row,
   }));
 
   // Nothing to declare → no Assets plan, but still ship any animation glbs above.
@@ -957,7 +889,7 @@ async function buildPartBundlePlan(
     meshAtlasPath = `Meshes/${bundleToken}_MeshAtlas.glb`;
     // One atlas node per placed custom mesh, resolved per geometry source. A source that can't
     // produce geometry yields null: the SubPart is dropped from BOTH the atlas and the Assets XML
-    // below (a <SubPart> whose <Mesh Id> names nothing would be a dangling reference in-game),
+    // below (a <SubPart> whose <Mesh Ref> names nothing would be a dangling reference in-game),
     // but the rest of the export still ships — never throw half-way through a user's export.
     const nodes = (
       await Promise.all(
@@ -1320,8 +1252,9 @@ export async function buildModZip(
   const content = buildMultiModContent(parts, projectName, catalog);
   const bundle = await buildMultiCustomBundle(content, kittenTex);
   const encoder = new TextEncoder();
-  const xmlAssets = [content.partFile, content.gameDataFile];
+  const xmlAssets = [content.partFile];
   if (bundle.assetsFile) xmlAssets.push(bundle.assetsFile);
+  xmlAssets.push(content.gameDataFile);
 
   const entries: ZipEntry[] = [
     {
@@ -1432,7 +1365,10 @@ export async function writeModToFolder(
   // SubParts) ships an Animations/*.glb referenced by the GameData XML.
   for (const b of bundle.binaries) await writeBinaryAtPath(modDir, b.path, b.data);
 
-  const assets = (await listFileNames(modDir)).filter(isXml).sort((a, b) => a.localeCompare(b));
+  const assets = (await listFileNames(modDir)).filter(isXml).sort((a, b) => {
+    const rank = (name: string) => (/GameData(?:-\d+)?\.xml$/i.test(name) ? 1 : 0);
+    return rank(a) - rank(b) || a.localeCompare(b);
+  });
   await writeTextFile(modDir, MOD_TOML_NAME, serializeModToml(assets));
 
   return { partFile, gameDataFile, assetsFile, assets };

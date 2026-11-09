@@ -1,11 +1,40 @@
 # Scope — GameData module blocks (mass, electrical, tanks, decoupler, docking port, control, light, sound)
 
+## Current contract — KSA 2026.11.10.5801
+
+Current modules are children of `<Part><Components>` or `<SubPart><Components>`,
+including in same-tag `Modify="Patch"` rows. Collections such as InertMasses,
+RocketCores, Rockets, RocketNozzles, RocketEngineControllers, Gimbals and IVASeats
+live in their own wrappers. The old GameData element tags are not accepted.
+
+Components use local `Key`; default module keys are their XML type names.
+Control, DockingPort, EVADoor and electrical component keys survive typed import,
+persistence and export. Battery `HasStatusLight` is preserved. Unmodeled modules
+such as Habitat are kept separately in `unknownComponents`, without duplicating
+the Components wrapper. Repeated whole-Part import remaps conflicting keys and
+references while preserving additional raw components.
+
+Tank wall materials and stored substances use global `Ref` plus `Phase`.
+Air and Water join the role flags. Existing shape/quantity editors and light
+falloff math remain in place. Engine/reaction and mass details have their own
+current documents. Adding a field within an already modeled module still requires
+an explicit parser/serializer update; raw passthrough does not protect it.
+
+Current implementation evidence and validation are recorded in
+[the 5801 upgrade](../plans/KSA_5801_UPGRADE.md).
+
+## Archived detail from audits through 5554
+
+The remainder records earlier source investigations. Its old XML examples and
+compatibility verdicts apply to their named builds; use the current contract above
+and [Part XML](part-and-subpart-xml.md) when authoring 5801 content.
+
 > The per-Part / per-SubPart component data flexo attaches and round-trips inside the
 > `<PartGameData>` / `<SubPartGameData>` documents. Each block maps to a KSA `*Template`
 > class. Engine modules have their own file ([engines.md](engines.md)).
 
-**Baseline:** re-vetted against KSA build **2026.10.10.5554** (decomp @ 5482 + shipped Core XML).
-**Baseline status:** ✅ **CURRENT** — 5554's `<Tank><MagneticTrap Value>` now survives
+**Historical baseline:** re-vetted against KSA build **2026.10.10.5554** (decomp @ 5482 + shipped Core XML).
+**Historical baseline status:** ✅ **CURRENT** — 5554's `<Tank><MagneticTrap Value>` now survives
 import/export, persistence and undoable editing; light math remains intact.
 Stock inert-mass definitions are now editable; see [mass-definitions.md](mass-definitions.md).
 See [What changed in 5554](#what-changed-in-5554). Previously, 5482 added a third tank shape,

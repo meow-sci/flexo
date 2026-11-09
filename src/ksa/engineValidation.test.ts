@@ -49,7 +49,7 @@ describe('KSA 5438 Core exhaust catalog', () => {
     const ids = [
       ...new Set(
         Array.from(doc.getElementsByTagName('VolumetricExhaust')).map((element) =>
-          element.getAttribute('Id'),
+          element.getAttribute('Ref'),
         ),
       ),
     ];

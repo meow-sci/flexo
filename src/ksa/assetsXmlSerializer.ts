@@ -1,33 +1,10 @@
 import { DOMImplementation, XMLSerializer } from '@xmldom/xmldom';
 import type { Document as XmlDocument, Element as XmlElement } from '@xmldom/xmldom';
-import {
-  buildColliderElement,
-  buildMassDefinitionElement,
-  INHERITED_COLLIDER_COMPONENT_ID,
-  prettyXml,
-} from './partXmlSerializer';
+import { prettyXml } from './partXmlSerializer';
 import { VIEW_MESH_SUFFIX } from './exportGlb';
-import type { MassDefinition, PartCollider } from './types';
+import type { RawXmlNode } from './types';
 
-/**
- * Serializes the custom-asset "Assets" XML — the file that DEFINES user-created
- * SubParts, mirroring KSA Core's CoreXxxAAssets.xml: a default <MeshAtlas> (the
- * generated geometry GLB), the <PbrMaterial> list (each referencing its .ktx2
- * channels by relative Path), and one <SubPart> per custom mesh wiring a
- * <PartModel> to its <Mesh> node and <Material>.
- *
- * Materials are first-class and SHARED: multiple SubParts may reference one
- * <PbrMaterial Id> — exactly Core's pattern (one pack material serves every
- * SubPart in the pack). buildMultiCustomBundle (modExport) dedupes identical resolved
- * channel sets into one entry.
- *
- * Only custom SubParts actually placed in the Part are emitted — built-in/Core
- * SubParts are owned by KSA Core and must NOT be re-declared here. The Part.xml
- * (serializePartsXml) references these via <SubPart InstanceOf="subPartId">.
- *
- * Paths are relative to the mod folder (e.g. "Meshes/Foo.glb", "Textures/Bar.ktx2"),
- * matching how Core references its own binaries.
- */
+/** Serialize current KSA file assets, materials and independent SubPart definitions. */
 
 /**
  * One <PbrMaterial> to declare. Diffuse + Normal + AoRoughMetal are REQUIRED:
@@ -37,8 +14,7 @@ import type { MassDefinition, PartCollider } from './types';
  * buildMultiCustomBundle resolves uniform channels into 1×1 solid textures.
  */
 export interface AssetsMaterialPlan {
-  /** <PbrMaterial Id>. MUST be project-unique and never a Core id — KSA dedupes
-   * materials by id (a duplicate silently becomes a reference to the first). */
+  /** <PbrMaterial Id>. Must be unique across the material registry, including Core. */
   id: string;
   /** Diffuse .ktx2 path (mod-relative, or absolute for a referenced kitten asset). */
   diffusePath: string;
@@ -88,43 +64,12 @@ export interface AssetsSubPartPlan {
  * fresh id so flexo can change something about it — an overridden `<Internal>` (interior-only)
  * flag, or SubPart GameData that would otherwise redefine the shared built-in template. Unlike
  * {@link AssetsSubPartPlan} it emits NO <PbrMaterial> (the material is built-in) and needs no
- * MeshAtlas; it DOES emit a <MeshView> pointing at the reused render mesh for editor picking.
+ * MeshAtlas; it preserves the resolved render components and their original MeshView references.
  */
 export interface ReferenceSubPartPlan {
-  /** New project-unique SubPart id (also the basis for its unique PartModel id). */
   subPartId: string;
-  /** Built-in <Mesh Id> to reference (NOT redeclared in this file). */
-  meshId: string;
-  /** Built-in `<Material Id>` to reference. REQUIRED for the same reason as {@link AssetsSubPartPlan.materialId}. */
-  materialId: string;
-  /**
-   * Collision primitives the shadowed built-in `<SubPart>` declared. A variant inherits
-   * NOTHING but the Mesh/Material it explicitly references, so these must be re-declared
-   * here or the variant loses the built-in collision volume.
-   */
-  colliders?: PartCollider[];
-  /** Inherited mass only when the document has no explicit mass override. */
-  massDefinitions?: MassDefinition[];
-  /**
-   * Emit `<Internal>true</Internal>` — interior-only, rendered in IVA camera mode and nowhere
-   * else (`PartModel.cs:387`). `false` emits nothing (KSA's default). The variant inherits
-   * nothing from the built-in, so this is the ONLY thing that carries the flag either way: a
-   * built-in Internal prop the user wants outside IVA becomes a variant with `false`, and a
-   * variant of an Internal prop that exists for some other reason must keep `true`.
-   */
-  internal: boolean;
-  /**
-   * The built-in's raw `<RayTracing>` token (`Disabled`/`Enabled`/`ShadowProxy`), copied forward
-   * verbatim; null when the built-in authors none. Same inheritance rule as {@link internal} —
-   * dropping it silently turns a `ShadowProxy` occluder into a VISIBLE mesh.
-   */
-  rayTracing: string | null;
-  /**
-   * The built-in's `<ShadowCaster>` bool, copied forward; null when the built-in authors none
-   * (KSA's default is `true`). Same inheritance rule as {@link rayTracing} — dropping Core's
-   * explicit `false` (the medium-capsule windows) makes the variant start casting shadows.
-   */
-  shadowCaster: boolean | null;
+  /** Complete independent row, with gameplay supplied by the patch where edited. */
+  row: RawXmlNode;
 }
 
 export interface AssetsPlan {
@@ -149,18 +94,16 @@ function internalElement(doc: XmlDocument): XmlElement {
 
 /**
  * Guards the global registries this file writes into: KSA registers `<PbrMaterial>` and
- * `<SubPart>` by id across the WHOLE mod (a duplicate silently becomes a reference to the
- * first), so two parts must never declare the same one. Unreachable under plan invariant I4
- * (project-unique asset ids) plus the per-part `ns` in every export-variant id — this is the
- * tripwire that turns a silent wrong-mesh bug into a loud failure.
+ * `<SubPart>` by id across the mod. Duplicate definitions are rejected by the content prepass.
+ * Project-unique asset ids and per-part variant namespaces prevent those collisions.
  */
 function claimId(seen: Set<string>, kind: string, id: string): void {
-  if (seen.has(id)) {
+  if (seen.has(id.toLowerCase())) {
     throw new Error(
-      `flexo export: duplicate <${kind} Id="${id}"> in the exported mod — KSA registers ${kind} ids globally, so this would silently collapse onto the first`,
+      `flexo export: duplicate <${kind} Id="${id}"> in the exported mod — KSA rejects duplicate asset definitions`,
     );
   }
-  seen.add(id);
+  seen.add(id.toLowerCase());
 }
 
 /**
@@ -169,25 +112,26 @@ function claimId(seen: Set<string>, kind: string, id: string): void {
  * custom geometry), its `<PbrMaterial>`s, its custom `<SubPart>`s and its reference
  * `<SubPart>`s; plans follow one another in list order. Multiple `<MeshAtlas>` elements per
  * file are first-class — `KSA/MeshAtlasFileReference.cs` `DoLoad()` registers each GLB mesh
- * by NAME (first-wins), so one atlas per part is exactly how N parts ship their geometry.
+ * by NAME, so one atlas per part can supply its own uniquely named meshes.
  */
 export function serializeAssets(plans: AssetsPlan[]): string {
   const doc = new DOMImplementation().createDocument(null, 'Assets', null);
   const assets = doc.documentElement!;
   const materialIds = new Set<string>();
   const subPartIds = new Set<string>();
+  const atlasIds = new Set<string>();
+  const textureIds = new Set<string>();
+  const textures = new Map<string, string>();
 
   for (const plan of plans) {
-    // Reference-only SubParts (export variants) reuse built-in geometry, so a file with
-    // only those needs no MeshAtlas. Emit it only when custom geometry is declared.
     if (plan.meshAtlasPath) {
+      const id = `flexo_MeshAtlas_${plan.meshAtlasPath.replace(/[^A-Za-z0-9]+/g, '_')}`;
+      claimId(atlasIds, 'MeshAtlas', id);
       const atlas = doc.createElement('MeshAtlas');
+      atlas.setAttribute('Id', id);
       atlas.setAttribute('Path', plan.meshAtlasPath);
       assets.appendChild(atlas);
     }
-
-    // Materials first (Core lists PbrMaterials above the SubParts that use them).
-    // Channel order mirrors Core: Diffuse, Normal, AoRoughMetal, then Emissive.
     for (const m of plan.materials ?? []) {
       claimId(materialIds, 'PbrMaterial', m.id);
       const mat = doc.createElement('PbrMaterial');
@@ -200,124 +144,61 @@ export function serializeAssets(plans: AssetsPlan[]): string {
       ];
       for (const [name, path] of channels) {
         if (!path) continue;
-        const el = doc.createElement(name);
-        el.setAttribute('Path', path);
-        el.setAttribute('Category', 'Vessel');
-        mat.appendChild(el);
+        let id = textures.get(path);
+        if (!id) {
+          id = `${m.id}_${name}`;
+          claimId(textureIds, 'Texture', id);
+          textures.set(path, id);
+          const texture = doc.createElement('Texture');
+          texture.setAttribute('Id', id);
+          texture.setAttribute('Path', path);
+          texture.setAttribute('Category', 'Vessel');
+          assets.appendChild(texture);
+        }
+        const slot = doc.createElement(name);
+        slot.setAttribute('Ref', id);
+        mat.appendChild(slot);
       }
       assets.appendChild(mat);
     }
-
-    appendSubParts(doc, assets, plan, subPartIds);
+    for (const sp of plan.subParts) {
+      claimId(subPartIds, 'SubPart', sp.subPartId);
+      const sub = doc.createElement('SubPart');
+      sub.setAttribute('Id', sp.subPartId);
+      const components = doc.createElement('Components');
+      const model = doc.createElement(sp.glass ? 'PartModelGlass' : 'PartModel');
+      model.setAttribute('Key', `${sp.subPartId}_Model`);
+      if (sp.internal && !sp.glass) model.appendChild(internalElement(doc));
+      const mesh = doc.createElement('Mesh');
+      mesh.setAttribute('Ref', sp.subPartId);
+      model.appendChild(mesh);
+      const material = doc.createElement('Material');
+      material.setAttribute('Ref', sp.materialId);
+      model.appendChild(material);
+      components.appendChild(model);
+      const meshView = doc.createElement('MeshView');
+      const viewMesh = doc.createElement('Mesh');
+      viewMesh.setAttribute('Ref', sp.subPartId + VIEW_MESH_SUFFIX);
+      meshView.appendChild(viewMesh);
+      components.appendChild(meshView);
+      sub.appendChild(components);
+      assets.appendChild(sub);
+    }
+    for (const sp of plan.referenceSubParts ?? []) {
+      claimId(subPartIds, 'SubPart', sp.subPartId);
+      const sub = rawElement(doc, sp.row);
+      sub.setAttribute('Id', sp.subPartId);
+      assets.appendChild(sub);
+    }
   }
-
   const body = new XMLSerializer().serializeToString(doc);
   return '<?xml version="1.0" encoding="utf-8"?>\n' + prettyXml(body) + '\n';
 }
 
-/** Appends one plan's custom `<SubPart>`s, then its reference (export-variant) `<SubPart>`s. */
-function appendSubParts(
-  doc: XmlDocument,
-  assets: XmlElement,
-  plan: AssetsPlan,
-  subPartIds: Set<string>,
-): void {
-  for (const sp of plan.subParts) {
-    claimId(subPartIds, 'SubPart', sp.subPartId);
-    const sub = doc.createElement('SubPart');
-    sub.setAttribute('Id', sp.subPartId);
-    // Glass surfaces (the kitten visor) render through KSA's translucent <PartModelGlass>
-    // path; everything else uses the opaque <PartModel>. Both take the same Id/Mesh/Material.
-    const model = doc.createElement(sp.glass ? 'PartModelGlass' : 'PartModel');
-    // The PartModel Id MUST be unique per SubPart. KSA's PartModel.Get dedupes
-    // PartModels by Template.Id (PartModel.cs) — an empty/missing Id collapses every
-    // SubPart onto the first one's mesh+material, so a multi-SubPart part renders only
-    // its first piece (stacked) in-game. Core always uses "<subPartId>_Model".
-    model.setAttribute('Id', `${sp.subPartId}_Model`);
-    // Interior-only geometry: rendered in IVA camera mode and nowhere else. Core writes it
-    // first inside the <PartModel>; never emitted on the glass path (the field doesn't exist
-    // there), which is why the plan's `internal` is already false for a glass SubPart.
-    if (sp.internal && !sp.glass) model.appendChild(internalElement(doc));
-    const mesh = doc.createElement('Mesh');
-    mesh.setAttribute('Id', sp.subPartId);
-    model.appendChild(mesh);
-    // Unconditional: a <PartModel> without <Material> crashes KSA at startup (see the field doc).
-    const material = doc.createElement('Material');
-    material.setAttribute('Id', sp.materialId);
-    model.appendChild(material);
-    sub.appendChild(model);
-    // View mesh wires the SubPart to its picking geometry. KSA's vehicle editor
-    // only raycasts SubParts that carry a MeshViewModule (built from <MeshView>);
-    // without it the placed part renders but can't be hovered/selected/right-clicked.
-    // The "<id>_VM" mesh is emitted into the atlas by buildMeshAtlasGlb.
-    const meshView = doc.createElement('MeshView');
-    const viewMesh = doc.createElement('Mesh');
-    viewMesh.setAttribute('Id', sp.subPartId + VIEW_MESH_SUFFIX);
-    meshView.appendChild(viewMesh);
-    sub.appendChild(meshView);
-    assets.appendChild(sub);
-  }
-
-  // Reference SubParts: a fresh SubPart + a fresh PartModel pointing at a built-in Mesh
-  // (and Material). No <PbrMaterial> (the material is built-in).
-  //
-  // The PartModel Id MUST be unique — KSA dedupes PartModels by Template.Id, so reusing the
-  // built-in "<orig>_Model" id would collapse the variant back onto the original and every
-  // <PartModel> property below (the built-in's own <Internal>, its <RayTracing>) would come
-  // back with it, silently undoing the redeclaration. Unchanged and still load-bearing.
-  //
-  // A variant inherits NOTHING but the Mesh/Material it names, so <Internal>/<RayTracing>/
-  // <ShadowCaster> are authored here explicitly and travel in BOTH directions: dropping
-  // <Internal> makes a built-in interior prop render outside IVA, keeping it makes a
-  // GameData-carrying variant stay interior.
-  // Element order mirrors Core (Internal, Mesh, Material, RayTracing, ShadowCaster) — Core
-  // authors Internal/Mesh/Material/RayTracing in CoreIVASpaceAAssets.xml and
-  // Mesh/Material/ShadowCaster in CoreCommandAAssets.xml, and this order satisfies both.
-  for (const sp of plan.referenceSubParts ?? []) {
-    claimId(subPartIds, 'SubPart', sp.subPartId);
-    const sub = doc.createElement('SubPart');
-    sub.setAttribute('Id', sp.subPartId);
-    const model = doc.createElement('PartModel');
-    model.setAttribute('Id', `${sp.subPartId}_Model`);
-    if (sp.internal) model.appendChild(internalElement(doc));
-    const mesh = doc.createElement('Mesh');
-    mesh.setAttribute('Id', sp.meshId);
-    model.appendChild(mesh);
-    // Unconditional, same as the custom-SubPart path above.
-    const material = doc.createElement('Material');
-    material.setAttribute('Id', sp.materialId);
-    model.appendChild(material);
-    if (sp.rayTracing) {
-      const rt = doc.createElement('RayTracing');
-      rt.appendChild(doc.createTextNode(sp.rayTracing));
-      model.appendChild(rt);
-    }
-    if (sp.shadowCaster !== null) {
-      const sc = doc.createElement('ShadowCaster');
-      sc.appendChild(doc.createTextNode(sp.shadowCaster ? 'true' : 'false'));
-      model.appendChild(sc);
-    }
-    sub.appendChild(model);
-    for (const mass of sp.massDefinitions ?? [])
-      sub.appendChild(buildMassDefinitionElement(doc, mass));
-    // View mesh — without a MeshViewModule (built from <MeshView>) KSA's editor won't
-    // raycast the SubPart, so an export variant renders but can't be hovered/selected/
-    // right-clicked. We point <MeshView> at the SAME built-in render mesh the PartModel
-    // reuses: it's guaranteed to exist (buildExportVariantMap skips entries without a mesh
-    // node) and resolves cross-mod exactly like the render <Mesh> above. We deliberately
-    // do NOT reference "<meshId>_VM": built-in IVA atlases are inconsistent (CoreIVAPropA
-    // ships a _VM per subpart, CoreIVASpaceA has only a handful for 333 subparts), so a
-    // _VM reference would dangle for most parts. RayCastEgoSubPart only reads the view
-    // mesh's vertex positions + normals, which any render mesh has.
-    const meshView = doc.createElement('MeshView');
-    const viewMesh = doc.createElement('Mesh');
-    viewMesh.setAttribute('Id', sp.meshId);
-    meshView.appendChild(viewMesh);
-    sub.appendChild(meshView);
-    // Carry the shadowed built-in's own collision volume forward (see the field docs).
-    if (sp.colliders?.length) {
-      sub.appendChild(buildColliderElement(doc, sp.colliders, INHERITED_COLLIDER_COMPONENT_ID));
-    }
-    assets.appendChild(sub);
-  }
+function rawElement(doc: XmlDocument, node: RawXmlNode): XmlElement {
+  const el = doc.createElement(node.tag);
+  for (const [key, value] of Object.entries(node.attrs)) el.setAttribute(key, value);
+  if (node.text) el.appendChild(doc.createTextNode(node.text));
+  for (const child of node.children) el.appendChild(rawElement(doc, child));
+  return el;
 }

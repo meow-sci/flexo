@@ -133,9 +133,18 @@ async function run(page: Page): Promise<void> {
       .waitFor({ timeout: 60_000 });
   });
 
+  await step('SubPart related appearance — selects the concrete template', async () => {
+    await page.getByRole('searchbox', { name: 'Search SubParts' }).fill('CoreFuelTankA_Subpart_Skin1W1HA');
+    const selector = page.getByRole('button', { name: 'Related appearances' });
+    await selector.waitFor({ timeout: 15_000 });
+    await selector.click();
+    await page.getByRole('option', { name: 'CoreFuelTankA_Subpart_Skin1W1HB' }).waitFor();
+    await page.getByRole('option', { name: 'CoreFuelTankA_Subpart_Skin1W1HC' }).click();
+    await selector.getByText('CoreFuelTankA_Subpart_Skin1W1HC').waitFor();
+  });
+
   await step('place a SubPart — one Outliner entity row appears', async () => {
     const before = await outlinerRows(page).count();
-    await page.getByRole('grid', { name: 'SubParts' }).getByRole('row').first().click();
     await page.getByRole('button', { name: 'Add & Close' }).click();
     await page.waitForFunction(
       (n) =>
@@ -145,6 +154,7 @@ async function run(page: Page): Promise<void> {
       before,
       { timeout: 20_000 },
     );
+    await outlinerRows(page).filter({ hasText: 'CoreFuelTankA_Subpart_Skin1W1HC' }).waitFor();
   });
 
   await step('undo — ⌘Z removes the placement again', async () => {
@@ -217,6 +227,22 @@ async function run(page: Page): Promise<void> {
     await partChip(page, 'Part 2').waitFor({ timeout: 15_000 });
   });
 
+  await step('Part variant — exact search and selector import a concrete member', async () => {
+    await page.getByRole('button', { name: 'Add', exact: true }).first().click();
+    await page.getByRole('menuitem', { name: 'Built-in Part…' }).click();
+    await page.getByRole('searchbox', { name: 'Search Parts' }).fill('CoreStructuralA_Prefab_PanelAC');
+    const selector = page.getByRole('button', { name: 'Variant' });
+    await selector.waitFor({ timeout: 15_000 });
+    await selector.getByText('C — CoreStructuralA_Prefab_PanelAC').waitFor();
+    await selector.click();
+    await page.getByRole('option', { name: 'D — CoreStructuralA_Prefab_PanelAD' }).click();
+    await selector.getByText('D — CoreStructuralA_Prefab_PanelAD').waitFor();
+    await page.getByRole('button', { name: 'Add & Close' }).click();
+    await page.getByRole('grid', { name: 'Parts' }).waitFor({ state: 'hidden' });
+    await outlinerRows(page).filter({ hasText: 'CoreSurfacesB_Subpart_PanelAD' }).waitFor();
+    await page.keyboard.press('ControlOrMeta+KeyZ');
+  });
+
   await step(
     'built-in EngineA3 — imported combustor and live performance appear in Engine mode',
     async () => {
@@ -254,11 +280,11 @@ async function run(page: Page): Promise<void> {
     await page.getByRole('menuitem', { name: 'Built-in Part…' }).click();
     await page
       .getByRole('searchbox', { name: 'Search Parts' })
-      .fill('CorePropulsionB_Prefab_RCSALargeA');
+      .fill('CorePropulsionB_Prefab_RCSLargeEightHornV1A');
     await page
       .getByRole('grid', { name: 'Parts' })
       .getByRole('row')
-      .filter({ hasText: 'CorePropulsionB_Prefab_RCSALargeA' })
+      .filter({ hasText: 'CorePropulsionB_Prefab_RCSLargeEightHornV1A' })
       .click();
     await page.getByRole('button', { name: 'Add & Close' }).click();
     await page.getByRole('grid', { name: 'Parts' }).waitFor({ state: 'hidden' });
@@ -387,11 +413,11 @@ async function run(page: Page): Promise<void> {
       await page.getByRole('menuitem', { name: 'Built-in Part…' }).click();
       await page
         .getByRole('searchbox', { name: 'Search Parts' })
-        .fill('CoreElectricalA_Prefab_RadialBatteryB');
+        .fill('CoreElectricalA_Prefab_RadialBatteryMediumV1A');
       await page
         .getByRole('grid', { name: 'Parts' })
         .getByRole('row')
-        .filter({ hasText: 'CoreElectricalA_Prefab_RadialBatteryB' })
+        .filter({ hasText: 'CoreElectricalA_Prefab_RadialBatteryMediumV1A' })
         .click();
       await page.getByRole('button', { name: 'Add & Close' }).click();
       await page.getByRole('grid', { name: 'Parts' }).waitFor({ state: 'hidden' });

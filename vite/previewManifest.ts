@@ -2,8 +2,9 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { DOMParser } from '@xmldom/xmldom';
 import { loadEnv, type Plugin } from 'vite';
-import { ASSET_FILES } from '../src/ksa/catalog';
-import { parsePartsFile, type CatalogPart } from '../src/ksa/partCatalog';
+import { CORE_CONTENT_FILES } from '../src/ksa/coreContent';
+import { resolveContent } from '../src/ksa/contentXml';
+import { catalogPartsFromContent } from '../src/ksa/partCatalog';
 import { ENVIRONMENT_PRESETS } from '../src/state/environmentPresets';
 
 /**
@@ -12,13 +13,8 @@ import { ENVIRONMENT_PRESETS } from '../src/state/environmentPresets';
  * KSA build the catalog data came from. A wiki reads it to enumerate every part it
  * can embed a preview for.
  *
- * The part list is NOT re-derived from the XML with a bespoke rule — it is produced
- * by running the app's OWN `parsePartsFile` (via `@xmldom/xmldom`, which is DOM-core
- * compatible for the APIs the parser uses) over the same `ASSET_FILES` the browser
- * fetches. That is the whole point: the manifest and the viewer share one definition
- * of "a part exists" (`<Part Id>` present AND ≥1 renderable placement), so they can
- * never drift. GameData siblings are irrelevant here — they merge data into existing
- * entries but never add parts.
+ * The part list uses the same manifest-ordered content prepass and Part catalog
+ * as the browser. Each concrete family member remains individually addressable.
  *
  * Source data comes entirely from `KSA_ASSETS_DIR` (same resolution as
  * {@link import('./ksaAssets').ksaAssets}); unset or missing ⇒ warn and skip, so the
@@ -55,17 +51,14 @@ export interface PreviewManifest {
  * the viewer accepts.
  */
 export function buildPreviewManifest(assetsDir: string): PreviewManifest {
-  const parts: CatalogPart[] = [];
-  for (const file of ASSET_FILES) {
+  const files = CORE_CONTENT_FILES.flatMap((file) => {
     const abs = join(assetsDir, file);
-    // A pruned asset tree may legitimately lack a file; the app tolerates that too.
-    if (!existsSync(abs)) continue;
-    // KSA ships some XML BOM-prefixed; the browser's fetch drops it, but @xmldom
-    // rejects a BOM that precedes the `<?xml?>` declaration.
-    const xml = readFileSync(abs, 'utf-8').replace(/^﻿/, '');
+    if (!existsSync(abs)) return [];
+    const xml = readFileSync(abs, 'utf-8').replace(/^\uFEFF/, '');
     const doc = new DOMParser().parseFromString(xml, 'application/xml') as unknown as Document;
-    parsePartsFile(doc, file, parts);
-  }
+    return [{ file, doc }];
+  });
+  const parts = files.length ? catalogPartsFromContent(resolveContent(files)) : [];
 
   // Defensive de-dupe: nothing in Core repeats a `<Part Id>`, but a manifest with a
   // duplicated id would make a wiki render the same entry twice, and the cost is nil.

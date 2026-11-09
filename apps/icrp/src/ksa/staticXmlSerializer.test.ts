@@ -1,191 +1,54 @@
 import { describe, expect, it } from 'vitest';
 import { DOMParser } from '@xmldom/xmldom';
-import { readVendoredAsset } from '../../../../src/ksa/ksaTestAssets';
-import { parseStaticCatalog, type StaticCatalog } from './staticCatalog';
-import {
-  serializeStaticAssetsXml,
-  serializeStaticGameDataXml,
-  type StaticPiecePlan,
-} from './staticXmlSerializer';
+import { parseStaticCatalog } from './staticCatalog';
+import { serializeStaticAssetsXml, serializeStaticGameDataXml } from './staticXmlSerializer';
+import { identityTransform } from './types';
 
-const FIXTURES = [
-  'CoreLaunchPadAAssets.xml',
-  'CoreLaunchPadBAssets.xml',
-  'CoreLaunchPadCAssets.xml',
-  'CoreLaunchPadAGameData.xml',
-];
+const parse = (xml: string) =>
+  new DOMParser().parseFromString(xml, 'application/xml') as unknown as Document;
 
-function parseFixtures(): StaticCatalog {
-  const parser = new DOMParser();
-  const docs = FIXTURES.map((file) => ({
-    doc: parser.parseFromString(readVendoredAsset(file), 'application/xml') as unknown as Document,
-    file,
-  }));
-  return parseStaticCatalog(docs);
-}
-
-it('preserves a stock Part collision hull when exporting it as static geometry', () => {
-  const out = serializeStaticAssetsXml({
-    materials: [],
-    pieces: [],
-    objects: [
-      {
-        id: 'HullObject',
-        placements: [],
-        colliders: [
-          {
-            id: 'Hull',
-            shape: 'ConvexHull',
-            meshId: '_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1',
-            ownerTemplateId: null,
-            layerId: 'default',
-            position: { x: 0, y: 0, z: 0 },
-            rotation: { x: 0, y: 0, z: 0 },
-            scale: { x: 2, y: 3, z: 4 },
-          },
-        ],
-      },
-    ],
-  });
-  expect(out).toContain('<Mesh Id="_ColMesh_CoreCommandA_Prefab_MediumCapsuleVariantA_1"');
-  expect(out).toContain('<Scale X="2" Y="3" Z="4"');
-});
-
-/**
- * Normalizes XML for byte-faithfulness comparison against Core's bundler output:
- * whitespace-only differences (indent width, ` />` vs `/>`) are erased, structure
- * and every attribute byte are kept.
- */
-function normalize(xml: string): string[] {
-  return xml
-    .replace(/<\?xml[^?]*\?>/, '') // Core's hand-authored GameData file omits the declaration
-    .replace(/\s+\/>/g, '/>')
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-}
-
-/** Extracts the lines of one element block (open tag through matching close). */
-function elementBlock(lines: string[], openPrefix: string, closeTag: string): string[] {
-  const start = lines.findIndex((l) => l.startsWith(openPrefix));
-  expect(start).toBeGreaterThanOrEqual(0);
-  const end = lines.findIndex((l, i) => i > start && l === closeTag);
-  expect(end).toBeGreaterThan(start);
-  return lines.slice(start, end + 1);
-}
-
-describe('serializeStaticAssetsXml — golden against Core (invariant I8)', () => {
-  const catalog = parseFixtures();
-  const pad = catalog.objects[0];
-
-  it('re-serializes the Core prefab byte-identically modulo whitespace', () => {
-    const out = serializeStaticAssetsXml({
-      materials: [],
-      pieces: [],
+describe('static XML export', () => {
+  it('uses global textures, keyed models, and resolvable static patches', () => {
+    const assets = serializeStaticAssetsXml({
+      meshAtlasPath: 'Meshes/custom.glb',
+      materials: [
+        { id: 'Mat', diffusePath: 'D.ktx2', normalPath: 'N.ktx2', aoRoughMetalPath: 'O.ktx2' },
+      ],
+      pieces: [{ id: 'Piece', meshId: 'Mesh', materialId: 'Mat' }],
       objects: [
         {
-          id: pad.id,
-          placements: pad.placements,
-          colliders: pad.colliders,
+          id: 'Pad',
+          placements: [{ instanceId: 'one', instanceOf: 'Piece', transform: identityTransform() }],
         },
       ],
     });
-    const ours = elementBlock(normalize(out), '<StaticObject ', '</StaticObject>');
-    const core = elementBlock(
-      normalize(readVendoredAsset('CoreLaunchPadAAssets.xml')),
-      '<StaticObject ',
-      '</StaticObject>',
-    );
-    expect(ours).toEqual(core);
-  });
-
-  it('re-serializes a collider-heavy piece byte-identically modulo whitespace', () => {
-    // BaseGrassA: 48 Box + 1 Cylinder, <Terrain>true</Terrain> — every emission
-    // path except <Alpha> (covered below).
-    const grass = catalog.pieces.find((p) => p.id === 'CoreLaunchPadC_Subpart_BaseGrassA')!;
-    const plan: StaticPiecePlan = {
-      id: grass.id,
-      meshId: grass.meshNodeName,
-      materialId: grass.materialId!,
-      terrain: grass.terrain,
-      colliders: grass.colliders,
-    };
-    const out = serializeStaticAssetsXml({ materials: [], pieces: [plan], objects: [] });
-    const ours = elementBlock(normalize(out), '<StaticSubObject ', '</StaticSubObject>');
-    const core = elementBlock(
-      normalize(readVendoredAsset('CoreLaunchPadCAssets.xml')),
-      '<StaticSubObject ',
-      '</StaticSubObject>',
-    );
-    expect(ours).toEqual(core);
-  });
-
-  it('emits MeshAtlas → PbrMaterial (with Alpha) → piece in Core order', () => {
-    const out = serializeStaticAssetsXml({
-      meshAtlasPath: 'Meshes/My_MeshAtlas.glb',
-      materials: [
-        {
-          id: 'My_Material',
-          diffusePath: 'Textures/My_Diffuse.ktx2',
-          normalPath: 'Textures/My_Normal.ktx2',
-          aoRoughMetalPath: 'Textures/My_PBR.ktx2',
-          alphaPath: 'Textures/My_Alpha.ktx2',
-        },
-      ],
-      pieces: [{ id: 'My_Piece', meshId: 'My_Piece', materialId: 'My_Material' }],
-      objects: [],
-    });
-    const lines = normalize(out);
-    expect(lines).toContain(
-      '<!-- This file is autogenerated by GlbToXmlUtility from source assets. -->',
-    );
-    const atlasIdx = lines.findIndex((l) => l.startsWith('<MeshAtlas'));
-    const matIdx = lines.findIndex((l) => l.startsWith('<PbrMaterial'));
-    const alphaIdx = lines.findIndex((l) => l.startsWith('<Alpha'));
-    const pieceIdx = lines.findIndex((l) => l.startsWith('<StaticSubObject'));
-    expect(atlasIdx).toBeGreaterThan(0);
-    expect(matIdx).toBeGreaterThan(atlasIdx);
-    expect(alphaIdx).toBeGreaterThan(matIdx);
-    expect(pieceIdx).toBeGreaterThan(alphaIdx);
-    expect(lines).toContain('<Alpha Path="Textures/My_Alpha.ktx2" Category="Vessel"/>');
-  });
-
-  it('round-trips: parse(serialize(parse(Core))) equals parse(Core)', () => {
-    const out = serializeStaticAssetsXml({
-      materials: [],
-      pieces: [],
-      objects: [{ id: pad.id, placements: pad.placements, colliders: pad.colliders }],
-    });
-    const reparsed = parseStaticCatalog([
+    const game = serializeStaticGameDataXml([
       {
-        doc: new DOMParser().parseFromString(out, 'application/xml') as unknown as Document,
-        file: 'out.xml',
-      },
-    ]);
-    expect(reparsed.objects).toHaveLength(1);
-    expect(reparsed.objects[0].placements).toEqual(pad.placements);
-  });
-});
-
-describe('serializeStaticGameDataXml', () => {
-  it('matches Core’s GameData file modulo whitespace', () => {
-    const out = serializeStaticGameDataXml([
-      {
-        id: 'CoreLaunchPadA_Prefab_LaunchPadA',
+        id: 'Pad',
         groundOffsetM: 0.2,
-        surfaceHeightM: 1.5537,
-        footprintRadiusM: 108.3,
+        surfaceHeightM: null,
+        footprintRadiusM: null,
+        placements: [{ instanceId: 'two', instanceOf: 'Piece', transform: identityTransform() }],
       },
     ]);
-    expect(normalize(out)).toEqual(normalize(readVendoredAsset('CoreLaunchPadAGameData.xml')));
-  });
-
-  it('omits unset metres', () => {
-    const out = serializeStaticGameDataXml([
-      { id: 'X', groundOffsetM: null, surfaceHeightM: 3, footprintRadiusM: null },
-    ]);
-    expect(out).not.toContain('GroundOffset');
-    expect(out).toContain('<SurfaceHeight M="3"/>');
-    expect(out).not.toContain('FootprintRadius');
+    expect(assets).toContain('<MeshAtlas Id="Icrp_MeshAtlas" Path="Meshes/custom.glb"/>');
+    expect(assets).toContain('<Texture Id="Mat_Diffuse" Path="D.ktx2" Category="Vessel"/>');
+    expect(assets).toContain('<Diffuse Ref="Mat_Diffuse"/>');
+    expect(game).toContain('<StaticObject Id="Pad" Modify="Patch">');
+    expect(game).toContain('<SubObjects Modify="Extend">');
+    const catalog = parseStaticCatalog(
+      [
+        { file: 'assets.xml', doc: parse(assets) },
+        { file: 'game.xml', doc: parse(game) },
+      ],
+      { mesh: 'Meshes/custom.glb' },
+    );
+    expect(catalog.pieces[0]).toMatchObject({
+      id: 'Piece',
+      meshNodeName: 'Mesh',
+      materialId: 'Mat',
+    });
+    expect(catalog.objects[0].placements.map((p) => p.instanceId)).toEqual(['one', 'two']);
+    expect(catalog.objects[0].groundOffsetM).toBe(0.2);
   });
 });

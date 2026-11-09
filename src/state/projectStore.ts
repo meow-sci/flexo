@@ -145,7 +145,8 @@ import { copyProjectAssets, deleteProjectAssets } from './assetDb';
 // silently load the WRONG motion; `normalizePart` cannot reach inside keyframes to fix it.
 // v4: multi-part — snapshot is parts: SavedPartEntry[] + activePartId; layerView/activeLayerId
 // moved per-part; history keyed byPart (plans/MULTI_PART_PLAN.md)
-export const PROJECT_SCHEMA_VERSION = 4;
+// v5: current KSA XML replaces the stored raw and typed game-data contract.
+export const PROJECT_SCHEMA_VERSION = 5;
 
 export { DEFAULT_PROJECT_NAME, $projectName };
 export type { ProjectId, ProjectMeta, ProjectSnapshot };
@@ -231,7 +232,9 @@ function normalizePart(part: EditingPart): EditingPart {
       // rather than spread, so a snapshot written before P12.16 removed `EvaDoor.connectorId`
       // does not carry that dead key back into memory — a snapshot is still LOADED, never
       // converted (nothing reads the key either way; this just stops it being re-persisted).
-      evaDoor: gameData.evaDoor ? { seatId: gameData.evaDoor.seatId ?? null } : null,
+      evaDoor: gameData.evaDoor
+        ? { ...gameData.evaDoor, seatId: gameData.evaDoor.seatId ?? null }
+        : null,
       // `<ConicalTank><RadiusTop>` (KSA 2026.9.22.5482) — additive, below the spread level.
       tanks: gameData.tanks.map((tank) => ({ ...createTank(), ...tank })),
       rockets: normalizeRockets(gameData.rockets),

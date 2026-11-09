@@ -51,6 +51,7 @@ describe('vesselPieceFromSubPart', () => {
   });
 
   it('still rejects templates without a mesh node or material', () => {
+    expect(vesselPieceFromSubPart({ ...entry, models: [] } as never)).toBeNull();
     expect(vesselPieceFromSubPart({ ...entry, meshNodeName: null } as never)).toBeNull();
     expect(vesselPieceFromSubPart({ ...entry, materialId: undefined } as never)).toBeNull();
   });

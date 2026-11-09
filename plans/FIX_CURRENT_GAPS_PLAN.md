@@ -1,3 +1,22 @@
+# Current KSA 5801 upgrade
+
+The current implementation and validation record is [KSA_5801_UPGRADE.md](KSA_5801_UPGRADE.md).
+The 5801 schema replaces the XML contracts in older entries below: current Part/SubPart
+rows use Id/Ref/Key/KeyRef, collection wrappers and same-tag Modify patches. The catalog,
+native Part families, SubPart appearance choices, export copies and supporting ICRP
+contracts are upgraded together. Current project schema is 5; compact export version 12.
+
+Retained limits are listed in [scope/FULL_SCOPE.md](../scope/FULL_SCOPE.md#retained-limits).
+The historical ground-clutter scaffold gap R1 remains open. New raw component preservation
+does not imply dedicated Habitat/parachute simulation or authoring. Actual 5801 game
+loading/rendering is not established by earlier in-game checks recorded below.
+
+---
+
+# Historical gap records through 5554
+
+The entries below preserve their original audit context and are not current XML examples.
+
 # Plan — Fix flexo gaps from KSA updates (running)
 
 > **Latest review: verified `2026.9.22.5482` → `2026.10.10.5554`.** The supplied

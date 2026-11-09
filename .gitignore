@@ -33,3 +33,7 @@ dist-ssr
 
 # Generated ICRP library thumbnails (rendered from licensed KSA assets — never commit)
 public/thumbs-icrp/
+
+# Optional managed KSA schema validation harness
+scripts/ksa-schema-check/bin/
+scripts/ksa-schema-check/obj/

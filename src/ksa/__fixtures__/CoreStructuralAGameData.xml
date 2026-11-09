@@ -1,0 +1,588 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<Assets>
+  <Part Id="CoreStructuralA_Prefab_EnginePlate1WSingle2WA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+      <EditorTag Ref="NoFaceSnapping"/>
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="2"/>
+    </Diameters>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector7" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector6" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+      <Connector Key="_connector36" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+    <AlignedGroups Modify="Extend">
+      <Aligned>
+        <Connectors>
+          <Connector KeyRef="_connector36"/>
+          <Connector KeyRef="_connector7"/>
+        </Connectors>
+      </Aligned>
+    </AlignedGroups>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_EnginePlate05WQuad2WA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+      <EditorTag Ref="NoFaceSnapping"/>
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="2"/>
+    </Diameters>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector2" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector3" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector4" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector5" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector1" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+      <Connector Key="_connector37" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+    <AlignedGroups Modify="Extend">
+      <Aligned>
+        <Connectors>
+          <Connector KeyRef="_connector37"/>
+          <Connector KeyRef="_connector2"/>
+          <Connector KeyRef="_connector3"/>
+          <Connector KeyRef="_connector4"/>
+          <Connector KeyRef="_connector5"/>
+        </Connectors>
+      </Aligned>
+    </AlignedGroups>
+    <SymmetryGroups Modify="Extend">
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector2"/>
+          <Connector KeyRef="_connector3"/>
+          <Connector KeyRef="_connector4"/>
+          <Connector KeyRef="_connector5"/>
+        </Connectors>
+      </SymmetryGroup>
+    </SymmetryGroups>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_EnginePlate2WSingle3WA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+      <EditorTag Ref="NoFaceSnapping"/>
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="3"/>
+    </Diameters>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector9" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector8" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+      <Connector Key="_connector38" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+    <AlignedGroups Modify="Extend">
+      <Aligned>
+        <Connectors>
+          <Connector KeyRef="_connector38"/>
+          <Connector KeyRef="_connector9"/>
+        </Connectors>
+      </Aligned>
+    </AlignedGroups>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_EnginePlate1WSingle3WA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+      <EditorTag Ref="NoFaceSnapping"/>
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="3"/>
+    </Diameters>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector11" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector10" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+      <Connector Key="_connector39" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+    <AlignedGroups Modify="Extend">
+      <Aligned>
+        <Connectors>
+          <Connector KeyRef="_connector39"/>
+          <Connector KeyRef="_connector11"/>
+        </Connectors>
+      </Aligned>
+    </AlignedGroups>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_EnginePlate1WQuad3WA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+      <EditorTag Ref="NoFaceSnapping"/>
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="3"/>
+    </Diameters>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector13" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector14" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector15" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector16" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector12" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+      <Connector Key="_connector40" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+    <AlignedGroups Modify="Extend">
+      <Aligned>
+        <Connectors>
+          <Connector KeyRef="_connector40"/>
+          <Connector KeyRef="_connector13"/>
+          <Connector KeyRef="_connector14"/>
+          <Connector KeyRef="_connector15"/>
+          <Connector KeyRef="_connector16"/>
+        </Connectors>
+      </Aligned>
+    </AlignedGroups>
+    <SymmetryGroups Modify="Extend">
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector13"/>
+          <Connector KeyRef="_connector14"/>
+          <Connector KeyRef="_connector15"/>
+          <Connector KeyRef="_connector16"/>
+        </Connectors>
+      </SymmetryGroup>
+    </SymmetryGroups>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_EnginePlate1WTriple3WA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+      <EditorTag Ref="NoFaceSnapping"/>
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="3"/>
+    </Diameters>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector18" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector19" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector20" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector17" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+      <Connector Key="_connector41" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+    <AlignedGroups Modify="Extend">
+      <Aligned>
+        <Connectors>
+          <Connector KeyRef="_connector41"/>
+          <Connector KeyRef="_connector18"/>
+          <Connector KeyRef="_connector19"/>
+          <Connector KeyRef="_connector20"/>
+        </Connectors>
+      </Aligned>
+    </AlignedGroups>
+    <SymmetryGroups Modify="Extend">
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector18"/>
+          <Connector KeyRef="_connector19"/>
+          <Connector KeyRef="_connector20"/>
+        </Connectors>
+      </SymmetryGroup>
+    </SymmetryGroups>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_EnginePlate1WDouble3WA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+      <EditorTag Ref="NoFaceSnapping"/>
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="3"/>
+    </Diameters>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector21" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector23" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector24" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector25" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector26" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector27" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+        <Flags>Internal</Flags>
+      </Connector>
+      <Connector Key="_connector22" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+      <Connector Key="_connector42" Modify="Patch">
+        <Capabilities>BulkFluid</Capabilities>
+      </Connector>
+    </Connectors>
+    <AlignedGroups Modify="Extend">
+      <Aligned>
+        <Connectors>
+          <Connector KeyRef="_connector42"/>
+          <Connector KeyRef="_connector21"/>
+          <Connector KeyRef="_connector23"/>
+          <Connector KeyRef="_connector24"/>
+          <Connector KeyRef="_connector25"/>
+          <Connector KeyRef="_connector26"/>
+          <Connector KeyRef="_connector27"/>
+        </Connectors>
+      </Aligned>
+    </AlignedGroups>
+    <SymmetryGroups Modify="Extend">
+      <SymmetryGroup>
+        <Connectors>
+          <Connector KeyRef="_connector21"/>
+          <Connector KeyRef="_connector23"/>
+        </Connectors>
+      </SymmetryGroup>
+    </SymmetryGroups>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_RadialDecouplerLargeA" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <SolidCuboidMass>
+        <Mass Kg="76"/>
+        <LocationAsmb Y="0.0003" Z="0.35"/>
+        <LengthX M="3.2344"/>
+        <LengthY M="1.5659"/>
+        <LengthZ M="0.3"/>
+      </SolidCuboidMass>
+      <SolidCuboidMass>
+        <Mass Kg="62"/>
+        <LocationAsmb Z="-0.2"/>
+        <LengthX M="2.5"/>
+        <LengthY M="1"/>
+        <LengthZ M="0.5"/>
+      </SolidCuboidMass>
+    </InertMasses>
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+      <EditorTag Ref="Radial" />
+      <EditorTag Ref="Coupling" />
+      <EditorTag Ref="NoFaceSnapping"/>
+    </EditorTags>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector28" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+      <Connector Key="_connector29" Modify="Patch">
+        <Flags>FromSurface</Flags>
+        <Capabilities>DecouplerJoint</Capabilities>
+      </Connector>
+    </Connectors>
+    <Components Modify="Extend">
+      <Decoupler Force="7000">
+        <Connector KeyRef="_connector29" />
+      </Decoupler>
+    </Components>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_RadialDecouplerSmallA" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <SolidCuboidMass>
+        <Mass Kg="15"/>
+        <LocationAsmb Z="-0.099"/>
+        <LengthX M="0.968"/>
+        <LengthY M="0.518"/>
+        <LengthZ M="0.321"/>
+      </SolidCuboidMass>
+    </InertMasses>
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+      <EditorTag Ref="Radial" />
+      <EditorTag Ref="Coupling" />
+      <EditorTag Ref="NoFaceSnapping"/>
+    </EditorTags>
+    <Connectors Modify="Extend">
+      <Connector Key="_connector52" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+      <Connector Key="_connector51" Modify="Patch">
+        <Flags>FromSurface</Flags>
+        <Capabilities>DecouplerJoint</Capabilities>
+      </Connector>
+    </Connectors>
+    <Components Modify="Extend">
+      <Decoupler Force="1500">
+        <Connector KeyRef="_connector51" />
+      </Decoupler>
+    </Components>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_StrutCubeHalfW1HalfHA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_StrutCubeHalfWHalfHA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_StrutCubeNodeHalfWHalfHA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_StrutHex1HA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_StrutHexHalfHA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_StrutOcto1HA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_StrutOctoEndcap1HA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_StrutOcto2HA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_StrutOctoEndcap2HA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_StrutOctoHalfHA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_BridgingAdapter1WHalf" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_BridgingAdapterHollow1WHalf" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_BridgingAdapter2HalfW2W" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_BridgingAdapterHollow2HalfW2W" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_BridgingAdapter2W1W" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_BridgingAdapterHollow2W1W" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_BridgingAdapter3W2W" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_BridgingAdapterHollow3W2W" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_Truss1W2HGirderA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_Truss1WAdapterA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_PanelAA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <ThumbnailRotation X="-1.5708" />
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Panels" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_PanelBA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <ThumbnailRotation X="-1.5708" />
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Panels" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_PanelCA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <ThumbnailRotation X="-1.5708" />
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Panels" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_PanelDA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <ThumbnailRotation X="-1.5708" />
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Panels" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_PanelEA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <ThumbnailRotation X="-1.5708" />
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Panels" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_PanelFA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <ThumbnailRotation X="-1.5708" />
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Panels" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_PanelGA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <ThumbnailRotation X="-1.5708" />
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Panels" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_PanelHA" Modify="Patch" FaceSnapMode="PhysicsCollider">
+    <ThumbnailRotation X="-1.5708" />
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Panels" />
+    </EditorTags>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_SurfaceAttachMount1WA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="1"/>
+    </Diameters>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_SurfaceAttachMount2WA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="2"/>
+    </Diameters>
+  </Part>
+
+  <Part Id="CoreStructuralA_Prefab_SurfaceAttachMountHalfWA" Modify="Patch">
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Structural" />
+    </EditorTags>
+    <Diameters Modify="Extend">
+      <Diameter M="0.5"/>
+    </Diameters>
+  </Part>
+</Assets>

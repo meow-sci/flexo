@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DOMParser } from '@xmldom/xmldom';
 import { readVendoredAsset } from '../../../../src/ksa/ksaTestAssets';
-import {
-  indexStaticPieces,
-  mergeStaticGameData,
-  parseStaticCatalog,
-  type StaticCatalog,
-} from './staticCatalog';
+import { indexStaticPieces, parseStaticCatalog, type StaticCatalog } from './staticCatalog';
 
 // Runs against the committed fixtures (src/ksa/__fixtures__/), so it exercises the
 // REAL Core static-object data of the current KSA baseline without the private tree.
@@ -23,7 +18,16 @@ function parseFixtures(): StaticCatalog {
     doc: parser.parseFromString(readVendoredAsset(file), 'application/xml') as unknown as Document,
     file,
   }));
-  return parseStaticCatalog(docs);
+  const meshIndex: Record<string, string> = {};
+  for (const { doc } of docs) {
+    const path = doc.getElementsByTagName('MeshAtlas')[0]?.getAttribute('Path');
+    if (!path) continue;
+    for (const model of Array.from(doc.getElementsByTagName('PartModel'))) {
+      const ref = model.getElementsByTagName('Mesh')[0]?.getAttribute('Ref');
+      if (ref) meshIndex[ref.toLowerCase()] = path;
+    }
+  }
+  return parseStaticCatalog(docs, meshIndex);
 }
 
 describe('parseStaticCatalog (Core launch pad fixtures)', () => {
@@ -98,46 +102,5 @@ describe('parseStaticCatalog (Core launch pad fixtures)', () => {
     expect(pad.groundOffsetM).toBeCloseTo(0.2, 9);
     expect(pad.surfaceHeightM).toBeCloseTo(1.5537, 9);
     expect(pad.footprintRadiusM).toBeCloseTo(108.3, 9);
-  });
-});
-
-describe('mergeStaticGameData (ApplyGameData semantics)', () => {
-  it('appends lists and overrides only the SET distances', () => {
-    const obj = {
-      id: 'X',
-      placements: [],
-      colliders: [],
-      groundOffsetM: 1,
-      surfaceHeightM: 2,
-      footprintRadiusM: null,
-      sourceFile: 'a.xml',
-    };
-    mergeStaticGameData(
-      [obj],
-      [
-        {
-          id: 'X',
-          placements: [
-            {
-              instanceId: 'p1',
-              instanceOf: 'P',
-              transform: {
-                position: { x: 0, y: 0, z: 0 },
-                rotation: { x: 0, y: 0, z: 0 },
-                scale: { x: 1, y: 1, z: 1 },
-              },
-            },
-          ],
-          colliders: [],
-          groundOffsetM: null, // unset → keeps 1
-          surfaceHeightM: 9, // set → overrides 2
-          footprintRadiusM: 50,
-        },
-      ],
-    );
-    expect(obj.placements).toHaveLength(1);
-    expect(obj.groundOffsetM).toBe(1);
-    expect(obj.surfaceHeightM).toBe(9);
-    expect(obj.footprintRadiusM).toBe(50);
   });
 });

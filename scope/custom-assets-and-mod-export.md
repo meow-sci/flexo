@@ -1,461 +1,160 @@
-# Scope — Custom assets, textures, GLB pipeline (import + export), mod export
+# Scope — Custom assets, textures, GLB and mod export
 
-> The deepest integration: a user-authored texture (image→KTX2), a primitive mesh (→GLB) **and
-> a glTF model imported from Blender** are exported as a KSA part mod that **loads and renders
-> in-game**. It must satisfy KSA's mod loader, KTX2/PBR pipeline, glTF **acceptance** rules
-> (contracts #10–#11, #13–#17 — which bind the IMPORT path too, since what flexo imports is
-> what it must be able to re-emit), and several null-check-free renderer quirks **exactly**.
-> Read alongside [docs/custom-assets.md](../docs/custom-assets.md),
-> [docs/importing-models.md](../docs/importing-models.md),
-> [docs/texturing.md](../docs/texturing.md), [docs/asset-pipeline.md](../docs/asset-pipeline.md).
+**Baseline: KSA 2026.11.10.5801.** Current XML uses the content prepass and identified
+global assets. Historical in-game checks of earlier formats do not establish that
+5801 exports load in the running game. Validation results and limits are recorded
+in [the upgrade report](../plans/KSA_5801_UPGRADE.md).
 
-**Baseline:** re-vetted against KSA build **2026.10.10.5554** (decomp + shipped Core XML and private assets).
-**Baseline status:** ✅ **EXPORT CONTRACT INTACT** — 5482 moved part render state into the new
-`PartTreeRenderData.cs` with equivalent logic and fixed the ambient BRDF lookup (rev 5472), which
-changes how exported materials LOOK in game but no export requirement; see
-[What changed in 5482](#what-changed-in-5482). At 5438, runtime vessel deformation adds GPU buffers,
-not new Part geometry fields. `<PbrMaterial DisplayName>` is new presentation metadata used by
-parachute choices; `<Alpha>` remains a static-object slot, outside the Part rendering pipeline.
-The existing synthetic Normal/ORM, five-slot Part material, indexed/named GLB and project-wide
-id requirements remain mandatory. See [What changed in 5438](#what-changed-in-5438).
-
-**Engine bundle audit @5402:** the vendored `CorePropulsionA/B/CAssets.xml` and sibling
-GameData documents now exercise import → `buildMultiModContent` → `buildMultiCustomBundle`
-in `src/ksa/modExport.test.ts`. Every engine-bearing built-in `<SubPartGameData Id>` targets a
-fresh `<SubPart Id>` declared in the exported Assets file; its `<PartModel><Mesh Id>` and
-`<Material Id>` reuse Core art and require no new binaries. This avoids
-`PartTemplate.ApplyGameData` (`decomp/KSA/PartTemplate.cs`) appending authored combustors,
-nozzles and rockets onto shared Core templates. The tests also preserve controller/rocket
-`SubPartId` refs, `<FeedsFrom>` plumbing, all nozzle FX and gimbal pivots across the two XML
-documents; see [engines.md](engines.md) for the game-side module schema.
-
----
-
-## What changed in 5554
-
-**Multi-part and materials — intact.** `Mod.cs` changes only log source-line metadata;
-`ModLibrary.cs` adds generated-delegate naming noise and log-line metadata. Their bundle
-enumeration, id registration and dedupe behavior are unchanged. `AssetBundle.cs` adds
-only top-level `<Barycenter>` for interstellar systems; it does not alter the flat
-`List<SerializedId>` or the N-Part/N-atlas bundle contract. flexo emits its own mod files,
-not a full Core Assets document, so it does not drop celestial templates on Part export.
-
-`PbrMaterialReference.cs`, `MeshAtlasFileReference.cs`, `MeshReference.cs`,
-`ThumbnailRenderResources.cs` and the KTX acceptance path are unchanged. Synthetic
-Normal/ORM remain required. `RenderCore.Gltf/GltfUtils.cs:LoadImageData` now takes a
-texture debug name; geometry atlas loading still registers `meshes[i].name`.
-`PartModelRenderer.cs` adopts shared pipeline caches and viewport descriptor sets;
-`ENABLE_EMISSIVE` remains on the normal pipeline and absent from the dynamic pipeline.
-`MeshIndirect.frag`/`ModelPbr.frag` replace dedicated global samplers with bindless macros,
-preserving emissive, gamma, normal mapping and roughness formulas.
-
-Stock collision atlases use `<MeshAtlas HostOnly="true">` and named meshes inside
-collision GLB files, referenced by `<ConvexHull><Mesh Id>` and introduced by
-`KSA.GlbImport/GlbCollisionAtlas.cs`. flexo resolves those host meshes for its imported
-convex-hull colliders while render mesh lookup retains its own atlas; see
-[colliders.md](colliders.md). Private binaries and UASTC were verified against 5554.
+Read with [custom assets](../docs/custom-assets.md),
+[importing models](../docs/importing-models.md), [texturing](../docs/texturing.md),
+[asset pipeline](../docs/asset-pipeline.md), and
+[Part XML](part-and-subpart-xml.md).
 
 ## Flexo modules
 
-| Path                                                    | Role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/ksa/modExport.ts`                                  | Export orchestration, **N parts per mod**. `buildMultiModContent(parts, projectName, catalog)` plans every included part (`NamedExportPart[]`); `buildMultiCustomBundle(content, …)` merges each part's plan (built by the module-private `buildPartBundlePlan` — one atlas node per placed mesh, per `meshKind`: primitive params / kitten bake / **imported raw geometry**) into ONE Assets document + the union of their binaries; `buildModZip(parts, projectName, …)`/`writeModToFolder(modsDir, parts, projectName, …)`, `serializeModToml`, `expandGlassGlow` (two-SubPart visor, kitten-only), `partExportNs`, `resolveInternal`/`buildExportVariantMap(part, catalog, base, ns)`/`variantRemap` (contract #19, #20). `buildMultiCustomBundle` takes an optional trailing `{signal}` (the export dialog's lazy Assets preview cancels an in-flight encode chain) — **control flow only, checked at per-part and per-asset boundaries; an un-aborted build emits byte-identical output and no contract below depends on it**. |
-| `src/ksa/exportGlb.ts`                                  | `buildMeshAtlasGlb(nodes, {viewMeshes, viewMeshBudget})` — geometry-only GLB atlas; render mesh + paired `_VM` view mesh per SubPart (`viewMeshes:false` for the importer's internal atlas; `viewMeshBudget` decimates heavy view meshes — contract #17); **`nameMeshesFromNodes()`** copies node name → `meshes[i].name`; **`toKsaGeometry()`** forces an index buffer + strips unread attributes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `src/three/loadModelFile.ts`                            | Model import entry: File(s) → glTF scene (`GLTFLoader` + DRACO/meshopt decoders, multi-file `blob:` URL resolution for `.gltf` sidecars). `ModelSource` façade over `GLTFParser`: glTF JSON, `parser.associations` material indices, the glTF **node** name behind each object (three names a multi-primitive mesh's pieces after the MESH, not the node), and each image's ORIGINAL encoded bytes (flexo re-encodes its `.ktx2` from them).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `src/ksa/importPlan.ts`                                 | `analyzeImport()` — (glTF mesh × material × handedness) → one SubPart, each referencing node → one placement; scale/up-axis correction; the KSA-can't-do-this warning catalog.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `src/ksa/importMaterials.ts`                            | `planImportMaterials()` — glTF metallic-roughness → the five `<PbrMaterial>` slots: every FACTOR baked into pixels (contract #16), occlusion+MR packed R=AO/G=rough/B=metal (contract #3), normal shipped untransformed (the encoder owns the X-flip), emissive composed into a `'painted'` glow bitmap (contract #12).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `src/ksa/importNormalize.ts`                            | `normalizeImport()` — bakes transforms/mirror/bind-pose, strips unread attributes, forces indices, optional double-siding, emits the import atlas GLB.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `src/ksa/importEstimates.ts`                            | The in-game COST of an import, shown before it is committed: resident texture VRAM (`w·h·4·4⁄3` — flexo's KTX2 is uncompressed RGBA8, contract #4), mod size, the `_VM` budget's effect (contract #17), warning severities. Pure/unit-tested.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `src/three/importedMeshCache.ts`                        | `importId → blob:` registry over the stored import atlas GLBs. `getImportedGeometry()` = editor (shared MeshAtlasCache: node transform baked + MikkTSpace tangents); `getImportedRawGeometry()` = export, **no tangents** (MikkTSpace de-indexes; KSA needs indices — contract #10).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `src/ksa/assetsXmlSerializer.ts`                        | `serializeAssets(plans: AssetsPlan[])` — one `<Assets>` document from N per-part plans. Emits `<MeshAtlas>`, `<PbrMaterial>` (`<Diffuse>/<Normal>/<AoRoughMetal>/<Emissive>`), `<SubPart>` (`<PartModel>`\|`<PartModelGlass>` + `<Mesh>` + `<Material>` + `<MeshView>`). `claimId` **throws** on a duplicate `<SubPart>`/`<PbrMaterial>` id across the whole mod (contract #20).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `src/state/customAssetStore.ts`                         | Ties descriptors ↔ IndexedDB blobs ↔ `blob:` URLs ↔ `$customCatalog`. `$simulateGlass` preview.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `src/state/assetDb.ts`                                  | IndexedDB blob store, project-namespaced keys `pa:<projectId>:<kind>:<assetId>` (binaries too big for the project snapshot).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `src/ktx/encodeKtx2.ts`                                 | **Single texture-format chokepoint.** ALWAYS `R8G8B8A8_UNORM` (vkFormat 37; the sRGB-tagged 43 is the one that double-decodes) + linear DFD (sRGB content keeps sRGB **bytes**; KSA's shader decodes once — see contract #4); `makeSolidKtx2()` for 1×1 solids; `isLegacySrgbKtx2()` flags pre-convention caches.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `src/ktx/decodeImage.ts`, `zstd.ts`, `glowComposite.ts` | image→RGBA8+mips; Zstd (`supercompressionScheme=2`); glow composite (`{diffuse, mask}`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `src/ktx/channelTransforms.ts`                          | Per-channel encode rules: `prepareChannelImage()` applies KSA's **normal X-flip** + the strength bake (contract #16), `packOrmLevel()` packs **R=AO G=rough B=metal** (contract #3). The import path deliberately stores normal maps UNtransformed so this stays the single owner.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `src/three/primitives.ts`                               | box/cyl/sphere/plane `BufferGeometry`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Module                                                                      | Responsibility                                                                     |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `src/ksa/modExport.ts`                                                      | Per-part plans, independent built-in copies, multi-part bundles, ZIP/folder output |
+| `src/ksa/assetsXmlSerializer.ts`                                            | Texture, MeshAtlas, material and SubPart declarations; ID uniqueness               |
+| `src/ksa/partXmlSerializer.ts`                                              | Part definitions and current same-tag gameplay patches                             |
+| `src/ksa/exportGlb.ts`                                                      | Indexed geometry, mesh names, view meshes and their triangle budget                |
+| `src/ksa/importPlan.ts`, `importNormalize.ts`, `importMaterials.ts`         | glTF analysis, geometry normalization and texture-channel conversion               |
+| `src/ktx/encodeKtx2.ts`, `channelTransforms.ts`, `glowComposite.ts`         | KTX2 container, normal/ORM mapping and emissive baking                             |
+| `src/state/customAssetStore.ts`, `assetDb.ts`                               | Project-owned descriptors, binaries and preview URLs                               |
+| `src/three/TextureCache.ts`, `MaterialFactory.ts`, `catalogRenderModels.ts` | Texture decode and material/model selection for previews                           |
 
-## Game-side anchors (`decomp/KSA/`, `decomp/KSA.Rendering.Thumbnails/`)
+## Game-side anchors
 
-| Concern                      | Class / file                                                                                    | Key fact                                                                                                                                                                                                                                                                                                                                                                          |
-| ---------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Thumbnail null-deref**     | `KSA.Rendering.Thumbnails/ThumbnailRenderResources.cs` (`AddDraw`)                              | reads `Material.NormalReference.BindlessHandle` + `Material.PBRMap.BindlessHandle` with **no null guard** (only `EmissiveMap?`/`ThinFilmMap?` are null-safe).                                                                                                                                                                                                                     |
-| Mod load / discovery         | `KSA/Mod.cs`, `KSA/ModLibrary.cs`                                                               | iterate mod.toml `Assets`, `XmlLoader.Load<AssetBundle>` per file.                                                                                                                                                                                                                                                                                                                |
-| Asset bundle root            | `KSA/AssetBundle.cs`                                                                            | `[XmlRoot("Assets")]`, polymorphic `[XmlElement(...)]` map.                                                                                                                                                                                                                                                                                                                       |
-| MeshAtlas + mesh-name read   | `KSA/MeshAtlasFileReference.cs`                                                                 | `DoLoad` registers `MeshReference{Id=Meshes[i].Name}` for every mesh; underscore names are no longer skipped.                                                                                                                                                                                                                                                                     |
-| **GLB geometry acceptance**  | `RenderCore.Gltf/GltfUtils.cs`, `KSA/MeshReference.cs`                                          | `GetGltfBufferWithStride` (:386-404) throws unless accessor element size == 12/12/8 AND the bufferView `byteStride` matches; index buffer built only `if (prim.Indices.HasValue)` (:484-488); `AddIntsToBuffer` (:540-566) accepts ushort/uint/ubyte only; `AddPositionExtremes` (:568-584) reads POSITION `min`/`max`; `MeshReference.Load` (:83) imports `Normals \| UVs` only. |
-| PbrMaterial schema           | `KSA/PbrMaterialReference.cs`                                                                   | `[XmlElement]` `Diffuse`/`Normal`(`TexturePowerReference`)/`AoRoughMetal`/`Emissive`/`ThinFilm`/`Alpha`; optional `[XmlAttribute] DisplayName` (5438). Part pipelines bind the first five slots.                                                                                                                                                                                  |
-| Texture schema + KTX2 accept | `KSA/TextureReference.cs` (+ `TexturePowerReference.cs`)                                        | `[XmlAttribute("Category")] Default`; no `.toml` sidecar ⇒ transcode target defaults to `R8G8B8A8UNorm`/`Rgba32`.                                                                                                                                                                                                                                                                 |
-| KTX2 vkFormat honored        | `decomp/Brutal.TextureApi.Ktx/Loader.cs` (+ `RenderCore/TextureAsset.cs`)                       | libktx `CreateFromNamedFile`; only UASTC (`NeedsTranscoding`) is transcoded — otherwise **the file's vkFormat becomes the VkImage format** (an `_SRGB` tag ⇒ hardware decode).                                                                                                                                                                                                    |
-| In-shader gamma decode       | `Content/Core/Shaders/Mesh/MeshIndirect.frag` + `Common/Shared.glsl`                            | `sampledColor = gammaToLinear(texture(...diffuse...))`, `gammaToLinear(x) = pow(x, 2.2)` — the shader decodes the diffuse ITSELF (Core atlases are BC7_UNORM/linear-tagged).                                                                                                                                                                                                      |
-| SubPart / model / view       | `KSA/SubPartTemplate.cs`, `PartModelModule.cs`, `PartModelGlassModule.cs`, `MeshViewModule.cs`  | `<SubPart Id>`→`<PartModel Id>`/`<PartModelGlass Id>`(`<Mesh Id>`+`<Material Id>`)+`<MeshView>`.                                                                                                                                                                                                                                                                                  |
-| Opaque renderer (glow gate)  | `KSA/PartModelRenderer.cs` (`BuildPipelineModel`)                                               | compiles `MeshIndirectFrag` **with `ENABLE_EMISSIVE`+`ENABLE_THIN_FILM`**.                                                                                                                                                                                                                                                                                                        |
-| Glow constant                | `Content/Core/Shaders/Common/Lighting.glsl`                                                     | `EMISSIVE_MULTIPLIER = 1.25`.                                                                                                                                                                                                                                                                                                                                                     |
-| Glass shader (export path)   | `Content/Core/Shaders/Mesh/MeshGlassIndirect.frag`                                              | opacity 0.75; `glassColor=mix(albedo,0.1,0.9)`; emissive ignored.                                                                                                                                                                                                                                                                                                                 |
-| **Editor picking (`_VM`)**   | `KSA/Part.cs` (`RayCastEgoSubPart`), `KSA/Ray.cs` (`RaycastWatertight`), `KSA/MeshReference.cs` | `Part.RayCastEgoSubPart` (`Part.cs:2574` @5482) needs a `MeshViewModule`, sphere-rejects, then CPU-triangle-tests `meshView.PositionCompare` and reads `MeshAttribute.Normal` at the hit vertex; `Ray.cs:194-213` is the `for (i += 3)` loop; `MeshReference.cs:87-95` builds `PositionsCompare` as one `double3` **per INDEX** at load.                                          |
+Current classes are under `ksa-game-assemblies/current/decomp/`: `KSA/ContentLoader`,
+`ContentDeserializer`, `ChildMerge`, `GameContentTags`, `Mod`, `MeshAtlasFileReference`,
+`MeshReference`, `PbrMaterialReference`, `TextureReference`, `PartModelModule`,
+`PartModelDynamicModule`, `PartModelGlassModule`, `PartModelRenderer`,
+`KSA.Rendering.Thumbnails/ThumbnailRenderResources`, and `RenderCore.Gltf/GltfUtils`.
+Shaders live under `Content/Core/Shaders`. The detailed binary and shader audit is
+[the rendering research](../plans/KSA_5801_RENDER_RESEARCH.md).
 
-## The contract — what flexo bakes in (each gotcha already caused an in-game crash)
+## Contracts
 
-1. **GLB mesh-name from node.** KSA reads the SubPart id from glTF `meshes[i].Name`, so a node name alone does not provide the mesh registry key. `nameMeshesFromNodes()` copies node→mesh name. (The historical failure was `null.StartsWith('_')`; that skip was removed in 5261, but the mesh-name registry contract remains.) _(`MeshAtlasFileReference.DoLoad`)_
-2. **Every named mesh registers, including `_`-prefixed names.** The old underscore-prefix skip was removed in 5261; `MeshAtlasFileReference.DoLoad` now loops over every `Meshes[]` entry. flexo's `<id>_VM` view meshes register normally; the render/view pair must be **distinct geometry instances** or GLTFExporter dedups them.
-3. **Every `<PartModel>` must carry a `<Material>`, AND every `<PbrMaterial>` must carry Diffuse + Normal + AoRoughMetal.** Both `ThumbnailRenderResources.AddDraw` (`KSA.Rendering.Thumbnails/ThumbnailRenderResources.cs:138-140`) AND `PartModel.WriteInstancesToGpu` (every placed part, `PartModel.cs:518-522` @5482) deref `Material.DiffuseReference`/`NormalReference`/`PBRMap` with no null check — **not even on `Material` itself** (only `EmissiveMap?`/`ThinFilmMap?` are null-safe). `PartModelModule.Template.Material` is nullable and resolved as `Material?.Get()` (`KSA/PartModelModule.cs:27,58` @5482), so an **absent `<Material>` element** leaves it null and NREs during the startup thumbnail pass — over every registered part, before the main menu. There is NO "untextured `<PartModel>`": a scan of every shipped `Content/Core/*Assets.xml` finds **0** `PartModel`/`PartModelDynamic`/`PartModelGlass` elements without a `<Material>`. flexo enforces this in the type system — `AssetsSubPartPlan.materialId` / `ReferenceSubPartPlan.materialId` are non-nullable `string`, so the serializer emits `<Material>` unconditionally — and a custom mesh that resolves no texture/material/glow gets a shared `<base>_NeutralMaterial` fallback instead of being left bare. (A _dangling_ `<Material Id>` is a different failure: `ModLibrary.Get<T>` **throws** `"<T> is null for '<id>'"` from `ThumbnailPart`'s constructor, not from `AddDraw`.) Regression-guarded by `modExport.test.ts` "every exported `<PartModel>` carries a `<Material>`". See `plans/FIX_EMISSIVES_BUG.md`. flexo resolves uniform channels into deduped 1×1 solids (`BundleTextures` in modExport): `_FlatNormal.ktx2` (128,128,255), `_NeutralORM.ktx2` (255,128,0 — the no-material legacy), `_ORM_<aarrmm-hex>.ktx2` (a CustomMaterial's uniform rough/metal; AO fixed 255, **R=AO G=rough B=metal per MeshIndirect.frag "Following GLTF spec"**), `_BaseColor_<rrggbb-hex>.ktx2` (picked base colors).
-4. **KTX2 flavor = uncompressed `R8G8B8A8_UNORM` + linear DFD + Zstd — NEVER `_SRGB`-tagged** (vs KSA's BC7/BC5/BC4+Zstd). With no `.toml` sidecar, KSA's loader honors the KTX2's real `vkFormat` verbatim (`Brutal.TextureApi.Ktx/Loader.cs`; only UASTC is transcoded, default target `Rgba32`), **and** `MeshIndirect.frag` gamma-decodes the diffuse sample itself (`gammaToLinear` = pow 2.2). An `_SRGB`-tagged diffuse therefore decodes TWICE in-game — mid-tones render too dark (saturated colors are fixed points, which is why early validation passed). Convention (matches Core's own linear-tagged BC7 atlases): **sRGB-encoded bytes, UNORM/linear container tags, one decode in the shader.** The editor is agnostic — `TextureCache.loadTexture` forces `colorSpace` per call site. Stale `_SRGB`-tagged IndexedDB caches are regenerated from the stored source on hydrate (`ensureCurrentKtx2`).
-5. **Element/attribute names**: `<MeshAtlas Path>`, `<PbrMaterial Id>`+`<Diffuse|Normal|AoRoughMetal|Emissive Path Category>`, `<SubPart Id>`→`<PartModel|PartModelGlass Id>`(`<Mesh Id>`,`<Material Id>`)+`<MeshView>`(`<Mesh Id>`). All match the C# classes exactly.
-6. **mod.toml fields** = `name` + `assets=[...xml paths]`. (flexo emits `name="flexo-parts"`.)
-7. **Path sandboxing** = assets referenced by relative `Path=` from the Assets XML, resolved mod-dir-relative. `Category` is a max-texture-size cap only.
-8. **`PartModel Id` must be unique** (KSA dedupes PartModels by `Template.Id`); flexo uses `<subPartId>_Model`. **`PbrMaterial Id`s dedupe the same way** (`PbrMaterialReference.OnDataLoad` → `ModLibrary.Register`; a duplicate silently becomes a reference to the first) — flexo exploits this deliberately: identical resolved channel sets intern into ONE shared `<PbrMaterial>` referenced by many SubParts (`flexo_<MatName>_<hex>_Material` for a verbatim CustomMaterial, `<subPartId>_Material` otherwise), exactly Core's one-pack-material pattern.
-9. **Glass: emissive ignored + ~10% diffuse tint.** `MeshGlassIndirect.frag` hard-codes opacity 0.75, `glassColor=mix(albedo,0.1,0.9)`. `$simulateGlass` mirrors this; glass can't glow, so the `glassGlow` layered two-SubPart export is required. **Two flexo sources take the `<PartModelGlass>` route** (`PartModelGlassModule.cs`): a transparent kitten submesh (the visor) and an IMPORTED mesh whose `imported.transparent` is set (offered at import for a glTF `alphaMode: BLEND` material). Both emit `<PartModelGlass>` in place of `<PartModel>` with the same `Id`/`<Mesh>`/`<Material>` children, and **neither ever carries `<Emissive>`** — the glass shader never samples it, so an emissive on a glass material is silently dead and only fragments material interning. The layered `glassGlow` expansion stays kitten-only: insetting a copy of arbitrary imported geometry toward its bbox center is a guess that pokes through non-convex shells, so an imported glass mesh just doesn't glow.
-10. **Every exported primitive MUST be indexed.** `GltfUtils.LoadMeshAssetForPrim` builds an index buffer only `if (prim.Indices.HasValue)` (`RenderCore.Gltf/GltfUtils.cs:484-488`), and `MeshReference.Load` (`:90-96`) walks that same span to build `PositionsCompare` for picking. A primitive with no `indices` therefore draws zero triangles and can't be picked — **silently, with no load error**. `GLTFExporter` faithfully omits `indices` for a non-indexed `BufferGeometry`, and three's MikkTSpace tangent generator **de-indexes** (`MeshAtlasCache` runs it for the editor's normal-map preview), so `toKsaGeometry()` rebuilds a 0..count-1 index whenever one is missing. Index `componentType` must be ushort/uint/ubyte (`AddIntsToBuffer`, `:540-566`).
-11. **Vertex accessors: float32, tight, POSITION/NORMAL/TEXCOORD_0 only, with POSITION `min`/`max`.** `GetGltfBufferWithStride` (`:386-404`) throws on any accessor whose element size ≠ 12/12/8 bytes or whose bufferView `byteStride` disagrees — so no `KHR_mesh_quantization`, no interleaving, no Draco in the shipped GLB. `MeshReference.Load` (`:83`) imports with `VertexImportFlags.Normals | UVs`, so TANGENT/COLOR_0/TEXCOORD_1/JOINTS_0/WEIGHTS_0 are never read and `toKsaGeometry()` strips them. `AddPositionExtremes` (`:568-584`) reads the POSITION accessor's `min`/`max` for the bounding sphere. `GLTFExporter` satisfies the float32/tight/min-max parts by construction; all of it is regression-guarded in `exportGlb.test.ts` (`describe('KSA glTF loader requirements')`).
-12. **Glow = WHITE × mask × 1.25, added after lighting — there is NO coloured emissive, and no LUT slot.** `MeshIndirect.frag:276-287` samples the emissive `.x` (single channel) and adds `gammaToLinear(vec3(sampledEmissive) * EMISSIVE_MULTIPLIER)`, `EMISSIVE_MULTIPLIER=1.25` (`Shaders/Common/Lighting.glsl:10`), `gammaToLinear = pow(x,2.2)` (`Shaders/Common/Shared.glsl:203`). Because it is added AFTER all lighting, a glow reads **pure white in shadow** no matter what the diffuse holds. Two consequences flexo bakes in:
-    - `glowComposite` keeps the glow COLOUR in the diffuse and the greyscale key in the mask, with **`coverage` (diffuse blend) and `strength` (mask value) as independent knobs** — one slider driving both made "saturated colour + gentle white core", the only setting that reads coloured in-game, unauthorable.
-    - A `GlowRamp` (flexo's equivalent of KSA's 1-px gradient LUTs) is **evaluated on the CPU and baked into the diffuse**; the exported `<Emissive>` is always the plain greyscale mask KSA supports. `PbrMaterialReference` has no LUT slot (contract #16) and the ONE LUT-keyed emission path in the engine is the temperature channel — see the caveat below.
-    - The only branch that emits a COLOUR is `addEmissiveColor` (state bit 7, `MeshIndirect.frag:279-282`), set exclusively by the part render state for `Battery.HasStatusLight` (since 5482 `PartTreeRenderData.ComputeOwnerDynamicState`, colour ramp `PartTreeRenderData.cs:1350-1363`; `PartModelModule.cs:110-140` before) (green→amber→red by charge; it also discards the mask value, so no falloff). For a coloured lamp, pair a modest mask with a `<Light>` carrying `<Color>` — the glow panel's "Add matching light" does exactly that. Full write-up: `analysis/KSA_EMISSIVE_AND_LUT.md`.
-13. **glTF node transforms are IGNORED.** `MeshAtlasFileReference.DoLoad` iterates `GltfJson.Meshes[]` and never walks the node graph (`decomp/KSA/MeshAtlasFileReference.cs:22-49`), so a mesh is registered purely by `meshes[i].name` and whatever local/world transform its node carried is lost. Consequence for the model importer: a node's world matrix must become either baked geometry or a flexo **placement** — it can never ride along in the GLB. (`importPlan.ts` `ImportInstance`, `importNormalize.ts` `bakeMatrixFor`.)
-14. **One `<PartModel>` = one `<Mesh>` + one `<Material>`, and only glTF primitive 0 is drawn.** `PartModelModule` binds a single mesh + material (`decomp/KSA/PartModelModule.cs:17-43` @5482); `MeshReference` loads every primitive but the part path renders `DeviceMeshesInterleaved[0]` with one bound material (`decomp/KSA/MeshReference.cs:58,76-118`, `decomp/KSA/PartModel.cs:493-531` @5482). So **one SubPart = one mesh = one primitive = one material**, and an imported multi-material object MUST be split at import — a game limit, not a preference (`importPlan.ts` grouping by (geometry, material, handedness) — see #15 for the handedness half).
-15. **Back-face culling is unconditional; the sampler is Repeat.** `PartModelRenderer.cs:196` (@5482) sets `CullMode = BackBit` for every part pipeline and `:50-52` sets `Repeat` on U/V/W; there is no double-sided, alpha-cutout or wrap-mode switch anywhere in the XML. Consequences: a **negative-scale placement would reverse winding and cull the whole piece invisible**, so the importer always bakes a mirrored transform into the geometry (winding reversed) and leaves a positive-scale placement — and because ONE bake serves a whole SubPart, **handedness is part of the import grouping key** (`importPlan.ts`), so a mirrored copy of an instanced mesh becomes its own SubPart instead of an instance with a negative `<Scale>`; "make double-sided" must duplicate + flip the geometry; `alphaMode: MASK` is unsupported and `BLEND` only via `<PartModelGlass>`.
-16. **`<PbrMaterial>` has FIVE TEXTURE SLOTS AND ZERO SCALARS.** `PbrMaterialReference` carries only `<Diffuse>/<Normal>/<AoRoughMetal>/<Emissive>/<ThinFilm>` path references — there is no colour tint, no metallic/roughness multiplier, no normal-strength and no emissive colour anywhere in the schema (`<Normal Power>` is parsed but only the planet renderer consumes it). Consequence for the model importer: **every glTF FACTOR must be baked into pixels** (`importMaterials.ts`) — `baseColorFactor` multiplied into the diffuse in LINEAR space, `metallicFactor`/`roughnessFactor`/`occlusionStrength` into the packed ORM in byte space (those channels are linear data), `normalTexture.scale` into RG at encode (`channelTransforms.prepareChannelImage`), and `emissiveFactor` × `KHR_materials_emissive_strength` into the glow bitmap that composites the diffuse + mask.
-17. **A `<MeshView>` mesh is a CPU BUDGET, not just geometry.** In-game editor picking runs `Part.RayCastEgoSubPart` (`decomp/KSA/Part.cs:2574` @5482; since 5482 `Part.RayCastEgo` first rejects the whole part against a bounding sphere built from its `<MeshView>` meshes): bail unless the SubPart has a `MeshViewModule`, sphere-reject, then `Ray.RaycastWatertight` — a plain `for (i += 3)` triangle loop over `meshView.PositionCompare` (`decomp/KSA/Ray.cs:194-213`) — and finally `meshView.HostMesh.GetVertexSpan<float3>(MeshAttribute.Normal)[…]` at the winning vertex. `PositionCompare` is the view mesh **de-indexed at load**: one `double3` (24 B) per INDEX (`decomp/KSA/MeshReference.cs:87-95`). So the view mesh dictates (a) 24 B × index-count of resident memory per SubPart and (b) a full triangle loop on **every hover frame**, for every SubPart under the cursor. Two consequences flexo bakes in: the `_VM` mesh must keep **indices AND its NORMAL attribute** (contract #10/#11 — a normal-less view mesh is a null-span read at the hit vertex), and imported geometry, which can be six figures of triangles, is **decimated** for the `_VM` copy only (`exportGlb.decimateViewGeometry`, budget 2 000 triangles set by `modExport.VIEW_MESH_TRIANGLE_BUDGET`, which the user can switch off via `$modelImportSettings.decimateViewMeshes` — off ⇒ full-resolution `_VM` meshes and the CPU cost above): meshopt returns a reduced index buffer over the SAME vertex arrays, so POSITION/NORMAL/TEXCOORD_0 survive verbatim and the render mesh is untouched. Failure to simplify falls back to full resolution (slow hover, never a broken export).
+1. **Global asset identities.** Top-level Texture, MeshAtlas, PbrMaterial and SubPart
+   rows require `Id`. Material slots use `Ref` to Texture; model Mesh/Material children
+   use `Ref` to global resources. Each render module has an owner-local `Key`, not a
+   global model ID. `Components` contains the model and MeshView declarations.
 
-18. **`<PartModel>` and `<PartModelDynamic>` are two shader VARIANTS of one file: emissive XOR temperature.** `PartModelRenderer.ColorData` compiles `MeshIndirect.vert/frag` twice — `Pipeline` with `ENABLE_EMISSIVE`+`ENABLE_THIN_FILM` (`decomp/KSA/PartModelRenderer.cs:136-137,152-153` @5482) and `PipelineDynamic` with `ENABLE_TEMPERATURE`+`ENABLE_THIN_FILM` (`:227-228`) — then draws `PartModel` and `PartModelDynamic` under them back to back (`:375-377`). So an `<Emissive>` on a `<PartModelDynamic>` SubPart is **never sampled** (the block at `MeshIndirect.frag:273-291` is preprocessed out and `:324-326` forces `emissive = false`), and the heat gradient — the `<ThinFilm>`/`_TFI` texture's G channel keyed through the global `temperatureLut` (`MeshIndirect.frag:293-300`) — is never sampled on a `<PartModel>` one. Shipped Core data obeys this exactly: every category with an `<Emissive>` has zero `<PartModelDynamic>` (CommandA / ElectricalA / IVAPropA / PassageA / PartAssets) and every `<PartModelDynamic>` category has zero `<Emissive>` (FuelTankA / PropulsionA / PropulsionC). flexo only ever emits `<PartModel>`/`<PartModelGlass>`, so it sits on the emissive side by construction — but **ThinFilm heat (the plan's Phase 3) can never coexist with a glow on the same SubPart**, and adopting `<PartModelDynamic>` would silently kill every glow on it.
-19. **An export VARIANT is minted only when flexo changes something, and it inherits NOTHING it does not name.** A variant re-declares a built-in SubPart template under a project-unique id (`flexo_<base>_<ns>_<originalId>` — one naming rule, no interior-prop special case any more; `ns` is the per-part namespace token, contract #20) that REUSES the built-in `<Mesh>` + `<Material>` by id. `buildExportVariantMap` mints one **only** when the placed built-in template (a) carries flexo SubPart GameData — a `<Light>`/tank/… or a SubPart-owned `<Collider>`, which under the shared built-in id would MERGE onto the built-in template globally — **or** (b) wants an `<Internal>` that differs from the built-in's own catalogued value. Everything else references the built-in id directly and keeps the built-in's flags for free. Because the variant is a fresh `<SubPart>` that inherits only what it names, `ReferenceSubPartPlan` copies the built-in's `<Internal>`, `<RayTracing>` (raw token) and `<ShadowCaster>` forward, plus the built-in's own geometry `<Collider>`s — dropping `<RayTracing>` turned a `ShadowProxy` occluder into a **visible** mesh, dropping `<ShadowCaster>` made Core's explicitly-`false` capsule windows start casting shadows. Element order mirrors Core: `Internal, Mesh, Material, RayTracing, ShadowCaster`. The `<PartModel Id>` must still be **fresh** (contract #8) or the dedup collapses the variant back onto the original, dragging the original's flags back with it. **A custom (flexo-authored) mesh must NEVER get a variant, and `buildExportVariantMap` skips them by DOCUMENT lookup (`part.customMeshes`), not by catalog absence.** The catalog it receives is `$catalogIndex`, which merges `$customCatalog` (`state/catalogStore.ts`), so a membership test silently let custom meshes through: giving a custom mesh SubPart GameData (a `<Light>`, or a SubPart-owned collider) minted a variant of flexo's own SubPart, and because custom catalog entries carry **no `materialId`** (their material lives in `customMeshRenderCache`) the variant emitted a `<PartModel>` with no `<Material>` — the contract-#3 startup crash — while orphaning the correct, fully-materialed declaration and pointing `<MeshView>` at the render mesh instead of the decimated `_VM`. The rule is semantic, not defensive: a custom SubPart id is project-unique and declared by this same export, so there is nothing to merge onto. A custom mesh emits `<Internal>true</Internal>` in its own `<PartModel>` when the user marks it interior-only. **Glass can NEVER be interior-only**: `<PartModelGlass>` has no `<Internal>` field (the one `[XmlElement("Internal")]` in the decomp is `PartModelModule.cs:35`), a `glassGlow` mesh counts as glass whole, and the flag is forced off on that path. Full contract in [connectors-coordinates-iva.md](connectors-coordinates-iva.md).
-20. **One mod = N parts = N `<MeshAtlas>` elements in ONE Assets file, and every registered id must be PROJECT-unique.** `<Base>Assets.xml` now holds every included part's `<MeshAtlas>` + `<PbrMaterial>` + `<SubPart>` entries as siblings (`AssetBundle` is a flat `List<SerializedId>` — see [part-and-subpart-xml.md](part-and-subpart-xml.md#multi-part-export)), and flexo emits **one atlas GLB per part that has custom meshes** (`Meshes/<Base>_<meshId>_MeshAtlas.glb`, the token carrying that part's first mesh id). Multiple atlases per file are legal because `MeshAtlasFileReference.DoLoad` (`decomp/KSA/MeshAtlasFileReference.cs:29-52`) loops over `GltfJson.Meshes[]` and registers every mesh **by NAME** through `ModLibrary.Register` — one flat, global, **first-wins** mesh registry, not a per-atlas namespace (a `Register` that returns false makes the atlas reuse the ALREADY-registered `MeshReference` instead: `Meshes.Add(ModLibrary.Get<MeshReference>(…))`, silently, with no load error). `<SubPart>` and `<PbrMaterial>` ids register the same first-wins way (contract #8). So the whole mod shares one id space, and flexo keeps **GLB mesh names, `_VM` names, `<SubPart>` ids, `<PartModel>` ids and `<PbrMaterial>` ids unique across the entire PROJECT**, not merely per part: custom-mesh ids carry a random suffix and are re-minted on duplicate/import (plan invariant **I4**, `state/partClone.ts`), material/texture names carry a mesh- or material-id token, and export-variant ids carry the per-part `ns` token (`partExportNs(partId)` = `sanitizeBaseName(partId)`, contract #19). `assetsXmlSerializer.claimId` **throws** on a duplicate `<SubPart>`/`<PbrMaterial>` id rather than let the game's silent first-wins collapse ship the wrong geometry, and `buildMultiCustomBundle` throws when two parts emit **different bytes** at the same binary path (equal bytes — a kitten texture copied verbatim by two parts — dedupe to one). Cross-part duplicates that survive to the UI are export pre-flight blockers (`collectProjectExportIssues`). ⏳ **Pending in-game verification:** a two-part mod whose `<Base>Assets.xml` declares TWO `<MeshAtlas>` elements has not yet been loaded in KSA — the reasoning above is decomp-derived (re-verified @5438) but unconfirmed on the running game.
+2. **Mesh names.** KSA registers GLB `meshes[i].name`; a node name alone is insufficient.
+   `exportGlb.ts` copies names to the mesh objects. Atlas IDs do not namespace meshes.
+   Render and `_VM` names must be unique throughout the exported mod and must not
+   collide with referenced Core resources. HostOnly collision atlases are separate
+   from the renderer's atlas index.
 
-## What changed in 5482
+3. **Required material channels.** Diffuse, Normal and AoRoughMetal are always emitted.
+   The thumbnail path dereferences the normal and packed PBR textures without null
+   guards. Missing channels get shared neutral textures. ORM means R=AO, G=roughness,
+   B=metalness. Optional native Emissive, ThinFilm and Alpha references survive
+   built-in template copies even where Flexo does not simulate them.
 
-**Verdict: export contract INTACT; in-game shading changed (COSMETIC, documented).**
+4. **KTX2 color convention.** Custom output is RGBA8 UNORM with linear container tags,
+   sRGB-encoded color bytes and Zstd mip compression. KSA performs its own gamma decode;
+   an SRGB Vulkan format would decode twice. Source normal maps receive the KSA X
+   inversion once during encoding. The editor reverses that convention while
+   reconstructing the normal Z component. Core browser textures use UASTC and transcode
+   according to device capabilities. Foil and cloth require no special format.
 
-- **Every export requirement still holds.** `ThumbnailRenderResources.cs` is byte-identical, so
-  `AddDraw` still dereferences Diffuse, Normal and AoRoughMetal with no null check, and
-  `PartModel.WriteInstancesToGpu` does the same (contract #3). `MeshAtlasFileReference`,
-  `GltfUtils`, `PbrMaterialReference`, `MeshIndirect.frag` (ORM = R ao / G rough / B metal;
-  emissive white × mask × 1.25), `AssetBundle`, `Mod` and `ModLibrary` are byte-identical.
-  `BuildPipelineModel` still defines `ENABLE_EMISSIVE`; `BuildPipelineDynamic` still defines only
-  `ENABLE_TEMPERATURE`. The new `SerializedCollection.Deregister` is called only for runtime
-  distant glints (`Vehicle.ReleaseDistantGlint`), so asset-loaded first-wins registration — and
-  the N-part bundle — is unaffected.
-- **Rev 5472 fixed the ambient BRDF lookup.** `Shaders/Common/Lighting.glsl`
-  (`getPBRLightingAmbient`, `getPBREnvironmentLightingPresampled`) and the ray-traced blocks of
-  `ModelPbr.frag`, `MeshIndirectRaytraced.frag` and `Fur.frag` now sample the BRDF texture at
-  `(dotNV, roughness)` instead of `(dotNV, 1 − roughness)`. Parts pick this up through
-  `MeshIndirect.frag`'s include of `Lighting.glsl`. Only the environment specular term changes;
-  direct lighting does not. Exported materials therefore look different in game from 5482 on:
-  smooth metals reflect more, rough surfaces lose the grazing-angle sheen. three.js's
-  `MeshStandardMaterial` already indexes its environment BRDF by roughness, so flexo's preview is
-  now closer to the game. The changelog warns Core assets may be rebalanced; any in-game
-  material A/B (the pending red-metallic-button check) should be judged on 5482 or later.
-- **Part render state moved.** Revs 5456/5474 deleted `UpdateRenderData` from `PartModelModule`,
-  `PartModelDynamicModule` and `PartModelGlassModule`; `PartTreeRenderData.cs` now computes the
-  same state bits (battery status-light colour, light-switch no-emissive bit, temperature, gimbal
-  matrix). The `<Internal>` render gate exists in two places with the same condition
-  (`PartModel.cs:486` and `PartTreeRenderData.cs:1300`), and `PartModelModule`'s `<Internal>` is
-  still the only `[XmlElement("Internal")]` in the decomp.
-- **Picking gained a whole-part early-out.** `Part.RayCastEgo` rejects a part against a bounding
-  sphere built from its `<MeshView>` meshes before the per-SubPart test (contract #17); flexo's
-  `_VM` view meshes already supply those meshes.
-- **KSA's own GLB bundler changed in ways flexo does not mirror.** `PartAssetBundler` and
-  `GlbExtras` changes (and the removed unknown-property warning) concern glTF `extras` and node
-  prefixes flexo never reads or writes; the new `GlbHullValidation` matters only if gap S1
-  (`<ConvexHull>`) is ever closed.
+5. **Current XML shape.** For example:
 
-## What changed in 5438
+   ```xml
+   <Texture Id="ExampleDiffuse" Path="Textures/example.ktx2" Category="Vessel"/>
+   <MeshAtlas Id="ExampleAtlas" Path="Meshes/example.glb"/>
+   <PbrMaterial Id="ExampleMaterial"><Diffuse Ref="ExampleDiffuse"/></PbrMaterial>
+   <SubPart Id="ExampleBody"><Components>
+     <PartModel Key="Model"><Mesh Ref="ExampleMesh"/><Material Ref="ExampleMaterial"/></PartModel>
+     <MeshView Key="View"><Mesh Ref="ExampleMesh_VM"/></MeshView>
+   </Components></SubPart>
+   ```
 
-**Verdict: existing Part import/export contracts intact; added metadata and runtime effects.**
+   The abbreviated material above illustrates references; real output also supplies
+   Normal and AoRoughMetal as required by contract 3. `Category` retains the game's
+   texture-size policy; it is not a shader selection.
 
-- `decomp/KSA/PbrMaterialReference.cs:DisplayName` adds the optional **attribute**
-  `<PbrMaterial DisplayName="…">`; `GetName()` returns it or `Id`. Shipped
-  `Content/Core/ParachuteAssets.xml` uses it for the six selectable canopy materials. This is
-  presentation metadata, not a new texture or shading parameter: the only shipped uses are
-  those six canopy materials, and `decomp/KSA/VehicleEditor.cs` passes
-  `Parachute.GetAuthoredMaterials()` to its material combo. `PbrMaterialReference.OnDataLoad`
-  still resolves/dedupes by `Id`, never `DisplayName`. `src/ksa/catalog.ts` reads material
-  texture paths for preview; `assetsXmlSerializer.ts`'s reference-SubPart loop emits the original
-  `<Material Id>` on Core variants, so the referenced Core declaration and label remain intact.
-  flexo does not import arbitrary material definitions as editable metadata and its fresh
-  custom declarations have no imported display label to preserve. No Part round-trip fix is
-  needed. The existing `<Alpha>` slot is still unbound by
-  `PartModel.PerDrawData`, and no `<EmissiveLut>` or tint slot appeared.
-- `PartModelModule.UpdateRenderData` and `PartModelDynamicModule.UpdateRenderData` gather up to
-  `FxDeformation.MaxDents` runtime dents. `PartModelRenderer` defines `ENABLE_DEFORMATION` in
-  vertex/shadow/prepass pipelines and adds descriptor bindings 1–2; `PartModelGlass` and
-  `KSA.Rendering.Thumbnails/ThumbnailRenderResources.UpdateDescriptorSets` bind matching dummy
-  buffers. These are real rendering changes, but no `[XmlElement]` or `[XmlAttribute]` was added
-  to the Part model templates. flexo authors the undeformed mesh and needs no damage preview.
-- **Crash guard still required:** both `ThumbnailRenderResources.AddDraw` overloads still
-  dereference `Material.DiffuseReference`, `NormalReference` and `PBRMap` without null checks.
-  `PartModel.WriteInstancesToGpu` still binds the same five texture slots. `ENABLE_EMISSIVE`
-  remains enabled by `ColorData.BuildPipelineModel` and absent from `BuildPipelineDynamic`;
-  `MeshIndirect.frag`, `MeshGlassIndirect.frag` and `Common/Lighting.glsl` are byte-identical.
-- `MeshReference.Load` adds `[XmlIgnore] BoundsCenter/BoundsRadius` computed from POSITION
-  accessor extrema and corrects a Z-radius comparison that accidentally read minimum X. The
-  indexed geometry and POSITION min/max requirements remain unchanged. `RenderCore.Gltf/GltfUtils`
-  and `MeshAtlasFileReference` are byte-identical, including global mesh-name registration and
-  first-wins reuse. The obsolete underscore-skip statement in contract 2 is corrected above.
-- `AssetBundle.Assets` adds top-level `<ExplosionVolume>` and `<Explosion>` registrations;
-  `ModLibrary` adds `AllExplosions` and exact `SoundBehavior` lookup. The flat `List<SerializedId>`
-  iteration, Part/SubPart/material registries, and N `<Part>` / N `<MeshAtlas>` sibling behavior
-  are unchanged. `Mod.cs` otherwise changes logging line numbers and a local variable name.
-  **Added-schema audit:** explosion definitions belong to the destruction effect catalog, not
-  geometry or the GameData passthrough. They are not preserved by flexo's Part-only import and
-  must not be described as covered by `RawXmlNode`; Core effect references resolve in the game.
-- The texture-library refactor adds case-insensitive extension lookup and formats to
-  `Brutal.TextureApi/TextureLoader`, fixes internal cubemap depth handling in
-  `Brutal.TextureApi.Ktx/Converter`, and caches host sampling properties in
-  `RenderCore/TextureAsset`. KTX2 UASTC transcoding/default RGBA32 and direct `vkFormat` handling
-  are unchanged. flexo's 2D UNORM/linear/Zstd exports and private UASTC atlas convention remain
-  valid; this review does not claim a live KSA mod-load test.
+6. **Manifest order.** `mod.toml` declares `name` and `assets=[…]`. Definitions precede
+   same-tag Modify patches. There is no separate systems list for current System rows.
+   A patch target must already exist, even though a Parent may resolve forward.
 
-## What changed in 5402
+7. **Paths and ownership.** New binary Paths are mod-relative. References to native
+   global resources keep Core's resource ownership. Fresh built-in SubPart copies
+   reuse global Mesh and Material references and do not copy licensed binaries into
+   the exported custom mod.
 
-**Nothing on the export contract.** The one documented commit of this build — rev 5401, "Fixed
-crash for incorrect data stride for thumbnail rendering" — landed in the new multi-viewport
-plumbing (`PartThumbnailViewport`, `ViewportRegistry`; `ThumbnailRenderer` / `ThumbnailCreator` /
-`ThumbnailPart` changed only by `Viewport` → `IViewport` types), and
-**`ThumbnailRenderResources.cs` is byte-identical**: `AddDraw` still dereferences
-`Material.NormalReference` / `AoRoughMetalReference` unguarded, so the synthetic Normal + ORM stay
-mandatory. `PbrMaterialReference` is byte-identical (gap **T1** `<Alpha>` still open, still no
-`<EmissiveLut>`/tint); `ENABLE_EMISSIVE` is still defined in `PartModelRenderer.BuildPipelineModel`
-and absent from the dynamic pipeline; `GltfUtils`, `Mod.cs`, `AssetBundle.cs` and `ModManifest`
-are byte-identical and `ModLibrary` changed only by viewport iteration, so the multi-part bundle
-contract is unmoved. `mod.toml` gained `ParachuteAssets.xml` (canopy `<GltfFile>`s + one
-`<PbrMaterial>`; nothing flexo lists). `ModelPbr.frag` / `ModelNormal.frag` now flip the geometric
-normal on back faces ("two-sided single-layer meshes (parachute canopy) rasterize backfaces");
-`getNormalFromMap_ShaderX` itself is unchanged, so the derivative-TBN / normal-X-flip contract
-stands. The private mirror was already at 5402 and UASTC-transcoded (`flexo-private-assets`
-commits `3825724`, `b1082c1`).
+8. **Scope and deduplication.** Top-level IDs are case-insensitively unique across the
+   export. Identical custom channel sets can intentionally share a single material;
+   duplicate declarations are not emitted. Component Keys are local to their owner.
+   The old PartModel-global-ID deduplication rule no longer describes the schema.
 
----
+9. **Glass.** Native PartModelGlass is preserved. Its special in-game shader is not
+   faithfully reproduced by the ordinary browser PBR preview. The existing custom
+   tinted-glass approximation and two-layer glassGlow export remain separate features.
+   Glass and Dynamic modules have no `Internal` member; only PartModel can be IVA-only.
 
-## What changed in 5348
+10. **Indices.** GLB render and view geometry require indices. Export uses raw geometry,
+    not the editor's tangented cache: tangent generation can de-index geometry.
 
-**`PbrMaterialReference` gained a sixth slot** (rev 5334, "Added alpha map support to static
-objects"):
+11. **Accessors.** KSA consumes tightly packed float32 POSITION, NORMAL and TEXCOORD_0,
+    with position bounds and unsigned integer indices. Unread attributes are stripped.
+    Geometry exported from Blender passes through the same normalization.
 
-```csharp
-[XmlElement("Alpha")] public TextureReference? AlphaMap;
-```
+12. **Emissive.** KSA adds a white mask after lighting; it has no arbitrary colored
+    emission or user LUT material slot. Flexo bakes desired color into diffuse and can
+    pair it with a Light. See [the emissive analysis](../analysis/KSA_EMISSIVE_AND_LUT.md).
 
-flexo models five (`<Color>` / `<Normal>` / `<PBR>` / `<Emissive>` / `<ThinFilm>`), so it can
-neither author an alpha-cutout material nor preserve the slot off a copied Core material:
-**gap T1** (MISSING-CAPABILITY). Nothing on a part path is lost today — Core uses it only on the
-launch pad (`CoreLaunchPadBAssets.xml`) and `PartModel`'s `PerDrawData` still binds exactly five
-texture indices (Diffuse/Normal/PBR/Emissive/TFI), so `<Alpha>` currently reaches only the
-`StaticObject.frag` pipeline. Still no `<EmissiveLut>` or tint slot, so flexo keeps baking its
-glow ramps.
+13. **glTF transforms.** The atlas loader reads mesh data, not the node hierarchy. Node
+    transforms must be baked into geometry or represented as Part placements. Mirrored
+    transforms are baked with corrected winding.
 
-Everything else re-verified: `ThumbnailRenderResources.AddDraw` still dereferences
-`Material.NormalReference` / `AoRoughMetalReference` **unguarded**, so flexo's synthetic Normal +
-ORM stay mandatory on every `<PbrMaterial>`; `PartModelRenderer` still defines `ENABLE_EMISSIVE`
-and still omits it from `BuildPipelineDynamic`; KSA still reads a SubPart id from `meshes[i].name`,
-so the GLB mesh-name post-process is still required. `Mod` / `ModLibrary` / `AssetBundle` changed
-only by registering the new static-object and clutter-game-data collections, leaving the flat
-`List<SerializedId>` bundle contract — and with it the multi-part export (N `<Part>` /
-`<PartGameData>` / `<MeshAtlas>` siblings, first-wins dedupe, id uniqueness) — unmoved.
-`GltfUtils` and `ThumbnailRenderResources` changed **only** by the
-`ReadOnlySpanExtensions.Cast<>(x)` → `x.Cast<>()` / `SpanExtensions.AsBytes<>(x)` → `x.AsBytes()`
-decompiler churn. `mod.toml` gained the launch-pad and clutter-GameData files to its load list;
-the file's grammar is unchanged.
+14. **Materials and primitives.** A PartModel references one mesh and one material;
+    current KSA renders primitive zero. Model import splits multi-material content into
+    compatible meshes. A SubPart may contain multiple model components, and Flexo now
+    preserves and previews all of them. Every shipped 5801 render mesh has one primitive.
 
----
+15. **Culling.** KSA renders part surfaces with back-face culling. Interior geometry
+    requires real inward-facing surfaces or deliberate double-sided geometry baking;
+    a browser-side material flag alone cannot make an exported mesh double-sided.
 
-## What changed in 5261
+16. **glTF factors.** KSA materials are texture-driven. Base color, roughness, metalness,
+    occlusion and emissive factors are baked into channel pixels. The import path leaves
+    normals unflipped until the common channel encoder applies the KSA convention.
 
-**Verdict: NONE.** Every anchor on this contract is byte-identical or noise-only:
+17. **View mesh cost.** MeshView provides CPU picking geometry. It needs indices and
+    normals. Custom `_VM` meshes may be simplified to the configured triangle budget;
+    the render mesh remains unchanged. Failed simplification keeps the full mesh.
 
-- **`ThumbnailRenderResources.cs`** — identical apart from the decompiler renaming
-  `<>y__InlineArray2` to `InlineArray2`. The un-guarded `Material.NormalReference` /
-  `AoRoughMetalReference` deref in `AddDraw` survives, so flexo's **synthetic Normal + AoRoughMetal
-  on every `<PbrMaterial>` remain mandatory**.
-- **`PbrMaterialReference.cs`** — same one-line decompiler rename, nothing else. **No
-  `<EmissiveLut>` or tint slot appeared**, so flexo must still bake emissive ramps rather than ship
-  one.
-- **`Mod.cs` / `ModLibrary.cs` / `AssetBundle.cs`** — all three diffs are entirely rev 5169's
-  `ToNearest` / `SpanBuilder` display refactor (byte-size formatting in the asset-size report). The
-  flat `List<SerializedId>` enumeration, id-uniqueness and first-wins dedupe rules are unmoved, so
-  the **multi-part** case (N `<Part>`s + N mesh atlases in one bundle) is unaffected.
-- **`PartModelModule.cs`** — byte-identical, so `ENABLE_EMISSIVE` is still defined and still absent
-  from `BuildPipelineDynamic`.
+18. **Dynamic models and foil.** Dynamic temperature/heat and ordinary emissive are
+    different native shader paths; built-in copies retain their original model kind.
+    Foil/cloth in Surfaces A/B use ordinary Diffuse/Normal/AoRoughMetal, with no ThinFilm,
+    transparency or special foil shader. Preview differences in native lighting,
+    temperature, wetness and specular antialiasing are not texture decoding failures.
 
-One adjacent change worth recording: rev 5185 **removed** the mesh-atlas rule that skipped loading
-meshes whose name starts with `_`, added in an earlier clutter commit. flexo's exported atlases do
-not rely on that skip (the `_VM` view meshes are meant to load — they exist for editor pickability),
-so this is neutral, but it means an underscore prefix no longer hides a mesh from the atlas.
+19. **Independent built-in copies.** When an edit changes a built-in SubPart, export
+    creates a fresh project-unique resolved row, preserving every model, MeshView and
+    untouched root field. It does not Patch the Core template. Explicit gameplay data
+    replaces the corresponding copied gameplay; an explicit empty override removes it.
+    Custom meshes already have project-owned IDs and do not acquire extra built-in
+    copies. A missing catalog entry for an edited built-in blocks export rather than
+    risking a global mutation. Unchanged external references can remain external.
 
-## What changed in 5168
+20. **Multiple Parts and atlases.** One Assets file may hold multiple identified atlases,
+    materials and SubParts. Namespaces isolate each Part's built-in copies. Equal bytes
+    at a shared binary path deduplicate; differing bytes at the same path fail. Project
+    export preflight rejects conflicting IDs. Native Part appearance families are
+    independent of these private export copies.
 
-**Verdict: ✅ INTACT — every crash-causing gotcha still applies.** Re-verified byte-identical:
-`ThumbnailRenderResources.cs` (the un-guarded `Material.NormalReference` / `AoRoughMetalReference`
-deref in `AddDraw` survives ⇒ flexo's **synthetic Normal + AoRoughMetal on every `<PbrMaterial>`
-stay mandatory**), `PbrMaterialReference.cs` (**no** `<EmissiveLut>` / tint slot appeared — flexo
-must keep baking ramps), and `PartModelModule.cs` (`ENABLE_EMISSIVE` still defined, still absent
-from `BuildPipelineDynamic`; `[XmlElement("Internal")]` still the only one in the tree).
-`Mod.cs` / `ModLibrary.cs` changed only by log line-numbers and the clutter registration below.
+## Deliberate limits and update checks
 
-**The multi-part contract (§1.2) is intact.** `AssetBundle`'s asset list is still one flat
-`List<SerializedId>` with the same first-wins registration, and 5168 only **adds** two element
-types to it — `[XmlElement("GroundClutterMaterial", typeof(GroundClutterMaterialReference))]` and
-`[XmlElement("ClutterObject", typeof(ClutterObjectTemplate))]` (rev 5137, which also gave
-`ModLibrary` an `AllClutterObjects` collection). Both are ground-clutter assets; neither changes
-how N `<Part>`s / N `<MeshAtlas>`es in one bundle enumerate, dedupe, or resolve ids. flexo's
-`modExport.ts` / `assetsXmlSerializer.ts` need no change.
+Actual 5801 game loading and rendering are separate from browser tests and XML schema
+validation. Source-level validation cannot prove GPU appearance or full simulation.
+The browser does not reproduce all native Alpha, ThinFilm, glass, heat or terrain
+behavior. Arbitrary collision-hull authoring remains separate from preserved stock
+hulls. Per-face custom texturing retains its documented export limitations.
 
-**One form change flexo is unaffected by, worth recording:** `MeshAtlasFileReference.HostOnly`
-gained `[XmlAttribute("HostOnly")]`. It previously had no XML attribute at all, so the serializer
-treated it as a child **element** `<HostOnly>`; it is now an **attribute** `HostOnly="…"`. flexo
-emits neither form and `[DefaultValue(false)]` keeps it optional, so `<MeshAtlas>` output is
-unchanged — but an atlas that _did_ author the old element form would now be silently ignored.
-
-Also in `MeshAtlasFileReference.DoLoad`: `MaterialCount` is now read from `gltfLoader.GltfJson.Materials`
-**before** the mesh loop instead of inside it. Previously an atlas whose meshes were _all_ `_`-prefixed
-(flexo's `_VM` view-mesh convention) left `MaterialCount` at its default `1`; it now always reflects the
-real glTF material count. `MaterialCount` has no consumer anywhere in the 5168 decomp outside the
-ground-clutter LOD validation, so this is inert for part atlases — but it is the same
-count-must-match rule that _throws_ on the clutter path, so keep flexo's per-atlas material count
-honest. The GLB mesh-name post-process (KSA reads the SubPart id from `meshes[i].name`) and the
-UASTC-for-SubParts / BC7-for-`Characters/` split are both unchanged.
-
----
-
-## What changed in 5117
-
-**Every export contract INTACT — including the one that has caused an in-game crash.**
-`KSA.Rendering.Thumbnails/ThumbnailRenderResources.cs` is **byte-identical**, so
-`AddDraw`'s unguarded `inTemplate.Material.NormalReference.BindlessHandle` /
-`AoRoughMetalReference` deref survives ⇒ flexo's synthetic Normal + AoRoughMetal on every
-`<PbrMaterial>` remain **mandatory**. `Mod.cs`, `ModLibrary.cs`, `AssetBundle.cs`,
-`PbrMaterialReference.cs`, `MeshAtlasFileReference.cs`, `PartModelModule.cs` and
-`PartModelRenderer` are all unchanged, so the mod-loader contract, the SubPart-id-from-mesh-name
-rule and `ENABLE_EMISSIVE` all stand. `DefaultAssets.xml` only added the launch-pad GLB and
-dropped editor icon/shader entries flexo does not touch.
-
-**New (confirms an existing flexo behaviour): the GLB importer now warns on non-identity mesh
-node transforms.** Rev 5060 added `AssetBundler.WarnIfUnappliedTransform`
-(`decomp/KSA.GlbImport/AssetBundler.cs`), which prints
-_"Mesh atlas node 'X' has a non-identity translation/rotation/scale"_ plus a per-file
-_"…subpart origins will be offset from the visual mesh locations, which will make positioning
-game data like rocket nozzles, tanks, and masses very challenging"_ for any non-`_`-prefixed
-atlas node with a mesh. KSA then re-imported its own art to comply (rev 5075/5078,
-`CorePropulsionAAssets.xml` / `CoreElectricalAAssets.xml`). flexo's `exportGlb.ts` writes **no**
-node TRS at all (glTF nodes default to identity), so its atlases already satisfy this — but it
-is now an explicit, warned-on expectation worth keeping. `AssetBundler`'s other changes are a
-`setPrefix` threading and `Console.Error` → `Console.WriteLine` for the collider-primitive
-warnings.
-
-## What changed in 5056
-
-**Nothing that reaches flexo's export — and the game shipped its own reference implementation.**
-
-Every contract class re-verified byte-identical: `PbrMaterialReference.cs`, `AssetBundle.cs`,
-`ThumbnailRenderResources.cs` (the null-deref site still has **no** guard, so the synthetic
-Normal + AoRoughMetal rule stands) and `PartModelRenderer.cs` (`ENABLE_EMISSIVE` still defined at
-`:111` / `:123`, so glow still works). `Mod.cs` / `ModLibrary.cs` / `FileReference.cs` /
-`ShaderReference.cs` / `TextureReference.cs` / `TexturePowerReference.cs` differ only in log line
-numbers. `MeshAtlasFileReference.Meshes` gained `[XmlIgnore]` and `HostOnly` gained
-`[DefaultValue(false)]` — both WRITE-side; `Meshes` is populated by the GLB loader and was never
-authored. `mod.toml` gained one line (`CoreFuelPortGameData.xml`).
-
-`PartModelModule` / `PartModelGlassModule` gained `[DefaultValue]` on their render flags —
-`RayTracing = Disabled`, `ShadowCaster = true`, `Internal = false` on `PartModel`; both bools
-`false` on `PartModelGlass`. These CONFIRM the defaults contract #19 already encodes, and
-`<Internal>` remains the ONLY `[XmlElement("Internal")]` in the decomp, so the
-"glass can never be interior-only" rule holds.
-
-**NEW unmapped surface — `KSA.GlbImport` (gap P2).** rev 5025 moved the `GlbToXmlUtility` CLI
-into the codebase (`decomp/KSA.GlbImport/AssetBundler.cs`, `ToolXml.cs`, `InputSet.cs`) so it
-reuses the shipped KSA serializers. It is the game's own answer to the question flexo's
-`assetsXmlSerializer.ts` / `exportGlb.ts` answer, and it independently corroborates conventions
-flexo reverse-engineered:
-
-- `_VM` view meshes: `if (names.Contains(name + "_VM"))` → emits a `MeshViewModule.Template`
-  (`AssetBundler.cs:158-166`), and non-`_VM`, non-`_`-prefixed nodes become SubParts (`:45`).
-- Material id is `set.Stem + "_Material"` (`:24`), with `DiffuseReference` / `NormalReference` /
-  `PBRMap` / `ThinFilmMap` / `EmissiveMap` slots (`:67-98`).
-- Node-name prefixes drive structure: `_ColPrim_Box|Sphere|Capsule|Cylinder`, `_connector`,
-  `_pivot`, `_glass`, `_raytrace`, `_raytraceShadowProxy` (`:189-320`).
-- `ToolXml.Build()` overrides two `PartInstance` attributes to defaults and `[XmlIgnore]`s
-  `TextureReference.Manifest`; output goes through a `NaNFilteringXmlWriter`.
-
-No flexo change is required, but it deserves either its own scope row or a cross-reference from
-here — filed as **P2**. It is also the cause of the 4-significant-figure precision drop across
-regenerated Core geometry (see [part-and-subpart-xml.md](part-and-subpart-xml.md)).
-
-## What changed in 5018
-
-**Nothing that reaches flexo's export.** `Mod.cs` / `ModLibrary.cs` / `FileReference.cs` /
-`ShaderReference.cs` differ only in log line numbers. `AssetBundle.cs` gained exactly ONE
-line — registering the new top-level `<GrainGeometry>` element (`Content/Core/GrainGeometries.xml`,
-listed in `mod.toml` after `Reactions.xml`) — which flexo neither reads nor writes; it
-references the shipped ids by name only (`GRAIN_GEOMETRY_IDS`). `ThumbnailRenderResources.cs`
-is absent from the diff, so the **synthetic Normal + AoRoughMetal requirement still holds**.
-`Content/Core/PlumeTrailAssets.xml` is likewise a new bundle entry flexo only references by
-id. Re-verified **INTACT** — no code change required.
-
-## What changed in 4980
-
-**INTACT — no flexo change.** `ThumbnailRenderResources.cs` is absent from the 4939→4980 diff
-(the `AddDraw` null-deref stays unguarded ⇒ synthetic Normal + AoRoughMetal stay required).
-`PartModelRenderer.cs` / `PartModelGlass.cs` hunks only thread the new cascaded-shadow-filter
-**specialization constant** (ID 10) and a per-cascade push constant into the pipelines —
-`ENABLE_EMISSIVE` is still defined on the color pipelines (visible unchanged in the same
-hunks). `ModLibrary.cs` is pure log-line-number noise; `Mod.cs`, `AssetBundle.cs`,
-`PbrMaterialReference.cs`, `MeshAtlasFileReference.cs`, `mod.toml` handling all absent from the
-diff. One additive schema note: `TextureCategory` gained `TerrainHeight` (rev 4947, exempts
-height-affecting terrain textures from the max-size downmip) — part textures stay
-`Category="Vessel"`, so mod export is unaffected (the celestial scaffold is —
-see [ground-clutter.md](ground-clutter.md#what-changed-in-4980)). The new texture-streaming
-stack (`CelestialTextureStreamer` et al.) only touches celestial diffuse/height sources.
-
-## What changed in 4939
-
-**INTACT — no flexo change.** Re-verified against the diff: `ThumbnailRenderResources.AddDraw`
-still has NO null guard (synthetic Normal + AoRoughMetal stay required);
-`PartModelRenderer` still defines `ENABLE_EMISSIVE` (and `MeshIndirect.frag` still gates on it);
-`MeshAtlasFileReference.cs` / `PbrMaterialReference.cs` unchanged; `AssetBundle.cs` /
-`ModLibrary.cs` / `FileReference.cs` / `ShaderReference.cs` hunks are decompiler/log noise.
-Notes: `Mod.cs` gained the `[XmlElement("PlumeTrailTemplate")]` registration (new top-level
-`<Assets>` child — flexo only ever REFERENCES Core's `DefaultEngine` by id from a nozzle, never
-emits the template, see [engines.md](engines.md#what-changed-in-4939));
-`SimpleVkMeshAtlas` now computes mesh bounding-sphere radius from the ORIGIN
-(`max(|min|,|max|).Length()`) instead of the bbox center — for flexo-exported GLBs that's equal
-or more conservative (no premature culling), no emit-side change. `<MeshFile>`'s `<Interleaved>`
-element already existed at 4892 (Core just started authoring it); flexo emits `<MeshAtlas>`, not
-`<MeshFile>`.
-
-## What changed in 4892
-
-**INTACT — no flexo change on the mesh/texture/mod path.** `ThumbnailRenderResources.AddDraw`
-still has NO null guard (synthetic Normal + AoRoughMetal still required); `ENABLE_EMISSIVE` is
-still defined in both `PartModelRenderer.BuildPipelineModel` variants; `TextureReference.cs` /
-`PbrMaterialReference.cs` / `SubPartTemplate.cs` byte-identical; `mod.toml` schema (`name` +
-`assets`) unchanged (Core's own manifest content swapped `Combustion.xml`/`Substances.xml` for
-`Reactions.xml`/`Volatiles.xml`/`SolidPropellants.xml`/`Materials.xml`). The 4826 watch-item on
-`MeshReference` **closes benignly**: the new `[XmlIgnore] PrimitiveMaterialIds` /
-`MeshAtlasFileReference.MaterialCount` (multi-primitive GLBs are now first-class) are consumed
-ONLY by ground clutter (`ClutterEcotypeRenderData`, `GroundClutterLodReference` — which now
-throws when clutter material refs ≠ GLB material count, see
-[ground-clutter.md](ground-clutter.md)); the part path still reads `HostPrimitives[0]` and the
-mesh-name → SubPart-id contract (`_`-prefix skip included) is unchanged. One schema note for the
-engines area: `AssetBundle.cs` dropped `<CombustionProcess>` from the `<Assets>` polymorphic
-union in favor of `<MixtureReaction>`/`<FixedReaction>`/`<ThermalReaction>` — flexo's custom
-propellants now export as `<FixedReaction>`. (Doc nit fixed: `AddDraw`'s null-safe read list is
-`EmissiveMap?` only — the old `ThinFilmMap?` mention was stale.)
-
-## What changed in 4826
-
-**Export contract intact — one watch-item.** Decomp diff (4750 → 4826):
-
-- `PbrMaterialReference.cs` — **unchanged**. The `ThumbnailRenderResources.AddDraw` null-deref still has no guard, so the synthetic Normal + AoRoughMetal on every `<PbrMaterial>` is still required. `ENABLE_EMISSIVE`, `Mod.cs`/`ModLibrary.cs`/`AssetBundle.cs`, `mod.toml` contract unchanged.
-- **Watch-item — `MeshReference`/`MeshAtlasFileReference` gained multi-primitive support** (`HostPrimitives[]`, `PrimitiveCount`, `DevicePrimitives[]`; `MeshAtlasFileReference.DoLoad` now registers every GLB mesh node by name, skipping `_`-prefixed). These are **runtime fields, not `[XmlElement]`** — the `<Mesh Id/>`/`<MeshAtlas>` reference schema is unchanged, and flexo exports **single-primitive** meshes named by SubPart id (the `meshes[i].name` → SubPart mapping still holds). No change needed, but the GLB node→SubPart mapping is now atlas-aware game-side — re-confirm a `flexo-parts/` mod still imports cleanly if the export mesh layout ever changes.
-
-## What changed in 4750
-
-- ✅ **`ThumbnailRenderResources.cs` deref site unchanged** — synthetic Normal + ORM still required (quirk #3 holds).
-- ✅ **Mod loading contract unchanged** — `Mod.cs`/`ModLibrary.cs`/`AssetBundle.cs`/`mod.toml` format identical (logging-codegen noise + an additive `[XmlElement("EditorTagDef", …)]` union entry flexo doesn't emit). `flexo-parts/` still loads.
-- ✅ **All PbrMaterial / MeshAtlas / SubPart / Texture schema classes byte-identical**; sample `CoreStructuralAAssets.xml` byte-identical. No element flexo emits changed.
-- ✅ **Glass merge** doesn't touch the export path (`MeshGlassIndirect.frag` zero-diff; the merged `ModelTranslucent.frag` is the live-character path only). `$simulateGlass` + glassGlow remain correct.
-- ✅ **Glow math byte-identical** (`EMISSIVE_MULTIPLIER=1.25`). `ModelPbr.frag` only reordered SSAO (drives characters, not exported parts).
-
-### Durable watch-items (not breaking today)
-
-- **`ENABLE_EMISSIVE` is now a hard dependency for glow.** flexo's opaque glow renders only because `PartModelRenderer.BuildPipelineModel` defines `ENABLE_EMISSIVE`. If a future build routed plain part SubParts through the temperature/"Dynamic" pipeline (which omits it), glow would **silently vanish** with no XML/crash signal. → After each KSA bump, grep `PartModelRenderer.cs` for `ENABLE_EMISSIVE` near the `MeshIndirectFrag` `BuildPipelineModel`.
-- **New optional capabilities** flexo could later adopt (already in the PbrMaterial schema, now with live feature paths): `<ThinFilm>` (`ENABLE_THIN_FILM`) and `<Normal Power="…">` (`TexturePowerReference`). Out of current v1 scope; classify as opportunities.
+On the next upgrade, inspect the content prepass, each modeled module's new fields,
+all render module types, texture slots, GLB accessor rules and the thumbnail path.
+Run both catalog completeness and real emitted XML checks. Do not infer schema
+compatibility from a successful browser preview.

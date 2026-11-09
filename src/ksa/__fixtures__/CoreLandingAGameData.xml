@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Assets>
+  <KeyframeAnimation Id="CoreLandingA_Prefab_MediumLandingLegA_Anim" Path="Animations/CoreLandingA_Prefab_MediumLandingLegA_Anim.glb"/>
+  <Part Id="CoreLandingA_Prefab_MediumLandingLegA" Modify="Patch">
+    <InertMasses Modify="Extend">
+      <SolidCuboidMass>
+        <Mass Kg="33"/>
+        <LocationAsmb X="-0.0173" Z="0.1477"/>
+        <LengthX M="1.0967"/>
+        <LengthY M="0.5038"/>
+        <LengthZ M="0.12"/>
+      </SolidCuboidMass>
+      <SolidCylinderMass>
+        <Mass Kg="5"/>
+        <LocationAsmb X="-1.5517" Z="-0.1434"/>
+        <Paf2Asmb Z="-1.5708"/>
+        <Length M="0.0449"/>
+        <Radius M="0.2611"/>
+      </SolidCylinderMass>
+      <SolidSphereMass>
+        <Mass Kg="7"/>
+        <LocationAsmb X="-1.4927" Z="-0.1443"/>
+        <Radius M="0.1457"/>
+      </SolidSphereMass>
+      <SolidCylinderMass>
+        <Mass Kg="21"/>
+        <LocationAsmb X="-0.6598" Z="-0.1432"/>
+        <Paf2Asmb Z="-1.5708"/>
+        <Length M="1.5402"/>
+        <Radius M="0.0966"/>
+      </SolidCylinderMass>
+      <SolidCylinderMass>
+        <Mass Kg="65"/>
+        <LocationAsmb X="-0.4217" Z="-0.1422"/>
+        <Paf2Asmb Z="-1.5708"/>
+        <Length M="1.9424"/>
+        <Radius M="0.1496"/>
+      </SolidCylinderMass>
+    </InertMasses>
+    <EditorTags Modify="Extend">
+      <EditorTag Ref="Landing" />
+    </EditorTags>
+    <Components Modify="Extend">
+      <KeyframeAnimationModule Key="LandingLegAnimation" ShowDeployRetract="true">
+        <KeyframeAnimation Ref="CoreLandingA_Prefab_MediumLandingLegA_Anim" />
+      </KeyframeAnimationModule>
+    </Components>
+
+    <Connectors Modify="Extend">
+      <Connector Key="_connector1" Modify="Patch">
+        <Flags>ToSurface</Flags>
+      </Connector>
+    </Connectors>
+  </Part>
+</Assets>

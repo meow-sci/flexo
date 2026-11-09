@@ -1,56 +1,12 @@
-# Vendored KSA asset fixtures
+# Vendored KSA XML fixtures
 
-Byte-identical copies of a **curated subset** of the KSA "Core" asset XML, committed to
-the repo so the import/parse unit tests exercise the **real** game data without the
-private asset tree (`$KSA_ASSETS_DIR` — the `flexo-private-assets/assets/` repo, which is
-git-ignored and not present in open-source CI).
+These byte-identical Core XML files are copied from build **2026.11.10.5801**.
+They include the complete Part/SubPart content closure in `coreFiles.ts`, plus
+physics and launch-pad fixtures used by other suites. They contain no licensed
+binary assets. The catalog tests resolve this closure offline and compare each
+fixture against the private mirror when it is available.
 
-Current copies are verified against KSA **2026.10.10.5554**.
-
-## Files
-
-`Materials.xml` also supplies the stock physical substance densities used by
-the mass editor and its material-based combined-mass tests.
-
-| File                                                        | Why it's vendored                                                                                                                    |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `CorePropulsionAAssets.xml` / `CorePropulsionAGameData.xml` | Liquid engines, gas generators, verniers, gimbal pivots, SRBs, launch escape systems, and 5554's magnetic nozzle/antimatter reactor. |
-| `CorePropulsionBAssets.xml` / `CorePropulsionBGameData.xml` | RCS chambers, inherited thruster controllers and service-fluid feeds.                                                                |
-| `CorePropulsionCAssets.xml` / `CorePropulsionCGameData.xml` | Large solid motor stacks, nozzle multipliers and grain data.                                                                         |
-| `CoreFuelTankAAssets.xml`                                   | Fuel-tank `<Part>` / `<SubPart>` geometry (the `LF1WHalfHA` prefab and its skins).                                                   |
-| `CoreFuelTankAGameData.xml`                                 | Fuel-tank `<PartGameData>` (editor tags, `<Diameter>`, `<Collider>`) and the magnetic trap's `<Tank><MagneticTrap>`.                 |
-| `CoreElectricalAAssets.xml`                                 | Electrical `<Part>` / `<SubPart>` geometry (the `SolarPanelB` prefab).                                                               |
-| `CoreElectricalAGameData.xml`                               | Electrical `<PartGameData>` + `<SubPartGameData>` (solar-cell `<SolarPanel>` data and the `<MagneticScoop>` module).                 |
-| `CoreFairingAGameData.xml`                                  | 5482's nosecones and adapters turned fuel tanks, including the only shipped `<ConicalTank>` data.                                    |
-| `CoreUtilityAGameData.xml`                                  | Parachute modules at Part and SubPart scope, including 5438's ordered `<PbrMaterialRef>` choices.                                    |
-| `CoreIVASpaceAGameData.xml`                                 | The ONLY shipped `<IVASeat>` data — the two-seat `MediumCapsuleA` interior.                                                          |
-| `PartGameData.xml`                                          | Shared file holding the fuel-tank `<SubPartGameData>` `<Tank>` metadata (the duplicate-`Id` merge case).                             |
-| `CoreLaunchPadAAssets.xml`                                  | The static-object catalog: 8 `<StaticSubObject>`s + the `<StaticObject>` launch-pad prefab (ICRP).                                   |
-| `CoreLaunchPadAGameData.xml`                                | The only shipped `<StaticObjectGameData>` (GroundOffset / SurfaceHeight / FootprintRadius).                                          |
-| `CoreLaunchPadBAssets.xml`                                  | `<PbrMaterial>` with the `<Alpha>` slot + the alpha-blended GravelTrim `<StaticSubObject>`.                                          |
-| `CoreLaunchPadCAssets.xml`                                  | The `<Terrain>true</Terrain>` BaseGrass `<StaticSubObject>` (planet-sampling render bucket).                                         |
-
-Consumed by [`src/ksa/partCatalog.test.ts`](../partCatalog.test.ts) via the
-`vendoredAsset` / `readVendoredAsset` helpers in [`src/ksa/ksaTestAssets.ts`](../ksaTestAssets.ts).
-
-## ⚠️ These MUST stay in sync with the live assets
-
-They are **verbatim copies**, never hand-edited. Whenever a vendored file's structure
-changes materially in the KSA assets, re-copy it **and** update the affected
-parser/catalog code + tests in the same change:
-
-```bash
-cd scripts && bun run sync-fixtures          # re-copies every *.xml here from $KSA_ASSETS_DIR
-# or, from the repo root:
-bun scripts/sync-test-fixtures.ts --src ../flexo-private-assets/assets
-```
-
-Enforcement: the **"vendored fixtures stay byte-identical to the live KSA assets"** test
-in `partCatalog.test.ts` compares each file here byte-for-byte against `$KSA_ASSETS_DIR`
-and **fails** on any drift — but only when the private tree is present (locally / private
-CI). Open-source CI, which lacks the private tree, tests against these copies alone, so
-stale fixtures would let a real regression pass silently. Keep them current.
-
-**Adding a fixture:** drop the file in here once (a verbatim copy from `$KSA_ASSETS_DIR`);
-`sync-test-fixtures.ts` and the drift test both discover it automatically from the
-directory contents.
+After an asset update, run `bun scripts/sync-test-fixtures.ts --src
+../flexo-private-assets/assets` from the repository root, then update tests and
+schema handling together. Add newly required dependency XML as verbatim copies;
+never edit a fixture by hand.

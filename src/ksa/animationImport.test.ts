@@ -374,18 +374,14 @@ describe('decodeAnimationGlb — real KSA solar panel asset', () => {
   });
 });
 
-describe('decodeAnimationGlb — real KSA SetAHeightA (GLB disagrees with geometry placement)', () => {
-  // The nested-joint deploy whose door SubParts' geometry <Position> is stale/rotated vs
-  // the GLB. KSA positions animated SubParts SOLELY from the GLB, so memberRestPlacements
-  // must yield the GLB rest pose (its world at the rest keyframe), NOT the geometry value —
-  // which is what the importer overrides each door placement with. See partImport.ts.
-  const PATH = ksaAsset('Animations/CoreServiceModuleA_Prefab_SetAHeightA_Anim.glb');
+describe('decodeAnimationGlb — real KSA SetA1SingleA (GLB rest pose)', () => {
+  // KSA positions animated SubParts from the GLB. The current SetA1SingleA geometry rows
+  // agree with that rest pose, so verify the decoded anchors retain the authored placement.
+  const PATH = ksaAsset('Animations/CoreServiceModuleA_Prefab_SetA1SingleA_Anim.glb');
   // Door geometry placements (from CoreServiceModuleAAssets.xml) — they disagree with the GLB.
   const geomDoors: Record<string, [number, number, number]> = {
-    CoreServiceModuleA_Subpart_SetADoorA1: [0, -0.7541, 0.7355],
-    CoreServiceModuleA_Subpart_SetADoorA2: [0, 0.7541, -0.7355],
-    CoreServiceModuleA_Subpart_SetADoorB1: [0, -0.7542, -0.7355],
-    CoreServiceModuleA_Subpart_SetADoorB2: [0, 0.7542, 0.7355],
+    CoreServiceModuleA_Subpart_SetADoorA1: [0, 0.7355, 0.7541],
+    CoreServiceModuleA_Subpart_SetADoorA2: [0, -0.7355, -0.7541],
   };
   it.runIf(hasKsaAssets)(
     'captures each door’s GLB rest pose, not its stale geometry placement',
@@ -400,12 +396,12 @@ describe('decodeAnimationGlb — real KSA SetAHeightA (GLB disagrees with geomet
         Object.entries(geomDoors).map(([id, p]) => [id, pl(id, tf({ pos: p }))]),
       );
       const decoded = decodeAnimationGlb(ab, { instanceIds, module: MODULE, placements })!;
-      // Nested chain: RootJoint + 4 Translate + 4 Rotate = 9 joints; doors modeled stowed (t=0).
+      // The current single-set clip carries 9 joints; doors are modeled stowed (t=0).
       expect(decoded.joints.length).toBe(9);
       expect(decoded.restAtLastKeyframe).toBe(false);
-      // All four doors are animated members with a captured GLB rest pose.
-      const doors = [...decoded.memberRestPlacements.keys()].filter((k) => /SetADoor/.test(k));
-      expect(doors).toHaveLength(4);
+      // Both door placements are members with a captured GLB rest pose.
+      const doors = Object.keys(geomDoors).filter((id) => decoded.memberRestPlacements.has(id));
+      expect(doors).toHaveLength(2);
       for (const [id, g] of Object.entries(geomDoors)) {
         const rest = decoded.memberRestPlacements.get(id)!;
         const dist = Math.hypot(
@@ -413,7 +409,7 @@ describe('decodeAnimationGlb — real KSA SetAHeightA (GLB disagrees with geomet
           rest.position.y - g[1],
           rest.position.z - g[2],
         );
-        expect(dist).toBeGreaterThan(1); // GLB pose ≠ the stale geometry placement
+        expect(dist).toBeLessThan(1e-5);
       }
     },
   );

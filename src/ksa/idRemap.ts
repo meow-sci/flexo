@@ -18,6 +18,15 @@
 
 import type { ConsumerFeedWiring, FeedSource } from './types';
 
+/** KSA local keys compare without case. */
+export function lookupLocalKey(map: ReadonlyMap<string, string>, key: string): string | undefined {
+  const direct = map.get(key);
+  if (direct !== undefined) return direct;
+  const lower = key.toLowerCase();
+  for (const [source, target] of map) if (source.toLowerCase() === lower) return target;
+  return undefined;
+}
+
 /**
  * Remaps one feed point: a connector feed's `connectorId` through `connectorIdMap`, a
  * container feed's `subPartInstanceId` through `idMap`. The `containerId` is a
@@ -30,14 +39,17 @@ export function remapFeed(
   idMap: ReadonlyMap<string, string>,
 ): FeedSource {
   if (f.kind === 'connector') {
-    return { kind: 'connector', connectorId: connectorIdMap.get(f.connectorId) ?? f.connectorId };
+    return {
+      kind: 'connector',
+      connectorId: lookupLocalKey(connectorIdMap, f.connectorId) ?? f.connectorId,
+    };
   }
   if (f.kind === 'container') {
     return {
       kind: 'container',
       containerId: f.containerId,
       subPartInstanceId: f.subPartInstanceId
-        ? (idMap.get(f.subPartInstanceId) ?? f.subPartInstanceId)
+        ? (lookupLocalKey(idMap, f.subPartInstanceId) ?? f.subPartInstanceId)
         : null,
     };
   }
@@ -67,7 +79,7 @@ export function remapConsumerFeedWiring(
   return {
     consumerId: w.consumerId,
     subPartInstanceId: w.subPartInstanceId
-      ? (idMap.get(w.subPartInstanceId) ?? w.subPartInstanceId)
+      ? (lookupLocalKey(idMap, w.subPartInstanceId) ?? w.subPartInstanceId)
       : null,
     feeds: w.feeds.map((f) => remapFeed(f, connectorIdMap, idMap)),
   };

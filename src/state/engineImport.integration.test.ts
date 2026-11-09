@@ -2,20 +2,16 @@ import { readFileSync, existsSync } from 'node:fs';
 import { DOMParser as XmlDOMParser } from '@xmldom/xmldom';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { loadCoreCatalog, indexCatalog, type CatalogSubPart } from '../ksa/catalog';
-import {
-  loadCorePartCatalog,
-  mergeGameData,
-  parseGameDataFile,
-  parsePartsFile,
-  type CatalogPart,
-} from '../ksa/partCatalog';
-import { hasKsaAssets, ksaAsset } from '../ksa/ksaTestAssets';
+import { loadCorePartCatalog, catalogPartsFromContent, type CatalogPart } from '../ksa/partCatalog';
+import { resolveContent } from '../ksa/contentXml';
+import { hasKsaAssets, ksaAsset, KSA_ASSETS_DIR } from '../ksa/ksaTestAssets';
+import { buildMeshIndex } from '../../vite/meshIndex';
 import {
   indexReactionCatalog,
   loadReactionCatalog,
   type ReactionData,
 } from '../ksa/reactionCatalog';
-import { buildMultiModContent } from '../ksa/modExport';
+import { buildMultiModContent, buildMultiCustomBundle } from '../ksa/modExport';
 import { validateEngines } from '../ksa/engineValidation';
 import { createEmptyPart } from '../ksa/types';
 import { $part } from './editorStore';
@@ -57,6 +53,8 @@ describe.skipIf(!hasKsaAssets)('current Core engine import → performance → m
       'fetch',
       vi.fn(async (input: string) => {
         const pathname = new URL(input, 'http://localhost').pathname;
+        if (pathname.endsWith('/mesh-index.json'))
+          return new Response(JSON.stringify(buildMeshIndex(KSA_ASSETS_DIR)));
         const path = ksaAsset(decodeURIComponent(pathname.split('/ksa/')[1] ?? pathname));
         if (!existsSync(path)) return new Response('', { status: 404 });
         return new Response(readFileSync(path));
@@ -111,8 +109,8 @@ describe.skipIf(!hasKsaAssets)('current Core engine import → performance → m
   });
 
   it('keeps every stock rocket resolvable and its performance stable after export and reimport', async () => {
-    // Current 5554 Core census: a missing pack must not silently shrink coverage.
-    expect(parts).toHaveLength(40);
+    // Current 5801 Core census: a missing pack must not silently shrink coverage.
+    expect(parts).toHaveLength(55);
     let liquidRockets = 0;
     let solidRockets = 0;
     let solidCurves = 0;
@@ -130,26 +128,43 @@ describe.skipIf(!hasKsaAssets)('current Core engine import → performance → m
         `${source.id} controller wiring`,
       ).toEqual([]);
 
-      const content = buildMultiModContent(
-        [{ entryId: 'engine', name: source.id, ns: 'engine', part: imported }],
-        'EngineAudit',
-        catalog,
-      );
+      let content: ReturnType<typeof buildMultiModContent>;
+      try {
+        content = buildMultiModContent(
+          [{ entryId: 'engine', name: source.id, ns: 'engine', part: imported }],
+          'EngineAudit',
+          catalog,
+        );
+      } catch (error) {
+        throw new Error(`${source.id}: ${String(error)}`);
+      }
+      const bundle = await buildMultiCustomBundle(content);
       const parser = new DOMParser();
-      const exported: CatalogPart[] = [];
-      parsePartsFile(
-        parser.parseFromString(content.partXml, 'application/xml'),
-        content.partFile,
-        exported,
-      );
-      const data = {
-        parts: new Map(),
-        subParts: new Map(),
-        subPartColliders: new Map(),
-        subPartLights: new Map(),
-      };
-      parseGameDataFile(parser.parseFromString(content.gameDataXml, 'application/xml'), data);
-      mergeGameData(exported, data);
+      const docs = [
+        {
+          file: content.partFile,
+          doc: parser.parseFromString(content.partXml, 'application/xml') as unknown as Document,
+        },
+        ...(bundle.assetsXml && bundle.assetsFile
+          ? [
+              {
+                file: bundle.assetsFile,
+                doc: parser.parseFromString(
+                  bundle.assetsXml,
+                  'application/xml',
+                ) as unknown as Document,
+              },
+            ]
+          : []),
+        {
+          file: content.gameDataFile,
+          doc: parser.parseFromString(
+            content.gameDataXml,
+            'application/xml',
+          ) as unknown as Document,
+        },
+      ];
+      const exported: CatalogPart[] = catalogPartsFromContent(resolveContent(docs));
       expect(exported, source.id).toHaveLength(1);
       $part.set(createEmptyPart());
       await importBuiltInPart(exported[0]);
@@ -257,7 +272,7 @@ describe.skipIf(!hasKsaAssets)('current Core engine import → performance → m
         }
       }
     }
-    expect(liquidRockets).toBe(37);
+    expect(liquidRockets).toBe(52);
     expect(solidRockets).toBe(16);
     expect(solidCurves).toBeGreaterThan(0);
     console.info(

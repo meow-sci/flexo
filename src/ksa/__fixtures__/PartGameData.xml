@@ -1,677 +1,855 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Assets>
 
-    <SubPartGameData Id="KittenBackPackSubPart">
-        <CustomMass>
-            <LocationAsmb Z="-0.49792" />
-            <Mass Kg="50" />
-            <!-- A solid rectangular prism, 0.211 x 0.274 x 0.483 -->
-            <MassSpecificInertia Ixx="0.0256970833" Iyy="0.0231508333" Izz="0.0099664166" />
-        </CustomMass>
+    <SubPart Id="KittenBackPackSubPart" Modify="Patch">
+        <InertMasses Modify="Extend">
+            <CustomMass>
+                <LocationAsmb Z="-0.49792" />
+                <Mass Kg="50" />
+                <!-- A solid rectangular prism, 0.211 x 0.274 x 0.483 -->
+                <MassSpecificInertia Ixx="0.0256970833" Iyy="0.0231508333" Izz="0.0099664166" />
+            </CustomMass>
+        </InertMasses>
 
-        <Tank Id="PropellantTank">
-            <SphericalTank>
-                <LocationAsmb X="0" Y="0" Z="-0.381" />
-                <Material Id="Aluminum.2014(s)" />
-                <OuterRadius M="0.276" />
-                <WallThickness Mm="4" />
-                <RoleAffinity>Thruster</RoleAffinity>
-            </SphericalTank>
-        </Tank>
+        <Components Modify="Extend">
+            <Tank Key="PropellantTank">
+                <SphericalTank>
+                    <LocationAsmb X="0" Y="0" Z="-0.381" />
+                    <Material Ref="Aluminum.2014" Phase="Solid" />
+                    <OuterRadius M="0.276" />
+                    <WallThickness Mm="4" />
+                    <RoleAffinity>Thruster</RoleAffinity>
+                </SphericalTank>
+            </Tank>
+            <!-- The suit contains 8 h of oxygen and LiOH, the EMU's 1 L in-suit drink bag and one meal bar. 
+            The bottles keep the small lander's wall-to-radius ratios, so the oxygen sits at the same pressure with room for about 0.31 kg. -->
+            <Habitat Key="Suit">
+                <HabitableVolume M3="0.1" />
+                <LocationAsmb Z="-0.49792" />
+                <Suit Meals="1" CartridgeHours="8" />
+            </Habitat>
+            <!-- What the kitten carries between habitats on EVA: 10 kg of meals and CO₂ canisters, never eaten or used by the kitten. -->
+            <Habitat Key="SuitCargo">
+                <LocationAsmb Z="-0.49792" />
+                <Carry Kg="10" />
+            </Habitat>
+            <Tank Key="SuitOxygenBottle">
+                <SphericalTank>
+                    <LocationAsmb X="0" Y="0" Z="-0.55" />
+                    <Material Ref="Aluminum.2014" Phase="Solid" />
+                    <OuterRadius M="0.068" />
+                    <WallThickness Mm="3.23" />
+                    <RoleAffinity>Air</RoleAffinity>
+                </SphericalTank>
+            </Tank>
+            <Tank Key="SuitDrinkBag">
+                <SphericalTank>
+                    <LocationAsmb X="0" Y="0" Z="-0.45" />
+                    <Material Ref="Aluminum.2014" Phase="Solid" />
+                    <OuterRadius M="0.0635" />
+                    <WallThickness Mm="1" />
+                    <RoleAffinity>Water</RoleAffinity>
+                </SphericalTank>
+            </Tank>
+        </Components>
 
-        <!-- Part frame convention: origin at the kitten's FEET (the character mesh and animation clips are authored feet-at-origin, and the collider capsule's bottom tip sits at the origin). The jetpack sits at the chest, 0.431m up (Z=-0.431), so every nozzle location, the custom mass, and the tank are shifted by Z-=0.431 relative to their original jetpack-at-origin authoring - a uniform shift that preserves all thruster moment arms about the center of mass exactly. -->
-        <RocketThrusterController Id="TranslateRight">
-            <ControlMap CSV="TranslateRight" />
-            <RocketReference Id="TranslateRightRocket" />
-        </RocketThrusterController>
-        <Rocket Id="TranslateRightRocket">
-            <Core Id="TranslateRightCombustor" />
-            <Nozzle Id="TranslateRight1" />
-            <Nozzle Id="TranslateRight2" />
-        </Rocket>
-        <Combustor Id="TranslateRightCombustor">
-            <FeedsFrom Container="PropellantTank" />
-            <Plumbing>Service</Plumbing>
-            <Reaction Id="MMH_NTO">
-                <MixtureRatio>1.6</MixtureRatio>
-            </Reaction>
-            <MaxPressure Bar="21" />
-            <ThermalEfficiency Value="0.75" />
-            <MinimumPulseTime Seconds="0" />
-        </Combustor>
-        <DeLavalNozzle Id="TranslateRight1">
-            <ExitDiameter M="0.03" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.00" Y="-0.23" Z="-0.431" />
-            <ExhaustDirection X="0.000" Y="-1.000" Z="0.000" />
-            <FxExhaustLocation X="-0.15" Y="-0.23" Z="-0.431" />
-            <FxExhaustDirection X="0.000" Y="-1.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="TranslateRight2">
-            <ExitDiameter M="0.03" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.00" Y="-0.23" Z="-0.431" />
-            <ExhaustDirection X="0.000" Y="-1.000" Z="0.000" />
-            <FxExhaustLocation X="-0.16" Y="-0.23" Z="-0.119" />
-            <FxExhaustDirection X="0.000" Y="-1.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
+        <RocketThrusterControllers Modify="Extend">
+            <!-- Part frame convention: origin at the kitten's FEET (the character mesh and animation clips are authored feet-at-origin, and the collider capsule's bottom tip sits at the origin). The jetpack sits at the chest, 0.431m up (Z=-0.431), so every nozzle location, the custom mass, and the tank are shifted by Z-=0.431 relative to their original jetpack-at-origin authoring - a uniform shift that preserves all thruster moment arms about the center of mass exactly. -->
+            <RocketThrusterController Key="TranslateRight">
+                <ControlMap CSV="TranslateRight" />
+                <Rockets>
+                    <Rocket KeyRef="TranslateRightRocket" />
+                </Rockets>
+            </RocketThrusterController>
 
-        <RocketThrusterController Id="TranslateLeft">
-            <ControlMap CSV="TranslateLeft" />
-            <RocketReference Id="TranslateLeftRocket" />
-        </RocketThrusterController>
-        <Rocket Id="TranslateLeftRocket">
-            <Core Id="TranslateLeftCombustor" />
-            <Nozzle Id="TranslateLeft1" />
-            <Nozzle Id="TranslateLeft2" />
-        </Rocket>
-        <Combustor Id="TranslateLeftCombustor">
-            <FeedsFrom Container="PropellantTank" />
-            <Plumbing>Service</Plumbing>
-            <Reaction Id="MMH_NTO">
-                <MixtureRatio>1.6</MixtureRatio>
-            </Reaction>
-            <MaxPressure Bar="21" />
-            <ThermalEfficiency Value="0.75" />
-            <MinimumPulseTime Seconds="0" />
-        </Combustor>
-        <DeLavalNozzle Id="TranslateLeft1">
-            <ExitDiameter M="0.03" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.00" Y="0.23" Z="-0.431" />
-            <ExhaustDirection X="0.000" Y="1.000" Z="0.000" />
-            <FxExhaustLocation X="-0.15" Y="0.23" Z="-0.431" />
-            <FxExhaustDirection X="0.000" Y="1.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="TranslateLeft2">
-            <ExitDiameter M="0.03" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.00" Y="0.23" Z="-0.431" />
-            <ExhaustDirection X="0.000" Y="1.000" Z="0.000" />
-            <FxExhaustLocation X="-0.16" Y="0.23" Z="-0.119" />
-            <FxExhaustDirection X="0.000" Y="1.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
+            <RocketThrusterController Key="TranslateLeft">
+                <ControlMap CSV="TranslateLeft" />
+                <Rockets>
+                    <Rocket KeyRef="TranslateLeftRocket" />
+                </Rockets>
+            </RocketThrusterController>
 
-        <RocketThrusterController Id="TranslateDown">
-            <ControlMap CSV="TranslateDown" />
-            <RocketReference Id="TranslateDownRocket" />
-        </RocketThrusterController>
-        <Rocket Id="TranslateDownRocket">
-            <Core Id="TranslateDownCombustor" />
-            <Nozzle Id="TranslateDown1" />
-            <Nozzle Id="TranslateDown2" />
-            <Nozzle Id="TranslateDown3" />
-            <Nozzle Id="TranslateDown4" />
-        </Rocket>
-        <Combustor Id="TranslateDownCombustor">
-            <FeedsFrom Container="PropellantTank" />
-            <Plumbing>Service</Plumbing>
-            <Reaction Id="MMH_NTO">
-                <MixtureRatio>1.6</MixtureRatio>
-            </Reaction>
-            <MaxPressure Bar="21" />
-            <ThermalEfficiency Value="0.75" />
-            <MinimumPulseTime Seconds="0" />
-        </Combustor>
-        <DeLavalNozzle Id="TranslateDown1">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="0.0" Y="0.0" Z="-1.000" />
-            <FxExhaustLocation X="-0.16" Y="0.23" Z="-0.119" />
-            <FxExhaustDirection X="0.0" Y="0.550" Z="-1.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="TranslateDown2">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="0.0" Y="0.0" Z="-1.000" />
-            <FxExhaustLocation X="-0.16" Y="-0.23" Z="-0.119" />
-            <FxExhaustDirection X="0.0" Y="-0.550" Z="-1.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="TranslateDown3">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="0.0" Y="0.0" Z="-1.000" />
-            <FxExhaustLocation X="-0.09" Y="0.23" Z="-0.121" />
-            <FxExhaustDirection X="0.0" Y="0.550" Z="-1.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="TranslateDown4">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="0.0" Y="0.0" Z="-1.000" />
-            <FxExhaustLocation X="-0.09" Y="-0.23" Z="-0.121" />
-            <FxExhaustDirection X="0.0" Y="-0.550" Z="-1.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
+            <RocketThrusterController Key="TranslateDown">
+                <ControlMap CSV="TranslateDown" />
+                <Rockets>
+                    <Rocket KeyRef="TranslateDownRocket" />
+                </Rockets>
+            </RocketThrusterController>
 
-        <RocketThrusterController Id="TranslateUp">
-            <ControlMap CSV="TranslateUp" />
-            <RocketReference Id="TranslateUpRocket" />
-        </RocketThrusterController>
-        <Rocket Id="TranslateUpRocket">
-            <Core Id="TranslateUpCombustor" />
-            <Nozzle Id="TranslateUp1" />
-            <Nozzle Id="TranslateUp2" />
-            <Nozzle Id="TranslateUp3" />
-            <Nozzle Id="TranslateUp4" />
-        </Rocket>
-        <Combustor Id="TranslateUpCombustor">
-            <FeedsFrom Container="PropellantTank" />
-            <Plumbing>Service</Plumbing>
-            <Reaction Id="MMH_NTO">
-                <MixtureRatio>1.6</MixtureRatio>
-            </Reaction>
-            <MaxPressure Bar="21" />
-            <ThermalEfficiency Value="0.75" />
-            <MinimumPulseTime Seconds="0" />
-        </Combustor>
-        <DeLavalNozzle Id="TranslateUp1">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="0.000" Y="0.000" Z="1.000" />
-            <FxExhaustLocation X="-0.15" Y="0.210" Z="-0.116" />
-            <FxExhaustDirection X="0.000" Y="0.000" Z="1.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="TranslateUp2">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="0.000" Y="0.000" Z="1.000" />
-            <FxExhaustLocation X="-0.15" Y="-0.210" Z="-0.116" />
-            <FxExhaustDirection X="0.000" Y="0.000" Z="1.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="TranslateUp3">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="0.000" Y="0.000" Z="1.000" />
-            <FxExhaustLocation X="-0.09" Y="0.210" Z="-0.116" />
-            <FxExhaustDirection X="0.000" Y="0.000" Z="1.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="TranslateUp4">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="0.000" Y="0.000" Z="1.000" />
-            <FxExhaustLocation X="-0.09" Y="-0.210" Z="-0.116" />
-            <FxExhaustDirection X="0.000" Y="0.000" Z="1.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
+            <RocketThrusterController Key="TranslateUp">
+                <ControlMap CSV="TranslateUp" />
+                <Rockets>
+                    <Rocket KeyRef="TranslateUpRocket" />
+                </Rockets>
+            </RocketThrusterController>
 
-        <RocketThrusterController Id="TranslateBackward">
-            <ControlMap CSV="TranslateBackward" />
-            <RocketReference Id="TranslateBackwardRocket" />
-        </RocketThrusterController>
-        <Rocket Id="TranslateBackwardRocket">
-            <Core Id="TranslateBackwardCombustor" />
-            <Nozzle Id="TranslateBackward1" />
-            <Nozzle Id="TranslateBackward2" />
-            <Nozzle Id="TranslateBackward3" />
-            <Nozzle Id="TranslateBackward4" />
-        </Rocket>
-        <Combustor Id="TranslateBackwardCombustor">
-            <FeedsFrom Container="PropellantTank" />
-            <Plumbing>Service</Plumbing>
-            <Reaction Id="MMH_NTO">
-                <MixtureRatio>1.6</MixtureRatio>
-            </Reaction>
-            <MaxPressure Bar="21" />
-            <ThermalEfficiency Value="0.75" />
-            <MinimumPulseTime Seconds="0" />
-        </Combustor>
-        <DeLavalNozzle Id="TranslateBackward1">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="1.000" Y="0.000" Z="0.000" />
-            <FxExhaustLocation X="-0.05" Y="0.220" Z="-0.431" />
-            <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="TranslateBackward2">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="1.000" Y="0.000" Z="0.000" />
-            <FxExhaustLocation X="-0.05" Y="-0.220" Z="-0.431" />
-            <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="TranslateBackward3">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="1.000" Y="0.000" Z="0.000" />
-            <FxExhaustLocation X="-0.05" Y="0.220" Z="-0.116" />
-            <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="TranslateBackward4">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="1.000" Y="0.000" Z="0.000" />
-            <FxExhaustLocation X="-0.05" Y="-0.220" Z="-0.116" />
-            <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
+            <RocketThrusterController Key="TranslateBackward">
+                <ControlMap CSV="TranslateBackward" />
+                <Rockets>
+                    <Rocket KeyRef="TranslateBackwardRocket" />
+                </Rockets>
+            </RocketThrusterController>
 
-        <RocketThrusterController Id="TranslateForward">
-            <ControlMap CSV="TranslateForward" />
-            <RocketReference Id="TranslateForwardRocket" />
-        </RocketThrusterController>
-        <Rocket Id="TranslateForwardRocket">
-            <Core Id="TranslateForwardCombustor" />
-            <Nozzle Id="TranslateForward1" />
-            <Nozzle Id="TranslateForward2" />
-            <Nozzle Id="TranslateForward3" />
-            <Nozzle Id="TranslateForward4" />
-        </Rocket>
-        <Combustor Id="TranslateForwardCombustor">
-            <FeedsFrom Container="PropellantTank" />
-            <Plumbing>Service</Plumbing>
-            <Reaction Id="MMH_NTO">
-                <MixtureRatio>1.6</MixtureRatio>
-            </Reaction>
-            <MaxPressure Bar="21" />
-            <ThermalEfficiency Value="0.75" />
-            <MinimumPulseTime Seconds="0" />
-        </Combustor>
-        <DeLavalNozzle Id="TranslateForward1">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
-            <FxExhaustLocation X="-0.15" Y="0.220" Z="-0.431" />
-            <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="TranslateForward2">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
-            <FxExhaustLocation X="-0.15" Y="-0.220" Z="-0.431" />
-            <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="TranslateForward3">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
-            <FxExhaustLocation X="-0.15" Y="0.220" Z="-0.116" />
-            <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="TranslateForward4">
-            <ExitDiameter M="0.02" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
-            <ExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
-            <FxExhaustLocation X="-0.15" Y="-0.220" Z="-0.116" />
-            <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
+            <RocketThrusterController Key="TranslateForward">
+                <ControlMap CSV="TranslateForward" />
+                <Rockets>
+                    <Rocket KeyRef="TranslateForwardRocket" />
+                </Rockets>
+            </RocketThrusterController>
 
-        <RocketThrusterController Id="PitchDownRollLeftYawRight">
-            <ControlMap CSV="PitchDown,RollLeft,YawRight" />
-            <RocketReference Id="PitchDownRollLeftYawRightRocket" />
-        </RocketThrusterController>
-        <Rocket Id="PitchDownRollLeftYawRightRocket">
-            <Core Id="PitchDownRollLeftYawRightCombustor" />
-            <Nozzle Id="PitchDownRollLeftYawRight1" />
-            <Nozzle Id="PitchDownRollLeftYawRight2" />
-        </Rocket>
-        <Combustor Id="PitchDownRollLeftYawRightCombustor">
-            <FeedsFrom Container="PropellantTank" />
-            <Plumbing>Service</Plumbing>
-            <Reaction Id="MMH_NTO">
-                <MixtureRatio>1.6</MixtureRatio>
-            </Reaction>
-            <MaxPressure Bar="21" />
-            <ThermalEfficiency Value="0.75" />
-            <MinimumPulseTime Seconds="0" />
-        </Combustor>
-        <DeLavalNozzle Id="PitchDownRollLeftYawRight1">
-            <ExitDiameter M="0.03" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0" Y="0.2" Z="0.069" />
-            <ExhaustDirection X="0.707106" Y="0.000" Z="0.707106" />
-            <FxExhaustLocation X="-0.05" Y="0.220" Z="-0.116" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="PitchDownRollLeftYawRight2">
-            <ExitDiameter M="0.03" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0" Y="-0.2" Z="-0.931" />
-            <ExhaustDirection X="-0.707106" Y="0.000" Z="-0.707106" />
-            <FxExhaustLocation X="-0.15" Y="-0.220" Z="-0.431" />
-            <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
+            <RocketThrusterController Key="PitchDownRollLeftYawRight">
+                <ControlMap CSV="PitchDown,RollLeft,YawRight" />
+                <Rockets>
+                    <Rocket KeyRef="PitchDownRollLeftYawRightRocket" />
+                </Rockets>
+            </RocketThrusterController>
 
-        <RocketThrusterController Id="PitchUpRollLeftYawLeft">
-            <ControlMap CSV="PitchUp,RollLeft,YawLeft" />
-            <RocketReference Id="PitchUpRollLeftYawLeftRocket" />
-        </RocketThrusterController>
-        <Rocket Id="PitchUpRollLeftYawLeftRocket">
-            <Core Id="PitchUpRollLeftYawLeftCombustor" />
-            <Nozzle Id="PitchUpRollLeftYawLeft1" />
-            <Nozzle Id="PitchUpRollLeftYawLeft2" />
-        </Rocket>
-        <Combustor Id="PitchUpRollLeftYawLeftCombustor">
-            <FeedsFrom Container="PropellantTank" />
-            <Plumbing>Service</Plumbing>
-            <Reaction Id="MMH_NTO">
-                <MixtureRatio>1.6</MixtureRatio>
-            </Reaction>
-            <MaxPressure Bar="21" />
-            <ThermalEfficiency Value="0.75" />
-            <MinimumPulseTime Seconds="0" />
-        </Combustor>
-        <DeLavalNozzle Id="PitchUpRollLeftYawLeft1">
-            <ExitDiameter M="0.03" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0" Y="0.2" Z="0.069" />
-            <ExhaustDirection X="-0.707106" Y="0.000" Z="0.707106" />
-            <FxExhaustLocation X="-0.15" Y="0.220" Z="-0.116" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="PitchUpRollLeftYawLeft2">
-            <ExitDiameter M="0.03" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0" Y="-0.2" Z="-0.931" />
-            <ExhaustDirection X="0.707106" Y="0.000" Z="-0.707106" />
-            <FxExhaustLocation X="-0.05" Y="-0.220" Z="-0.431" />
-            <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
+            <RocketThrusterController Key="PitchUpRollLeftYawLeft">
+                <ControlMap CSV="PitchUp,RollLeft,YawLeft" />
+                <Rockets>
+                    <Rocket KeyRef="PitchUpRollLeftYawLeftRocket" />
+                </Rockets>
+            </RocketThrusterController>
 
-        <RocketThrusterController Id="PitchDownRollRightYawLeft">
-            <ControlMap CSV="PitchDown,RollRight,YawLeft" />
-            <RocketReference Id="PitchDownRollRightYawLeftRocket" />
-        </RocketThrusterController>
-        <Rocket Id="PitchDownRollRightYawLeftRocket">
-            <Core Id="PitchDownRollRightYawLeftCombustor" />
-            <Nozzle Id="PitchDownRollRightYawLeft1" />
-            <Nozzle Id="PitchDownRollRightYawLeft2" />
-        </Rocket>
-        <Combustor Id="PitchDownRollRightYawLeftCombustor">
-            <FeedsFrom Container="PropellantTank" />
-            <Plumbing>Service</Plumbing>
-            <Reaction Id="MMH_NTO">
-                <MixtureRatio>1.6</MixtureRatio>
-            </Reaction>
-            <MaxPressure Bar="21" />
-            <ThermalEfficiency Value="0.75" />
-            <MinimumPulseTime Seconds="0" />
-        </Combustor>
-        <DeLavalNozzle Id="PitchDownRollRightYawLeft1">
-            <ExitDiameter M="0.03" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0" Y="-0.2" Z="0.069" />
-            <ExhaustDirection X="0.707106" Y="0.000" Z="0.707106" />
-            <FxExhaustLocation X="-0.05" Y="-0.220" Z="-0.116" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="PitchDownRollRightYawLeft2">
-            <ExitDiameter M="0.03" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0" Y="0.2" Z="-0.931" />
-            <ExhaustDirection X="-0.707106" Y="0.000" Z="-0.707106" />
-            <FxExhaustLocation X="-0.15" Y="0.220" Z="-0.431" />
-            <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
+            <RocketThrusterController Key="PitchDownRollRightYawLeft">
+                <ControlMap CSV="PitchDown,RollRight,YawLeft" />
+                <Rockets>
+                    <Rocket KeyRef="PitchDownRollRightYawLeftRocket" />
+                </Rockets>
+            </RocketThrusterController>
 
-        <RocketThrusterController Id="PitchUpRollRightYawRight">
-            <ControlMap CSV="PitchUp,RollRight,YawRight" />
-            <RocketReference Id="PitchUpRollRightYawRightRocket" />
-        </RocketThrusterController>
-        <Rocket Id="PitchUpRollRightYawRightRocket">
-            <Core Id="PitchUpRollRightYawRightCombustor" />
-            <Nozzle Id="PitchUpRollRightYawRight1" />
-            <Nozzle Id="PitchUpRollRightYawRight2" />
-        </Rocket>
-        <Combustor Id="PitchUpRollRightYawRightCombustor">
-            <FeedsFrom Container="PropellantTank" />
-            <Plumbing>Service</Plumbing>
-            <Reaction Id="MMH_NTO">
-                <MixtureRatio>1.6</MixtureRatio>
-            </Reaction>
-            <MaxPressure Bar="21" />
-            <ThermalEfficiency Value="0.75" />
-            <MinimumPulseTime Seconds="0" />
-        </Combustor>
-        <DeLavalNozzle Id="PitchUpRollRightYawRight1">
-            <ExitDiameter M="0.03" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0" Y="-0.2" Z="0.069" />
-            <ExhaustDirection X="-0.707106" Y="0.000" Z="0.707106" />
-            <FxExhaustLocation X="-0.15" Y="-0.220" Z="-0.116" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-        <DeLavalNozzle Id="PitchUpRollRightYawRight2">
-            <ExitDiameter M="0.03" />
-            <AreaRatio Value="50" />
-            <FlowEfficiency Value="0.72" />
-            <ExpansionEfficiency Value="0.5" />
-            <ExhaustLocation X="0" Y="0.2" Z="-0.931" />
-            <ExhaustDirection X="0.707106" Y="0.000" Z="-0.707106" />
-            <FxExhaustLocation X="-0.05" Y="0.220" Z="-0.431" />
-            <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
-            <ReactionPlume Default="true">
-              <VolumetricExhaust Id="MmuRcsVac" />
-            </ReactionPlume>
-            <ExhaustLight Value="false"/>
-            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
-        </DeLavalNozzle>
-    </SubPartGameData>
+            <RocketThrusterController Key="PitchUpRollRightYawRight">
+                <ControlMap CSV="PitchUp,RollRight,YawRight" />
+                <Rockets>
+                    <Rocket KeyRef="PitchUpRollRightYawRightRocket" />
+                </Rockets>
+            </RocketThrusterController>
+        </RocketThrusterControllers>
+        <Rockets Modify="Extend">
+            <Rocket Key="TranslateRightRocket">
+                <Core KeyRef="TranslateRightCombustor" />
+                <Nozzles>
+                    <Nozzle KeyRef="TranslateRight1" />
+                    <Nozzle KeyRef="TranslateRight2" />
+                </Nozzles>
+            </Rocket>
+            <Rocket Key="TranslateLeftRocket">
+                <Core KeyRef="TranslateLeftCombustor" />
+                <Nozzles>
+                    <Nozzle KeyRef="TranslateLeft1" />
+                    <Nozzle KeyRef="TranslateLeft2" />
+                </Nozzles>
+            </Rocket>
+            <Rocket Key="TranslateDownRocket">
+                <Core KeyRef="TranslateDownCombustor" />
+                <Nozzles>
+                    <Nozzle KeyRef="TranslateDown1" />
+                    <Nozzle KeyRef="TranslateDown2" />
+                    <Nozzle KeyRef="TranslateDown3" />
+                    <Nozzle KeyRef="TranslateDown4" />
+                </Nozzles>
+            </Rocket>
+            <Rocket Key="TranslateUpRocket">
+                <Core KeyRef="TranslateUpCombustor" />
+                <Nozzles>
+                    <Nozzle KeyRef="TranslateUp1" />
+                    <Nozzle KeyRef="TranslateUp2" />
+                    <Nozzle KeyRef="TranslateUp3" />
+                    <Nozzle KeyRef="TranslateUp4" />
+                </Nozzles>
+            </Rocket>
+            <Rocket Key="TranslateBackwardRocket">
+                <Core KeyRef="TranslateBackwardCombustor" />
+                <Nozzles>
+                    <Nozzle KeyRef="TranslateBackward1" />
+                    <Nozzle KeyRef="TranslateBackward2" />
+                    <Nozzle KeyRef="TranslateBackward3" />
+                    <Nozzle KeyRef="TranslateBackward4" />
+                </Nozzles>
+            </Rocket>
+            <Rocket Key="TranslateForwardRocket">
+                <Core KeyRef="TranslateForwardCombustor" />
+                <Nozzles>
+                    <Nozzle KeyRef="TranslateForward1" />
+                    <Nozzle KeyRef="TranslateForward2" />
+                    <Nozzle KeyRef="TranslateForward3" />
+                    <Nozzle KeyRef="TranslateForward4" />
+                </Nozzles>
+            </Rocket>
+            <Rocket Key="PitchDownRollLeftYawRightRocket">
+                <Core KeyRef="PitchDownRollLeftYawRightCombustor" />
+                <Nozzles>
+                    <Nozzle KeyRef="PitchDownRollLeftYawRight1" />
+                    <Nozzle KeyRef="PitchDownRollLeftYawRight2" />
+                </Nozzles>
+            </Rocket>
+            <Rocket Key="PitchUpRollLeftYawLeftRocket">
+                <Core KeyRef="PitchUpRollLeftYawLeftCombustor" />
+                <Nozzles>
+                    <Nozzle KeyRef="PitchUpRollLeftYawLeft1" />
+                    <Nozzle KeyRef="PitchUpRollLeftYawLeft2" />
+                </Nozzles>
+            </Rocket>
+            <Rocket Key="PitchDownRollRightYawLeftRocket">
+                <Core KeyRef="PitchDownRollRightYawLeftCombustor" />
+                <Nozzles>
+                    <Nozzle KeyRef="PitchDownRollRightYawLeft1" />
+                    <Nozzle KeyRef="PitchDownRollRightYawLeft2" />
+                </Nozzles>
+            </Rocket>
+            <Rocket Key="PitchUpRollRightYawRightRocket">
+                <Core KeyRef="PitchUpRollRightYawRightCombustor" />
+                <Nozzles>
+                    <Nozzle KeyRef="PitchUpRollRightYawRight1" />
+                    <Nozzle KeyRef="PitchUpRollRightYawRight2" />
+                </Nozzles>
+            </Rocket>
+        </Rockets>
+        <RocketCores Modify="Extend">
+            <Combustor Key="TranslateRightCombustor">
+                <FeedsFroms>
+                    <FeedsFrom>
+                        <Container KeyRef="PropellantTank" />
+                    </FeedsFrom>
+                </FeedsFroms>
+                <Plumbing>Service</Plumbing>
+                <Reaction Ref="MMH_NTO">
+                    <MixtureRatio>1.6</MixtureRatio>
+                </Reaction>
+                <MaxPressure Bar="21" />
+                <ThermalEfficiency Value="0.75" />
+                <MinimumPulseTime Seconds="0" />
+            </Combustor>
+            <Combustor Key="TranslateLeftCombustor">
+                <FeedsFroms>
+                    <FeedsFrom>
+                        <Container KeyRef="PropellantTank" />
+                    </FeedsFrom>
+                </FeedsFroms>
+                <Plumbing>Service</Plumbing>
+                <Reaction Ref="MMH_NTO">
+                    <MixtureRatio>1.6</MixtureRatio>
+                </Reaction>
+                <MaxPressure Bar="21" />
+                <ThermalEfficiency Value="0.75" />
+                <MinimumPulseTime Seconds="0" />
+            </Combustor>
+            <Combustor Key="TranslateDownCombustor">
+                <FeedsFroms>
+                    <FeedsFrom>
+                        <Container KeyRef="PropellantTank" />
+                    </FeedsFrom>
+                </FeedsFroms>
+                <Plumbing>Service</Plumbing>
+                <Reaction Ref="MMH_NTO">
+                    <MixtureRatio>1.6</MixtureRatio>
+                </Reaction>
+                <MaxPressure Bar="21" />
+                <ThermalEfficiency Value="0.75" />
+                <MinimumPulseTime Seconds="0" />
+            </Combustor>
+            <Combustor Key="TranslateUpCombustor">
+                <FeedsFroms>
+                    <FeedsFrom>
+                        <Container KeyRef="PropellantTank" />
+                    </FeedsFrom>
+                </FeedsFroms>
+                <Plumbing>Service</Plumbing>
+                <Reaction Ref="MMH_NTO">
+                    <MixtureRatio>1.6</MixtureRatio>
+                </Reaction>
+                <MaxPressure Bar="21" />
+                <ThermalEfficiency Value="0.75" />
+                <MinimumPulseTime Seconds="0" />
+            </Combustor>
+            <Combustor Key="TranslateBackwardCombustor">
+                <FeedsFroms>
+                    <FeedsFrom>
+                        <Container KeyRef="PropellantTank" />
+                    </FeedsFrom>
+                </FeedsFroms>
+                <Plumbing>Service</Plumbing>
+                <Reaction Ref="MMH_NTO">
+                    <MixtureRatio>1.6</MixtureRatio>
+                </Reaction>
+                <MaxPressure Bar="21" />
+                <ThermalEfficiency Value="0.75" />
+                <MinimumPulseTime Seconds="0" />
+            </Combustor>
+            <Combustor Key="TranslateForwardCombustor">
+                <FeedsFroms>
+                    <FeedsFrom>
+                        <Container KeyRef="PropellantTank" />
+                    </FeedsFrom>
+                </FeedsFroms>
+                <Plumbing>Service</Plumbing>
+                <Reaction Ref="MMH_NTO">
+                    <MixtureRatio>1.6</MixtureRatio>
+                </Reaction>
+                <MaxPressure Bar="21" />
+                <ThermalEfficiency Value="0.75" />
+                <MinimumPulseTime Seconds="0" />
+            </Combustor>
+            <Combustor Key="PitchDownRollLeftYawRightCombustor">
+                <FeedsFroms>
+                    <FeedsFrom>
+                        <Container KeyRef="PropellantTank" />
+                    </FeedsFrom>
+                </FeedsFroms>
+                <Plumbing>Service</Plumbing>
+                <Reaction Ref="MMH_NTO">
+                    <MixtureRatio>1.6</MixtureRatio>
+                </Reaction>
+                <MaxPressure Bar="21" />
+                <ThermalEfficiency Value="0.75" />
+                <MinimumPulseTime Seconds="0" />
+            </Combustor>
+            <Combustor Key="PitchUpRollLeftYawLeftCombustor">
+                <FeedsFroms>
+                    <FeedsFrom>
+                        <Container KeyRef="PropellantTank" />
+                    </FeedsFrom>
+                </FeedsFroms>
+                <Plumbing>Service</Plumbing>
+                <Reaction Ref="MMH_NTO">
+                    <MixtureRatio>1.6</MixtureRatio>
+                </Reaction>
+                <MaxPressure Bar="21" />
+                <ThermalEfficiency Value="0.75" />
+                <MinimumPulseTime Seconds="0" />
+            </Combustor>
+            <Combustor Key="PitchDownRollRightYawLeftCombustor">
+                <FeedsFroms>
+                    <FeedsFrom>
+                        <Container KeyRef="PropellantTank" />
+                    </FeedsFrom>
+                </FeedsFroms>
+                <Plumbing>Service</Plumbing>
+                <Reaction Ref="MMH_NTO">
+                    <MixtureRatio>1.6</MixtureRatio>
+                </Reaction>
+                <MaxPressure Bar="21" />
+                <ThermalEfficiency Value="0.75" />
+                <MinimumPulseTime Seconds="0" />
+            </Combustor>
+            <Combustor Key="PitchUpRollRightYawRightCombustor">
+                <FeedsFroms>
+                    <FeedsFrom>
+                        <Container KeyRef="PropellantTank" />
+                    </FeedsFrom>
+                </FeedsFroms>
+                <Plumbing>Service</Plumbing>
+                <Reaction Ref="MMH_NTO">
+                    <MixtureRatio>1.6</MixtureRatio>
+                </Reaction>
+                <MaxPressure Bar="21" />
+                <ThermalEfficiency Value="0.75" />
+                <MinimumPulseTime Seconds="0" />
+            </Combustor>
+        </RocketCores>
+        <RocketNozzles Modify="Extend">
+            <DeLavalNozzle Key="TranslateRight1">
+                <ExitDiameter M="0.03" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.00" Y="-0.23" Z="-0.431" />
+                <ExhaustDirection X="0.000" Y="-1.000" Z="0.000" />
+                <FxExhaustLocation X="-0.15" Y="-0.23" Z="-0.431" />
+                <FxExhaustDirection X="0.000" Y="-1.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateRight2">
+                <ExitDiameter M="0.03" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.00" Y="-0.23" Z="-0.431" />
+                <ExhaustDirection X="0.000" Y="-1.000" Z="0.000" />
+                <FxExhaustLocation X="-0.16" Y="-0.23" Z="-0.119" />
+                <FxExhaustDirection X="0.000" Y="-1.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateLeft1">
+                <ExitDiameter M="0.03" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.00" Y="0.23" Z="-0.431" />
+                <ExhaustDirection X="0.000" Y="1.000" Z="0.000" />
+                <FxExhaustLocation X="-0.15" Y="0.23" Z="-0.431" />
+                <FxExhaustDirection X="0.000" Y="1.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateLeft2">
+                <ExitDiameter M="0.03" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.00" Y="0.23" Z="-0.431" />
+                <ExhaustDirection X="0.000" Y="1.000" Z="0.000" />
+                <FxExhaustLocation X="-0.16" Y="0.23" Z="-0.119" />
+                <FxExhaustDirection X="0.000" Y="1.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateDown1">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="0.0" Y="0.0" Z="-1.000" />
+                <FxExhaustLocation X="-0.16" Y="0.23" Z="-0.119" />
+                <FxExhaustDirection X="0.0" Y="0.550" Z="-1.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateDown2">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="0.0" Y="0.0" Z="-1.000" />
+                <FxExhaustLocation X="-0.16" Y="-0.23" Z="-0.119" />
+                <FxExhaustDirection X="0.0" Y="-0.550" Z="-1.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateDown3">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="0.0" Y="0.0" Z="-1.000" />
+                <FxExhaustLocation X="-0.09" Y="0.23" Z="-0.121" />
+                <FxExhaustDirection X="0.0" Y="0.550" Z="-1.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateDown4">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="0.0" Y="0.0" Z="-1.000" />
+                <FxExhaustLocation X="-0.09" Y="-0.23" Z="-0.121" />
+                <FxExhaustDirection X="0.0" Y="-0.550" Z="-1.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateUp1">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+                <FxExhaustLocation X="-0.15" Y="0.210" Z="-0.116" />
+                <FxExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateUp2">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+                <FxExhaustLocation X="-0.15" Y="-0.210" Z="-0.116" />
+                <FxExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateUp3">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+                <FxExhaustLocation X="-0.09" Y="0.210" Z="-0.116" />
+                <FxExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateUp4">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+                <FxExhaustLocation X="-0.09" Y="-0.210" Z="-0.116" />
+                <FxExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateBackward1">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+                <FxExhaustLocation X="-0.05" Y="0.220" Z="-0.431" />
+                <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateBackward2">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+                <FxExhaustLocation X="-0.05" Y="-0.220" Z="-0.431" />
+                <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateBackward3">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+                <FxExhaustLocation X="-0.05" Y="0.220" Z="-0.116" />
+                <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateBackward4">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+                <FxExhaustLocation X="-0.05" Y="-0.220" Z="-0.116" />
+                <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateForward1">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+                <FxExhaustLocation X="-0.15" Y="0.220" Z="-0.431" />
+                <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateForward2">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+                <FxExhaustLocation X="-0.15" Y="-0.220" Z="-0.431" />
+                <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateForward3">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+                <FxExhaustLocation X="-0.15" Y="0.220" Z="-0.116" />
+                <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="TranslateForward4">
+                <ExitDiameter M="0.02" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0.0" Y="0.0" Z="-0.431" />
+                <ExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+                <FxExhaustLocation X="-0.15" Y="-0.220" Z="-0.116" />
+                <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="PitchDownRollLeftYawRight1">
+                <ExitDiameter M="0.03" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0" Y="0.2" Z="0.069" />
+                <ExhaustDirection X="0.707106" Y="0.000" Z="0.707106" />
+                <FxExhaustLocation X="-0.05" Y="0.220" Z="-0.116" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="PitchDownRollLeftYawRight2">
+                <ExitDiameter M="0.03" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0" Y="-0.2" Z="-0.931" />
+                <ExhaustDirection X="-0.707106" Y="0.000" Z="-0.707106" />
+                <FxExhaustLocation X="-0.15" Y="-0.220" Z="-0.431" />
+                <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="PitchUpRollLeftYawLeft1">
+                <ExitDiameter M="0.03" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0" Y="0.2" Z="0.069" />
+                <ExhaustDirection X="-0.707106" Y="0.000" Z="0.707106" />
+                <FxExhaustLocation X="-0.15" Y="0.220" Z="-0.116" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="PitchUpRollLeftYawLeft2">
+                <ExitDiameter M="0.03" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0" Y="-0.2" Z="-0.931" />
+                <ExhaustDirection X="0.707106" Y="0.000" Z="-0.707106" />
+                <FxExhaustLocation X="-0.05" Y="-0.220" Z="-0.431" />
+                <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="PitchDownRollRightYawLeft1">
+                <ExitDiameter M="0.03" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0" Y="-0.2" Z="0.069" />
+                <ExhaustDirection X="0.707106" Y="0.000" Z="0.707106" />
+                <FxExhaustLocation X="-0.05" Y="-0.220" Z="-0.116" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="PitchDownRollRightYawLeft2">
+                <ExitDiameter M="0.03" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0" Y="0.2" Z="-0.931" />
+                <ExhaustDirection X="-0.707106" Y="0.000" Z="-0.707106" />
+                <FxExhaustLocation X="-0.15" Y="0.220" Z="-0.431" />
+                <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="PitchUpRollRightYawRight1">
+                <ExitDiameter M="0.03" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0" Y="-0.2" Z="0.069" />
+                <ExhaustDirection X="-0.707106" Y="0.000" Z="0.707106" />
+                <FxExhaustLocation X="-0.15" Y="-0.220" Z="-0.116" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+            <DeLavalNozzle Key="PitchUpRollRightYawRight2">
+                <ExitDiameter M="0.03" />
+                <AreaRatio Value="50" />
+                <FlowEfficiency Value="0.72" />
+                <ExpansionEfficiency Value="0.5" />
+                <ExhaustLocation X="0" Y="0.2" Z="-0.931" />
+                <ExhaustDirection X="0.707106" Y="0.000" Z="-0.707106" />
+                <FxExhaustLocation X="-0.05" Y="0.220" Z="-0.431" />
+                <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+                <ReactionPlumes>
+                    <ReactionPlume Default="true">
+                      <VolumetricExhaust Ref="MmuRcsVac" />
+                    </ReactionPlume>
+                </ReactionPlumes>
+                <ExhaustLight Value="false"/>
+                <SoundEvent Ref="DefaultRcsThruster" Action="On"/>
+            </DeLavalNozzle>
+        </RocketNozzles>
+    </SubPart>
 
-    <PartGameData Id="KittenBackPackPart">
-        <Collider Id="KittenBackPackCollider">
-            <Capsule Id="KittenBackPackCapsuleCollider">
-                <LocationAsmb X="0" Y="0" Z="-0.59" />
-                <Collider2Asmb X="-1.5708" Y="0" Z="0" />
-                <LengthY M="0.45" />
-                <Radius M="0.35" />
-            </Capsule>
-        </Collider>
-    </PartGameData>
-
-    <SubPartGameData Id="CoreServiceModuleA_Subpart_MedSMStructure">
-        <!-- Mass set purely to get the existing vehicle center of mass in roughly the right spot -->
-        <SolidSphereMass>
-            <Mass Kg="400" />
-            <Radius M="0.25" />
-        </SolidSphereMass>
-    </SubPartGameData>
+    <Part Id="KittenBackPackPart" Modify="Patch">
+        <Components Modify="Extend">
+            <Collider Key="KittenBackPackCollider">
+                <Colliders>
+                    <Capsule Key="KittenBackPackCapsuleCollider">
+                        <LocationAsmb X="0" Y="0" Z="-0.59" />
+                        <Collider2Asmb X="-1.5708" Y="0" Z="0" />
+                        <LengthY M="0.45" />
+                        <Radius M="0.35" />
+                    </Capsule>
+                </Colliders>
+            </Collider>
+        </Components>
+    </Part>
 
     <!-- Capsules and Interstages -->
 
-    <SubPartGameData Id="CoreCommandA_Subpart_MediumCapsuleCrewDoorA">
-        <EVADoor SeatId="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA" />
-    </SubPartGameData>
+    <SubPart Id="CoreCommandA_Subpart_MediumCapsuleCrewDoorA" Modify="Patch">
+        <Components Modify="Extend">
+            <EVADoor SeatId="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA" />
+        </Components>
+    </SubPart>
 
-    <SubPartGameData Id="CoreCommandA_Subpart_MediumCapsuleCrewDoorB">
-        <EVADoor SeatId="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatB" />
-    </SubPartGameData>
+    <SubPart Id="CoreCommandA_Subpart_MediumCapsuleCrewDoorB" Modify="Patch">
+        <Components Modify="Extend">
+            <EVADoor SeatId="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatB" />
+        </Components>
+    </SubPart>
 
 </Assets>

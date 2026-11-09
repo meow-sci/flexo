@@ -197,7 +197,7 @@ The v2 shell adds five rules that every new surface MUST obey (full detail in [d
 - **`scope/` MUST stay in sync with the game contract (NON-NEGOTIABLE).** `scope/` ([scope/FULL_SCOPE.md](scope/FULL_SCOPE.md)) is the catalog of every flexo↔KSA integration point and is the reference used to check whether a KSA update breaks flexo. Whenever you add, change, or remove any code that touches the game contract — i.e. anything that reads or writes KSA XML (`src/ksa/partXmlParser.ts`, `partXmlSerializer.ts`, `assetsXmlSerializer.ts`, `partCatalog.ts`, `catalog.ts`, the `types.ts` schema structs), ports KSA math (`enginePhysics.ts`, `combustionCatalog.ts`), depends on asset/mesh/material/bone naming or file-path conventions (`kittenAssets.ts`, `KittenObject.ts`, `modExport.ts`, `exportGlb.ts`, `src/ktx/*`, `kittenBake.ts`), maps coordinates (`src/three/coords.ts`), or works around a game renderer/loader quirk — you MUST update the matching `scope/*.md` in the **same change** (cite the game-side class/asset path + the exact XML element/attribute names). Adding a NEW integration surface ⇒ add a new `scope/*.md` AND a row in the `scope/FULL_SCOPE.md` integration map. When closing a gap listed in `plans/FIX_CURRENT_GAPS_PLAN.md`, update that area's `scope/*.md` baseline status. Treat a scope doc that contradicts the code as a bug to fix, not stale prose to ignore.
 - **Vendored test fixtures MUST stay in sync with the live KSA assets (NON-NEGOTIABLE).** `src/ksa/__fixtures__/` holds byte-identical copies of a curated subset of Core asset XML (`CoreFuelTankA*`, `CoreElectricalA*`, `CorePropulsion{A,B,C}*`, the shared `PartGameData.xml`) so the parser/catalog unit tests run without the private `$KSA_ASSETS_DIR` tree (they are the ONLY real-data check in open-source CI, which lacks that tree). Whenever a vendored file's structure changes materially in the game assets, re-copy it (`cd scripts && bun run sync-fixtures`) **and** update the affected parser/catalog code + tests **in the same change**. The `describe('vendored fixtures stay byte-identical to the live KSA assets')` test in `src/ksa/partCatalog.test.ts` compares each fixture byte-for-byte against `$KSA_ASSETS_DIR` and fails on drift whenever the private tree is present (locally / private CI). To add a fixture: drop a verbatim copy into `src/ksa/__fixtures__/` (the sync script + drift test discover it from the directory). See [src/ksa/**fixtures**/README.md](src/ksa/__fixtures__/README.md).
 - **vetting a KSA game update**: when a new KSA build lands, follow [scope/GAME_UPDATE_CHECKLIST.md](scope/GAME_UPDATE_CHECKLIST.md) (diff the decomp + `Content/` snapshots, map changed files to `scope/*.md`, verify each contract), record findings in `plans/`, and bump the baseline build in `scope/FULL_SCOPE.md`. The decompiled C# + shipped `Content/Core` for the current and previous builds live in the `ksa-game-assemblies*/current/` working dirs (`decomp/`, `Content/`, `version.json`).
-- **Latest KSA audit:** [plans/KSA_5554_REVIEW.md](plans/KSA_5554_REVIEW.md) covers the verified `5482 → 5554` range (the supplied previous source tree is 5541), with complete changed-file routing in [plans/KSA_5554_FILE_AUDIT.md](plans/KSA_5554_FILE_AUDIT.md). The previous review is [plans/KSA_5482_REVIEW.md](plans/KSA_5482_REVIEW.md). Use current `scope/` verdicts; older prose can contain corrected findings.
+- **Latest KSA audit:** [plans/KSA_5801_UPGRADE.md](plans/KSA_5801_UPGRADE.md) covers the full verified-baseline `5554 → 5801` change, with [the file inventory](plans/KSA_5801_FILE_AUDIT.md) and linked schema/variant/render research. Current XML uses top-level `Id`, global `Ref`, local `Key`/`KeyRef`, wrappers and same-tag `Modify` patches; `PartGameData`/`SubPartGameData` are TypeScript names and filenames only. Read [scope/FULL_SCOPE.md](scope/FULL_SCOPE.md) for current verdicts and retained limits. Older upgrade plans are historical.
 - **Default pattern for state**: Any user-facing settings, UI panel visibility, tool modes, or view preferences SHOULD use localStorage persistence via `@nanostores/persistent` (see [state-persistence.md](docs/state-persistence.md)). By default, persist state unless there's a specific reason not to.
 - **Undo/redo MUST be maintained**: the editor has snapshot-based undo/redo over `$part` (the serialized document). When you add, remove, or change any feature that mutates the document (`$part`: `partId`, `editorTags`, `gameData`, `layers`, `placements`, `connectors` — including each entity's `layerId`), it MUST enroll in undo/redo via one of the two patterns documented in [editor-state.md](docs/editor-state.md#undoredo-invariant-must-maintain) and at the top of the undo/redo section in `src/state/editorStore.ts`: (1) **discrete** mutations call `pushUndo()` internally; (2) **streaming** mutations (gizmo drag / typing session) let the caller push once at interaction start. Ephemeral UI state (selection, tool mode, snap, active layer) and persisted view state (per-layer visibility/lock in `layerStore.ts`) are intentionally excluded. Part registry operations (create/switch/delete/duplicate/rename/reorder/view flags) are lifecycle state and are deliberately NOT undo steps (see [docs/multi-part.md](docs/multi-part.md)); the stacks themselves are per part, so a switch parks them with the outgoing document. A document mutator that enrolls in neither pattern silently bypasses undo — that is a bug. Add/extend a test in `src/state/editorStore.test.ts` for the new mutation's undo behavior.
 
@@ -303,8 +303,8 @@ plots thrust, pressure and Isp. Connector-fed vehicle stacks remain outside sing
 
 A `<Light>` is KSA's real cast light — a `Spot` or `Point` placed into the scene by
 `LightModule`, gated by the Part's single light switch. It is legal, and Core-authored, at
-**BOTH** levels: on a `<PartGameData>` (the CoreCommandA headlights, CoreIVASpaceA's
-interior lamp) and on a `<SubPartGameData>` so it travels with a reused mesh (the
+**BOTH** levels: on a `<Part><Components>` (the CoreCommandA headlights, CoreIVASpaceA's
+interior lamp) and on a `<SubPart><Components>` so it travels with a reused mesh (the
 CoreElectricalA spotlights). flexo models both.
 
 Lights are first-class 3D entities (`EditingPart.lights: PartLight[]` on the built-in
@@ -353,8 +353,8 @@ and `meshId` retains `<Mesh Id>`; never reinterpret it as analytic dimensions.
 `<Radius>` mapping — a capsule's `<LengthY>` is only the cylindrical SEGMENT, and
 `DistanceReference` reads back as **NaN** when omitted, so every dimension is ALWAYS emitted.
 
-A collider is either part-level (`ownerTemplateId: null` ⇒ `<PartGameData>`) or SubPart-owned
-(⇒ that template's `<SubPartGameData>`, applying to every placement of it and **following
+A collider is either part-level (`ownerTemplateId: null` ⇒ `<Part><Components>`) or SubPart-owned
+(⇒ that template's `<SubPart><Components>`, applying to every placement of it and **following
 joint animation** — how a landing leg gets a deployed foot collider). `<Collider>` is legal
 in four places in KSA's schema; flexo reads all four and normalises every collider into the
 GameData document, which is what closed the long-open geometry-template gap **E**.
@@ -364,7 +364,7 @@ See [docs/colliders.md](docs/colliders.md), [scope/colliders.md](scope/colliders
 ## IVA seats (interior camera vantage points)
 
 An `<IVASeat>` is where the player's eye goes in KSA's interior (IVA) camera mode. It is one
-`<PartGameData>` child carrying **three vectors** — `<Position>` (the eye point, in the Part's
+`<Part><IVASeats><IVASeat Key>` entry carrying **three vectors** — `<Position>` (the eye point, in the Part's
 assembly frame), `<ForwardAxis>` and `<UpAxis>` — and nothing else. There is no "IVA support"
 flag: **a vehicle offers the IVA mode iff at least one part in it carries at least one seat**,
 document order IS the `C`-cycle order, and the **first seat is the one IVA opens on** — so seat

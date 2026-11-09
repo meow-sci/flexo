@@ -1,5 +1,34 @@
 # Scope — Plumbing topology (connector capabilities, consumer feed points, containers)
 
+## Current contract — KSA 2026.11.10.5801
+
+5801 preserves explicit plumbing topology but changes its XML representation.
+Feeds are in a `FeedsFroms` wrapper. A FeedsFrom uses either the attribute
+`FromParent="true"`, or exactly one reference child: `<Container KeyRef="…" SubPart="…"/>`, or
+`<Connector KeyRef="…"/>`. Tank and grain containers have local Keys; global
+reaction/substance references use Ref, with Phase separately where applicable.
+
+ConsumerFeedWirings contains ConsumerFeedWiring entries whose KeyRef names the
+consumer, optionally scoped by the SubPart placement key. The wiring's FeedsFroms
+then supplies its sources. Rocket Core/Nozzle/controller references follow the same
+owner-local versus SubPart-scoped distinction. Refer to current native
+`FeedsFromReference`, `ConsumerFeedWiring`, `ContentRefLookup` and the source-derived
+schema report; old attribute-style Feed examples below are historical.
+
+Repeated import remaps owner-local keys and connector/placement bindings together.
+References scoped into a shared SubPart template keep their template-local keys.
+Air/Water tank role flags are now authorable. The flow and resource rules below
+remain useful background; this upgrade does not replace the native flow simulation.
+
+Current implementation evidence and validation are recorded in
+[the 5801 upgrade](../plans/KSA_5801_UPGRADE.md).
+
+## Archived detail from audits through 5554
+
+The remainder records earlier source investigations. Its old XML examples and
+compatibility verdicts apply to their named builds; use the current contract above
+and [Part XML](part-and-subpart-xml.md) when authoring 5801 content.
+
 > **New integration surface at KSA 2026.7.9.5018.** Before 5018 propellant flow was
 > IMPLICIT — a `Combustor` owned a `ResourceManager` that searched the whole vehicle for
 > tanks holding its reactants, ranked by a `FlowRule`. Authoring an engine meant authoring
@@ -11,9 +40,9 @@
 > alongside [engines.md](engines.md), [connectors-coordinates-iva.md](connectors-coordinates-iva.md)
 > and [gamedata-modules.md](gamedata-modules.md).
 
-**Baseline:** re-verified against KSA build **2026.10.10.5554** (decomp @ 5554 + shipped Core XML);
+**Historical baseline:** re-verified against KSA build **2026.10.10.5554** (decomp @ 5554 + shipped Core XML);
 surface introduced at **2026.7.9.5018**.
-**Baseline status:** ✅ **CURRENT** — all capability tokens, `<FeedsFrom>` and
+**Historical baseline status:** ✅ **CURRENT** — all capability tokens, `<FeedsFrom>` and
 `<ConsumerFeedWiring>` fields remain intact. New ThermalCore and AntimatterRamCore consumers
 use the same feed graph and are modeled through import/paste, authoring, auto-wire,
 validation, project codecs and export. No schema-version bump is needed for their additive lists.

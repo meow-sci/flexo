@@ -100,6 +100,13 @@ keys, flags and raw fields. The editor and previews draw every render model.
 Material and atlas resolution can cross pack boundaries. Foil/cloth use the same
 Diffuse/Normal/AoRoughMetal path; see [custom assets](custom-assets-and-mod-export.md).
 
+`Content/Core/PartAssets.xml` also declares `<SubPart Id="KittenBackPackSubPart">`
+without any model component and places it in `<Part Id="KittenBackPackPart">` using
+`<SubPart Key="KittenBackPackSubPart" Ref="KittenBackPackSubPart"/>`. This template
+remains available for gameplay import/export, but its empty scene object has no
+geometry bounds. Preview capture skips it and removes cached thumbnail/turntable
+outputs without failing the run; it remains listed in the manifest's `part_ids`.
+
 ## Master invariant — typed fields and passthrough
 
 Flexo rebuilds XML from its document model; it is not a byte-faithful XML editor.

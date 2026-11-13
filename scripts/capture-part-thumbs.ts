@@ -598,6 +598,8 @@ async function synthesizeTurntables(
         await synthesizeTurntable(partId)
         made++
       } catch (err) {
+        // A failed validation may still leave a static or incomplete WebP behind.
+        await rm(join(TURNTABLES_OUT, turntableFileName(partId)), { force: true })
         failed.push(partId)
         console.error(
           `  TURNTABLE FAILED ${partId}: ${err instanceof Error ? err.message : String(err)}`,
@@ -969,6 +971,13 @@ async function main(): Promise<void> {
             const message = err instanceof Error ? err.message : String(err)
             // A mesh-less part is data, not a bug: no thumbs, no failure.
             if (message.includes(EMPTY_PART_ERROR)) {
+              // Discard frames from earlier runs before the on-disk manifest scan.
+              await Promise.all([
+                ...Array.from({ length: THUMB_COUNT }, (_, angle) =>
+                  rm(join(THUMBS_OUT, thumbFileName(partId, angle)), { force: true }),
+                ),
+                rm(join(TURNTABLES_OUT, turntableFileName(partId)), { force: true }),
+              ])
               empty.push(partId)
               console.log(`  no geometry, no thumbs: ${partId}`)
             } else {
@@ -1105,6 +1114,7 @@ async function main(): Promise<void> {
       }
       fingerprints[partId] = emptyIds.has(partId) ? { fp, empty: true } : { fp }
     }
+    for (const partId of turntableFailures) delete fingerprints[partId]
     for (const partId of Object.keys(fingerprints)) {
       if (!knownPartIds.has(partId)) delete fingerprints[partId]
     }
@@ -1133,7 +1143,8 @@ async function main(): Promise<void> {
   console.log(
     `done in ${formatElapsed(startedAt)}: ${captured} captured, ` +
       `${skipped} ${reconcile ? 'current' : 'skipped'}, ` +
-      `${empty.length} without geometry, ${failed.length} failed; manifest: ` +
+      `${empty.length} without geometry, ${failed.length} capture failures, ` +
+      `${turntableFailures.length} turntable failures; manifest: ` +
       `${Object.keys(thumbs).length} thumbs, ${Object.keys(turntables).length} turntables ` +
       `(of ${manifest.part_ids.length} parts)`,
   )

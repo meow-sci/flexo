@@ -478,9 +478,9 @@ export class PartPreviewViewport {
     return this.envPromise;
   }
 
-  /** True when the last {@link setPart} produced at least one SubPart object. */
+  /** True when the last {@link setPart} produced geometry, excluding empty metadata-only objects. */
   hasContent(): boolean {
-    return this.objects.length > 0;
+    return this.partBounds !== null;
   }
 
   /** Show/hide the connector markers without re-loading or re-framing the part. */

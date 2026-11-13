@@ -142,8 +142,9 @@ export const DEFAULT_TURNTABLE_SECONDS = 4;
  * has no renderable geometry at all.
  *
  * That is a real state of the Core data, not drift — `KittenBackPackPart`'s only
- * placement instances `<SubPart Id="KittenBackPackSubPart"/>`, which carries no
- * Mesh, so the SubPart catalog has nothing to build. The manifest still lists the
+ * placement instances `<SubPart Key="KittenBackPackSubPart" Ref="KittenBackPackSubPart"/>`,
+ * whose metadata-only template has no models. Its empty scene object does not
+ * count as content. The manifest still lists the
  * part (it has a placement, which is all `part_ids` claims) and the live embed
  * renders it just as empty. So: no thumbnails, no `thumbs` entry, no failure —
  * any OTHER error still fails the run.

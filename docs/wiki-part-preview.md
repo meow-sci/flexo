@@ -411,6 +411,13 @@ which carries no mesh, so the live embed renders it just as empty. Any other fai
 the run (exit 1) — every other `part_id` is renderable by construction, so a failure is a
 real bug, and CI must not publish a manifest with holes in it.
 
+Content detection uses the loaded SubParts' geometry bounds, so a metadata-only
+SubPart's empty scene object does not count as renderable content. Skipping an empty
+part also deletes any cached frames and turntable for it before rebuilding the manifest.
+Failed turntable synthesis deletes its output and invalidates its fingerprint, so an
+invalid file cannot be advertised or accepted as current on a later reconciled run.
+The final summary reports capture failures and turntable failures separately.
+
 ### Lifecycle — mind the order
 
 `vite build apps/partpreview` runs with `emptyOutDir`, which **wipes the thumbnails, the turntables
